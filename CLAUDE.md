@@ -54,9 +54,11 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 3. Non aggiungere dipendenze non concordate: se una serve, proponila motivandola.
 4. Una migration già committata non si modifica: se ne crea una nuova.
 5. I test si scrivono nello stesso task del codice che verificano. Un task non è concluso finché `make test` e `make lint` non sono verdi.
-6. A fine task elenca le verifiche manuali che l'utente deve fare (Postman per le API, browser e Mailpit per il frontend) con passi precisi.
-7. A fine fase lancia il subagent `code-reviewer` e riporta i risultati prima del commit.
-8. Non fare commit né `git push` senza richiesta esplicita.
+6. Nei test i valori attesi si scrivono a mano, non si ricavano dal codice o dalla configurazione che il test verifica.
+7. Le regole di design, dominio e contenuti si prendono dalle fonti nella repository (skill, `design/`, `docs/`) o si chiedono all'utente, mai ricostruite. Se un mockup e una decisione approvata divergono, vale la decisione.
+8. A fine task elenca le verifiche manuali che l'utente deve fare (Postman per le API, browser e Mailpit per il frontend) con passi precisi.
+9. A fine fase lancia il subagent `code-reviewer` e riporta i risultati prima del commit.
+10. Non fare commit né `git push` senza richiesta esplicita.
 
 ## Skill del progetto
 

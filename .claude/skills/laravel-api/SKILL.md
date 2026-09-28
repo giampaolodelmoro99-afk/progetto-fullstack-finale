@@ -32,7 +32,7 @@ app/
 ├── Providers/
 └── Services/{Area}/           # implementazioni delle interfacce
 config/
-├── shop.php                   # spedizione, soglia scorte basse
+├── shop.php                   # spedizione, soglie ultimi pezzi e scorte basse, giorni delle novità
 └── security.php               # tempi di conferma e scadenze
 database/
 ├── factories/
@@ -68,7 +68,7 @@ final class ProductController extends Controller
     {
         $product = $createProduct->execute($request->validated());
 
-        return ProductResource::make($product->load(['categories', 'images']))
+        return ProductResource::make($product->load(['category', 'images']))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
@@ -111,14 +111,17 @@ final class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'sku' => ['required', 'string', 'max:64', Rule::unique('products', 'sku')],
+            'short_description' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
+            'specifications' => ['present', 'array', 'max:20'],
+            'specifications.*.label' => ['required', 'string', 'max:64'],
+            'specifications.*.value' => ['required', 'string', 'max:255'],
             'price' => ['required', 'integer', 'min:1'],
             'stock' => ['required', 'integer', 'min:0'],
             'is_active' => ['required', 'boolean'],
-            'category_ids' => ['required', 'array', 'min:1'],
-            'category_ids.*' => ['integer', Rule::exists('categories', 'id')],
         ];
     }
 }
@@ -147,7 +150,8 @@ final class StoreProductRequest extends FormRequest
 
 - `$fillable` esplicito; `$hidden` per ogni attributo sensibile; cast nel metodo `casts()` (enum, boolean, datetime, integer, encrypted).
 - Relazioni con tipo di ritorno dichiarato.
-- Filtri come scope locali: `search`, `inCategory`, `priceBetween`, `inStock`, `active`.
+- Filtri come scope locali: `search`, `inCategory`, `priceBetween`, `inStock`, `active`, `newArrivals`; ordinamenti con uno scope `sortBy` che accetta solo `newest`, `price_asc` e `price_desc` e aggiunge `id` come secondo criterio.
+- Valori calcolati (`is_new`, `availability` del prodotto) in un solo punto, un accessor o una piccola classe dedicata, letti dalle soglie di `config/shop.php`: la Resource li espone, i controller non li calcolano.
 - `Model::shouldBeStrict(! app()->isProduction())` in `AppServiceProvider`: in sviluppo il lazy loading e gli attributi mancanti generano un errore.
 - Eager loading esplicito dove si caricano le relazioni.
 - Slug generati in un Observer.
@@ -167,7 +171,7 @@ final class StoreProductRequest extends FormRequest
 
 ## Enum, eventi, notifiche, servizi
 
-- Enum string-backed in `App\Enums` con metodo `label()` in italiano.
+- Enum string-backed in `App\Enums` con metodo `label()` in italiano, con le parole fisse di `design/design-system/voice-and-content.md` (es. `OrderStatus`: In attesa, Pagato, Spedito, Consegnato, Annullato).
 - Listener e notifiche implementano `ShouldQueue`; in sviluppo girano in modo sincrono perché `QUEUE_CONNECTION=sync`.
 - Email come Notification (canale `mail`), testi in italiano.
 - Interfacce in `App\Contracts`, implementazioni in `App\Services`, binding in `AppServiceProvider` guidato da config.
@@ -183,7 +187,7 @@ final class StoreProductRequest extends FormRequest
 - Ogni modello ha una factory, con dati realistici in italiano (`fake('it_IT')`, locale Faker `it_IT` in `.env`).
 - Stati espliciti per ogni variante utile ai test:
   - `UserFactory`: `admin()`, `customer()`, `unverified()`, `withTwoFactor()`
-  - `ProductFactory`: `inactive()`, `outOfStock()`, `lowStock()`
+  - `ProductFactory`: `inactive()`, `outOfStock()`, `lastUnits(int $stock = 2)` (sotto `last_units_threshold`), `lowStock()` (sotto `low_stock_threshold`), `newArrival()` e `older()` (`created_at` dentro o fuori `new_arrival_days`); la categoria si assegna con `for(Category::factory())` o `recycle()`
   - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelled()`, ognuno con i timestamp coerenti
 - Le relazioni si creano con `for()`, `has()` e `recycle()`.
 - Gli stati coerenti si costruiscono con `afterCreating()` quando servono (es. righe d'ordine e totali).
@@ -193,8 +197,8 @@ final class StoreProductRequest extends FormRequest
 
 - Un seeder per responsabilità, tutti richiamati da `DatabaseSeeder` nell'ordine corretto:
   - `UserSeeder`: admin e clienti demo con credenziali fisse, più clienti casuali
-  - `CategorySeeder`: albero fisso e coerente con il tema del negozio
-  - `ProductSeeder`: prodotti per categoria con immagini da `database/seeders/assets/`
+  - `CategorySeeder`: le cinque categorie fisse, con slug e descrizione, elencate nella skill `ecommerce-domain`
+  - `ProductSeeder`: prodotti per categoria con immagini da `database/seeders/assets/`, nomi secondo `design/design-system/voice-and-content.md`, `created_at` deterministici per avere novità e prodotti più vecchi
   - `AddressSeeder`: indirizzi per i clienti
   - `OrderSeeder`: ordini in tutti gli stati, distribuiti sugli ultimi mesi
 - I dati fissi (categorie, prodotti principali, utenti demo) sono deterministici; i dati di contorno possono essere casuali.
