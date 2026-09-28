@@ -1,0 +1,169 @@
+---
+name: react-architecture
+description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419 e 423, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
+---
+
+# React — architettura del frontend
+
+## Stack
+
+React + Vite in JavaScript, React Router (data router), TanStack Query, axios, React Hook Form + Zod, MUI. Test con Vitest, React Testing Library e MSW (skill `testing`).
+
+## Struttura
+
+```
+src/
+├── app/
+│   ├── App.jsx
+│   ├── providers/            # AppProviders, AuthProvider, NotificationProvider, IdentityConfirmationProvider
+│   └── router/               # router.jsx, paths.js, ProtectedRoute.jsx, GuestRoute.jsx, AdminRoute.jsx
+├── api/
+│   ├── httpClient.js
+│   └── queryKeys.js
+├── features/
+│   ├── auth/                 # api/ hooks/ components/ pages/ schemas.js
+│   ├── security/             # doppia autenticazione, passkey, conferma identità
+│   ├── catalog/
+│   ├── cart/
+│   ├── checkout/
+│   ├── account/
+│   └── admin/
+├── components/               # condivisi: feedback/, form/, data-display/, navigation/
+├── layouts/                  # StoreLayout, AuthLayout, AccountLayout, AdminLayout
+├── hooks/
+├── theme/
+├── test/                     # setup, utility e mock dei test
+├── utils/                    # format.js, normalizeApiError.js
+└── pages/                    # NotFoundPage, ErrorPage
+```
+
+Una feature contiene tutto ciò che le appartiene, compresi i suoi test. Un elemento finisce in `components/` solo quando lo usano almeno due feature.
+
+## Convenzioni di codice
+
+- Nessun commento inline.
+- File sempre completi.
+- Solo componenti funzione, un componente per file, nome del file uguale al nome del componente, PascalCase con estensione `.jsx`.
+- Le pagine usano `export default`, necessario al lazy loading; componenti, hook e utility usano named export.
+- Hook in `useSomething.js`, utility in camelCase.
+- Nomi in inglese, testi dell'interfaccia in italiano.
+- Import tramite alias `@/` verso `src/`.
+- Nessuna chiamata HTTP nei componenti: passano sempre dagli hook della feature.
+
+## Routing
+
+- `createBrowserRouter` in `app/router/router.jsx`, `RouterProvider` in `App.jsx`.
+- Percorsi centralizzati in `app/router/paths.js`; nessuna stringa di percorso sparsa nei componenti.
+- Layout come rotte genitore con `<Outlet />`:
+  - `StoreLayout`: `/`, `/products`, `/products/:slug`, `/cart`, `/checkout`, `/checkout/success/:orderId`
+  - `AccountLayout` dentro `StoreLayout`: `/account/profile`, `/account/addresses`, `/account/orders`, `/account/orders/:orderId`, `/account/security`
+  - `AuthLayout`: `/login`, `/login/two-factor`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`, `/confirm-email-change`, `/cancel-email-change`
+  - `AdminLayout`: `/admin`, `/admin/products`, `/admin/products/new`, `/admin/products/:productId/edit`, `/admin/categories`, `/admin/orders`, `/admin/orders/:orderId`
+- `ProtectedRoute`: se l'utente non è autenticato reindirizza a `/login` salvando la pagina di provenienza in `state.from`, così dopo il login si torna lì.
+- `GuestRoute`: login e registrazione reindirizzano a `/` se l'utente è già autenticato.
+- `AdminRoute`: se l'utente non è admin reindirizza a `/`.
+- Il checkout richiede email verificata: se non lo è, la pagina mostra l'invito a verificarla invece del form.
+- Le pagine admin si caricano con `React.lazy` e `Suspense`, con un fallback di caricamento.
+- `errorElement` con `ErrorPage`; rotta `*` con `NotFoundPage`.
+- I filtri del catalogo vivono nella query string (`useSearchParams`): i link si possono condividere e il pulsante indietro del browser funziona.
+- Le pagine raggiunte da link nelle email leggono i parametri dalla query string e chiamano l'API al caricamento.
+
+## Dati dal server (TanStack Query)
+
+- Tutto lo stato che arriva dal server passa da TanStack Query. Vietato il pattern `useEffect` + `useState` per caricare dati.
+- `features/x/api/*.js`: funzioni pure che usano `httpClient` e restituiscono `response.data`.
+- `features/x/hooks/*.js`: `useQuery` e `useMutation` che usano quelle funzioni.
+- Query key centralizzate in `api/queryKeys.js` come factory.
+- Dopo una mutation si invalidano le query toccate (aggiunta al carrello → `cart`; cambio di stato di un ordine → `orders`; modifiche di sicurezza → `me` e `security`).
+- `QueryClient` con `staleTime` ragionevole e nessun retry per gli errori 4xx.
+
+```js
+export const queryKeys = {
+  me: ['me'],
+  cart: ['cart'],
+  categories: ['categories'],
+  products: {
+    all: ['products'],
+    list: (filters) => ['products', 'list', filters],
+    detail: (slug) => ['products', 'detail', slug],
+  },
+  orders: {
+    all: ['orders'],
+    detail: (orderId) => ['orders', 'detail', orderId],
+  },
+  security: {
+    overview: ['security', 'overview'],
+    passkeys: ['security', 'passkeys'],
+    events: ['security', 'events'],
+  },
+};
+```
+
+```js
+export function useProducts(filters) {
+  return useQuery({
+    queryKey: queryKeys.products.list(filters),
+    queryFn: () => fetchProducts(filters),
+    placeholderData: keepPreviousData,
+  });
+}
+```
+
+## httpClient
+
+- `axios.create` con `baseURL: import.meta.env.VITE_API_URL`, `withCredentials: true`, `withXSRFToken: true` e header `Accept: application/json`.
+- Funzione `ensureCsrfCookie()` che chiama `GET /sanctum/csrf-cookie` prima di login, registrazione e recupero password.
+- Interceptor di risposta:
+  - 401: rimuove l'utente dalla cache (`queryKeys.me`); il redirect lo gestiscono le rotte protette.
+  - 419: richiede di nuovo il cookie CSRF e ripete la richiesta una sola volta.
+  - 423: il backend chiede di confermare l'identità. L'interceptor apre il `ConfirmIdentityDialog` tramite `IdentityConfirmationProvider`, attende l'esito e ripete la richiesta originale; se l'utente annulla, la richiesta fallisce con un errore gestito.
+- Errori normalizzati da `utils/normalizeApiError.js` nella forma `{ status, message, fieldErrors }`.
+
+## Autenticazione
+
+- `AuthProvider` basato sulla query `me` (`GET /api/v1/me`); un 401 significa ospite, non errore.
+- Hook `useAuth()` che restituisce `{ user, isAuthenticated, isAdmin, isEmailVerified, isLoading, login, logout, register }`.
+- Il login può rispondere con la richiesta del secondo fattore: in quel caso si naviga a `/login/two-factor` (dettagli nella skill `account-security`).
+- Durante il caricamento iniziale dell'utente le rotte protette mostrano un indicatore, non un redirect.
+- Dopo login e logout si invalidano `me` e `cart`.
+
+## Form
+
+- React Hook Form con `zodResolver`; schema Zod in `features/x/schemas.js`, con messaggi in italiano.
+- Campi MUI collegati con `Controller`; `error` e `helperText` presi dallo stato del form.
+- Gli errori 422 del server vengono mappati sui campi con `setError`.
+- Il pulsante di invio è disabilitato e mostra un indicatore durante l'invio.
+
+## Stato
+
+- Dati del server: TanStack Query.
+- Stato di interfaccia locale: `useState`.
+- Stato globale: solo autenticazione, notifiche (`NotificationProvider` con Snackbar) e conferma dell'identità (`IdentityConfirmationProvider`).
+- Niente Redux né Zustand.
+
+## Stati di una vista
+
+Ogni vista con dati remoti gestisce esplicitamente quattro stati:
+
+1. Caricamento: Skeleton con la forma del contenuto.
+2. Errore: Alert con pulsante "Riprova" che chiama `refetch`.
+3. Vuoto: messaggio chiaro con un'azione (es. "Il carrello è vuoto" → "Vai al catalogo").
+4. Contenuto.
+
+## Presentazione dei valori
+
+- Prezzi con `formatPrice(cents)` in `utils/format.js`, basato su `Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' })`.
+- Date con `formatDate` e `formatDateTime`, basati su `Intl.DateTimeFormat('it-IT')`.
+- Ogni valore numerico ha etichetta e unità (es. "Disponibilità: 12 pezzi", "Totale: 49,90 €").
+
+## Checklist per una nuova feature
+
+1. Funzioni API della feature
+2. Query key
+3. Hook
+4. Componenti e pagina
+5. Rotta nel router e percorso in `paths.js`
+6. Stati di caricamento, errore e vuoto
+7. Test secondo la skill `testing`
+8. `make test-frontend` e `make lint` verdi
+9. Elenco per l'utente di pagine da aprire e azioni da provare nel browser
