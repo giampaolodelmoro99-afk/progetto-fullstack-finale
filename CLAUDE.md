@@ -27,7 +27,7 @@ Il container `node` fa lo stesso per il frontend: crea `.env` se manca e install
 | Servizio | Ruolo | Indirizzo |
 |---|---|---|
 | app | Laravel con `php artisan serve` | http://localhost:8000 |
-| mysql | MySQL 8.4 (database `ecommerce` ed `ecommerce_testing`) | localhost:3306 |
+| mysql | MySQL 8.4 (database `ecommerce` ed `ecommerce_testing`) | localhost:3307 dall'host, mysql:3306 nella rete Docker |
 | node | Vite dev server | http://localhost:5173 |
 | mailpit | cattura delle email (SMTP 1025) | http://localhost:8025 |
 | phpmyadmin | ispezione del database | http://localhost:8081 |
