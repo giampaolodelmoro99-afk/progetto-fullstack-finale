@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Laptop stand, side view, ivory finish</title>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="410" cy="732" rx="190" ry="16" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <path d="M530 470 L548 470 L572 712 L552 712 Z" fill="#E4DDCF" stroke="#E4DDCF" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M268 708 L530 466 L550 480 L294 712 Z" fill="#FAF7F0" stroke="#E4DDCF" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="250" y="706" width="330" height="18" rx="6" fill="#FAF7F0" stroke="#E4DDCF" stroke-width="2"/>
+  <rect x="250" y="686" width="14" height="30" rx="4" fill="#E4DDCF"/>
+  <circle cx="540" cy="474" r="11" fill="url(#gold)"/>
+</svg>

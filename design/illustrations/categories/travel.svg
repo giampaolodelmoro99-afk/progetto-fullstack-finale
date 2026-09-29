@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Travel category: zipped pouch and travel adapter</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="420" cy="734" rx="290" ry="18" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M190 600 C130 600 118 680 178 692" fill="none" stroke="#1C1B19" stroke-width="10" stroke-linecap="round"/>
+  <rect x="190" y="500" width="300" height="222" rx="50" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <path d="M215 542 Q340 522 465 542" fill="none" stroke="#B89560" stroke-width="5"/>
+  <rect x="455" y="532" width="14" height="40" rx="6" fill="#B89560"/>
+  <rect x="545" y="500" width="14" height="62" rx="4" fill="#B89560"/>
+  <rect x="591" y="500" width="14" height="62" rx="4" fill="#B89560"/>
+  <rect x="500" y="558" width="150" height="164" rx="20" fill="url(#ink)"/>
+  <rect x="545" y="640" width="60" height="14" rx="7" fill="#5E5A53"/>
+  <circle cx="575" cy="690" r="5" fill="#B89560"/>
+</svg>

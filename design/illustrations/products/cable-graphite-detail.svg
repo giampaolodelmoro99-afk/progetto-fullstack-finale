@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>USB-C cable, connector detail, graphite finish</title>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <path d="M400 1000 V760" stroke="#1C1B19" stroke-width="44"/>
+  <rect x="368" y="680" width="64" height="110" rx="22" fill="#3A3834"/>
+  <rect x="342" y="248" width="116" height="150" rx="22" fill="#A29D94"/>
+  <rect x="362" y="282" width="76" height="26" rx="13" fill="#5E5A53"/>
+  <rect x="320" y="380" width="160" height="320" rx="40" fill="url(#gold)"/>
+  <rect x="340" y="404" width="10" height="272" rx="5" fill="#CDB27E"/>
+  <rect x="320" y="630" width="160" height="6" fill="#76592B"/>
+</svg>

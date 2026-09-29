@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Table lamp, three-quarter view from below the shade, ivory finish</title>
+  <defs>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="750" rx="130" ry="18" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <ellipse cx="400" cy="734" rx="90" ry="24" fill="#FAF7F0"/>
+  <ellipse cx="400" cy="728" rx="86" ry="20" fill="#E4DDCF"/>
+  <circle cx="450" cy="732" r="4" fill="#B89560"/>
+  <rect x="393" y="500" width="14" height="230" fill="#FAF7F0"/>
+  <path d="M280 500 A120 120 0 0 1 520 500 Z" fill="url(#shade)"/>
+  <ellipse cx="400" cy="500" rx="120" ry="24" fill="#F4ECDD" stroke="#B89560" stroke-width="6"/>
+  <circle cx="400" cy="504" r="14" fill="#FFFFFF"/>
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Headphones, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="770" rx="200" ry="16" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <path d="M250 570 V440 A150 150 0 0 1 550 440 V570" fill="none" stroke="#E4DDCF" stroke-width="36" stroke-linecap="round"/>
+  <path d="M250 570 V440 A150 150 0 0 1 550 440 V570" fill="none" stroke="#FAF7F0" stroke-width="28" stroke-linecap="round"/>
+  <path d="M278 560 V446 A122 122 0 0 1 522 446 V560" fill="none" stroke="#B89560" stroke-width="5"/>
+  <rect x="237" y="540" width="26" height="46" rx="4" fill="#A29D94"/>
+  <rect x="537" y="540" width="26" height="46" rx="4" fill="#A29D94"/>
+  <rect x="180" y="580" width="130" height="185" rx="52" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="490" y="580" width="130" height="185" rx="52" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="296" y="600" width="30" height="146" rx="15" fill="#E4DDCF"/>
+  <rect x="474" y="600" width="30" height="146" rx="15" fill="#E4DDCF"/>
+  <circle cx="242" cy="672" r="32" fill="none" stroke="#B89560" stroke-width="6"/>
+  <circle cx="558" cy="672" r="32" fill="none" stroke="#B89560" stroke-width="6"/>
+</svg>

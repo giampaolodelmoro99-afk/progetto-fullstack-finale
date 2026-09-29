@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>USB-C cable coiled on a table, three-quarter view, graphite finish</title>
+  <defs>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="690" rx="240" ry="24" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <ellipse cx="400" cy="620" rx="170" ry="60" fill="none" stroke="#1C1B19" stroke-width="14"/>
+  <ellipse cx="404" cy="612" rx="140" ry="48" fill="none" stroke="#3A3834" stroke-width="14"/>
+  <ellipse cx="398" cy="604" rx="110" ry="38" fill="none" stroke="#1C1B19" stroke-width="14"/>
+  <path d="M530 600 C600 585 622 520 604 440" fill="none" stroke="#1C1B19" stroke-width="14" stroke-linecap="round"/>
+  <g transform="rotate(-12 600 410)">
+    <rect x="586" y="378" width="30" height="64" rx="8" fill="#B89560"/>
+    <rect x="592" y="358" width="18" height="22" rx="3" fill="#A29D94"/>
+  </g>
+  <path d="M244 634 C200 652 176 690 166 718" fill="none" stroke="#1C1B19" stroke-width="14" stroke-linecap="round"/>
+  <g transform="rotate(62 158 736)">
+    <rect x="144" y="708" width="28" height="56" rx="8" fill="#B89560"/>
+    <rect x="149" y="760" width="18" height="16" rx="3" fill="#A29D94"/>
+  </g>
+</svg>

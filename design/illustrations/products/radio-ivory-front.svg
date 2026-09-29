@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Radio, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <pattern id="grille" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="8" r="2" fill="#5E5A53"/>
+    </pattern>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="722" rx="220" ry="16" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M262 460 L225 330" stroke="#5E5A53" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="225" cy="330" r="7" fill="#5E5A53"/>
+  <rect x="200" y="455" width="400" height="260" rx="44" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <circle cx="320" cy="585" r="88" fill="#1C1B19"/>
+  <circle cx="320" cy="585" r="78" fill="url(#grille)"/>
+  <rect x="430" y="515" width="120" height="34" rx="8" fill="#1C1B19"/>
+  <rect x="448" y="530" width="54" height="4" rx="2" fill="#B89560"/>
+  <circle cx="462" cy="615" r="28" fill="url(#gold)"/>
+  <circle cx="462" cy="615" r="14" fill="#CDB27E"/>
+  <circle cx="528" cy="615" r="15" fill="#1C1B19"/>
+</svg>

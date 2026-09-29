@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Watch strap, buckled, three-quarter view, graphite finish</title>
+  <defs>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="696" rx="210" ry="18" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <ellipse cx="400" cy="540" rx="170" ry="110" fill="none" stroke="#3A3834" stroke-width="70"/>
+  <path d="M230 540 A170 110 0 0 0 570 540" fill="none" stroke="#1C1B19" stroke-width="70"/>
+  <circle cx="470" cy="642" r="5" fill="#5E5A53"/>
+  <circle cx="512" cy="628" r="5" fill="#5E5A53"/>
+  <circle cx="548" cy="606" r="5" fill="#5E5A53"/>
+  <rect x="350" y="618" width="100" height="60" rx="14" fill="none" stroke="#B89560" stroke-width="8"/>
+  <rect x="396" y="618" width="8" height="64" rx="4" fill="#B89560"/>
+</svg>

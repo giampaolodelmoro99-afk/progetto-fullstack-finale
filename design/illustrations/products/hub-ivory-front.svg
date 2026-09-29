@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>USB-C hub, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="664" rx="200" ry="16" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <path d="M244 610 C180 610 160 560 190 520 C220 480 292 470 322 432" fill="none" stroke="#E4DDCF" stroke-width="14" stroke-linecap="round"/>
+  <path d="M244 610 C180 610 160 560 190 520 C220 480 292 470 322 432" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <g transform="rotate(38 330 416)">
+    <rect x="316" y="380" width="28" height="56" rx="8" fill="#B89560"/>
+    <rect x="321" y="364" width="18" height="18" rx="3" fill="#A29D94"/>
+  </g>
+  <rect x="240" y="570" width="320" height="80" rx="26" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="290" y="596" width="48" height="28" rx="6" fill="#E4DDCF"/>
+  <rect x="298" y="605" width="32" height="10" rx="2" fill="#A29D94"/>
+  <rect x="354" y="596" width="48" height="28" rx="6" fill="#E4DDCF"/>
+  <rect x="362" y="605" width="32" height="10" rx="2" fill="#A29D94"/>
+  <rect x="418" y="603" width="44" height="14" rx="7" fill="#A29D94"/>
+  <rect x="476" y="603" width="44" height="14" rx="7" fill="#A29D94"/>
+  <circle cx="538" cy="610" r="5" fill="#B89560"/>
+</svg>

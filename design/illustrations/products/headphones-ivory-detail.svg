@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Headphones, ear cup detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="410" cy="860" rx="240" ry="20" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M410 40 V210" stroke="#E4DDCF" stroke-width="44"/>
+  <rect x="390" y="170" width="40" height="90" rx="6" fill="#A29D94"/>
+  <rect x="150" y="270" width="90" height="540" rx="45" fill="#E4DDCF"/>
+  <rect x="200" y="245" width="420" height="600" rx="180" fill="url(#ivory)"/>
+  <circle cx="410" cy="545" r="120" fill="none" stroke="#B89560" stroke-width="14"/>
+  <circle cx="410" cy="545" r="86" fill="none" stroke="#E4DDCF" stroke-width="4"/>
+  <circle cx="410" cy="545" r="8" fill="#B89560"/>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Laptop stand, hinge detail, graphite finish</title>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <path d="M440 440 L500 440 L660 1000 L580 1000 Z" fill="#1C1B19" opacity="0.10" filter="url(#blur)" transform="translate(24 10)"/>
+  <path d="M420 420 L480 420 L640 1000 L560 1000 Z" fill="#1C1B19"/>
+  <path d="M-20 900 L420 390 L490 450 L60 1000 L-20 1000 Z" fill="#3A3834"/>
+  <path d="M0 910 L430 410" stroke="#5E5A53" stroke-width="6"/>
+  <circle cx="452" cy="432" r="46" fill="url(#gold)"/>
+  <circle cx="452" cy="432" r="16" fill="#76592B"/>
+</svg>

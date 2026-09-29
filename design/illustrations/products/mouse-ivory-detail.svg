@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Mouse, scroll wheel detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <path d="M100 1000 C100 500 250 200 400 200 C550 200 700 500 700 1000 Z" fill="url(#ivory)"/>
+  <path d="M400 204 V640" stroke="#E4DDCF" stroke-width="6"/>
+  <rect x="360" y="300" width="80" height="200" rx="40" fill="url(#gold)"/>
+  <path d="M368 340 H432 M366 370 H434 M366 400 H434 M366 430 H434 M368 460 H432" stroke="#76592B" stroke-width="3"/>
+</svg>

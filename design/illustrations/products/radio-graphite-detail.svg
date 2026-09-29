@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Radio, speaker and tuning knob detail, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <pattern id="grille" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="11" cy="11" r="3.5" fill="#5E5A53"/>
+    </pattern>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <rect x="70" y="220" width="780" height="640" rx="60" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <rect x="60" y="200" width="800" height="640" rx="60" fill="url(#ink)"/>
+  <circle cx="310" cy="520" r="205" fill="#1C1B19" stroke="#B89560" stroke-width="8"/>
+  <circle cx="310" cy="520" r="188" fill="url(#grille)"/>
+  <circle cx="645" cy="430" r="72" fill="url(#gold)"/>
+  <circle cx="645" cy="430" r="40" fill="#CDB27E"/>
+  <rect x="641" y="364" width="8" height="30" rx="4" fill="#76592B"/>
+  <circle cx="645" cy="640" r="40" fill="#5E5A53"/>
+</svg>

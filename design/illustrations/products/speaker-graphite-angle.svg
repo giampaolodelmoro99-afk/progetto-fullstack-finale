@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Speaker, three-quarter view, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <pattern id="grille" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="8" r="2" fill="#5E5A53"/>
+    </pattern>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="410" cy="770" rx="150" ry="18" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M290 340 V690 A110 70 0 0 0 510 690 V340 Z" fill="url(#ink)"/>
+  <rect x="306" y="386" width="136" height="340" rx="44" fill="url(#grille)"/>
+  <path d="M290 340 V364 A110 30 0 0 0 510 364 V340 Z" fill="#76592B"/>
+  <ellipse cx="400" cy="340" rx="110" ry="30" fill="#CDB27E"/>
+  <ellipse cx="400" cy="340" rx="86" ry="22" fill="#B89560"/>
+  <ellipse cx="400" cy="340" rx="9" ry="6" fill="#5E5A53"/>
+</svg>

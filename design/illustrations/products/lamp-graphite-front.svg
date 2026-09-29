@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Table lamp, front view, graphite finish</title>
+  <defs>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="746" rx="110" ry="14" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="393" y="525" width="14" height="206" fill="#1C1B19"/>
+  <ellipse cx="400" cy="735" rx="78" ry="13" fill="#1C1B19"/>
+  <circle cx="440" cy="731" r="4" fill="#B89560"/>
+  <path d="M285 520 A115 115 0 0 1 515 520 Z" fill="url(#shade)"/>
+  <rect x="280" y="516" width="240" height="9" rx="4" fill="#B89560"/>
+</svg>

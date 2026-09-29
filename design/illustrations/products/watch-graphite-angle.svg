@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Watch, three-quarter view, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="390" cy="776" rx="130" ry="16" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M368 440 Q372 330 400 250 H452 Q432 330 432 440 Z" fill="#3A3834"/>
+  <path d="M365 560 Q360 680 330 770 H420 Q440 680 435 560 Z" fill="url(#ink)"/>
+  <ellipse cx="400" cy="514" rx="104" ry="84" fill="#76592B"/>
+  <ellipse cx="400" cy="500" rx="104" ry="84" fill="#B89560"/>
+  <ellipse cx="400" cy="500" rx="90" ry="72" fill="#FFFFFF"/>
+  <ellipse cx="507" cy="506" rx="8" ry="12" fill="#B89560"/>
+  <g transform="translate(400 500) scale(1 0.8)">
+    <path d="M0 -76 V-62 M76 0 H62 M0 76 V62 M-76 0 H-62" stroke="#1C1B19" stroke-width="4"/>
+    <path d="M0 0 V-52" stroke="#1C1B19" stroke-width="6" stroke-linecap="round"/>
+    <path d="M0 0 L40 34" stroke="#1C1B19" stroke-width="4" stroke-linecap="round"/>
+    <circle r="6" fill="#1C1B19"/>
+  </g>
+</svg>

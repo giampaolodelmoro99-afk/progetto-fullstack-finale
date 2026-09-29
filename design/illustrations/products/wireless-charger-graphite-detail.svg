@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Wireless charging pad, charging surface detail, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <circle cx="414" cy="520" r="282" fill="#1C1B19" opacity="0.18" filter="url(#blur)"/>
+  <circle cx="400" cy="500" r="280" fill="url(#ink)"/>
+  <circle cx="400" cy="500" r="240" fill="none" stroke="#3A3834" stroke-width="3"/>
+  <circle cx="400" cy="500" r="200" fill="none" stroke="#3A3834" stroke-width="3"/>
+  <circle cx="400" cy="500" r="150" fill="none" stroke="#B89560" stroke-width="10"/>
+  <circle cx="400" cy="500" r="12" fill="#B89560"/>
+</svg>

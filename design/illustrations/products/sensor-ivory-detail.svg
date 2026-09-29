@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Temperature and humidity sensor, face detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <rect x="56" y="166" width="720" height="780" rx="200" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="40" y="140" width="720" height="780" rx="200" fill="url(#ivory)"/>
+  <circle cx="400" cy="460" r="150" fill="none" stroke="#B89560" stroke-width="20"/>
+  <circle cx="400" cy="460" r="120" fill="#E4DDCF"/>
+  <circle cx="400" cy="460" r="16" fill="#B89560"/>
+  <rect x="260" y="720" width="280" height="14" rx="7" fill="#A29D94"/>
+  <rect x="260" y="756" width="280" height="14" rx="7" fill="#A29D94"/>
+  <rect x="260" y="792" width="280" height="14" rx="7" fill="#A29D94"/>
+</svg>

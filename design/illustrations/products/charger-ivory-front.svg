@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Wall charger, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="716" rx="150" ry="16" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="300" y="470" width="200" height="240" rx="22" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="345" y="560" width="46" height="14" rx="7" fill="#1C1B19"/>
+  <rect x="345" y="610" width="46" height="14" rx="7" fill="#1C1B19"/>
+  <rect x="420" y="520" width="48" height="3" fill="#B89560"/>
+  <rect x="420" y="532" width="30" height="3" fill="#B89560"/>
+</svg>

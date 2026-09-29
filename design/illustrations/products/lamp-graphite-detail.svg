@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Table lamp, shade rim detail, graphite finish</title>
+  <defs>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="620" rx="300" ry="70" fill="#F4ECDD" filter="url(#glow)"/>
+  <rect x="380" y="574" width="40" height="440" fill="#1C1B19"/>
+  <rect x="368" y="574" width="64" height="40" rx="8" fill="url(#gold)"/>
+  <path d="M40 560 A360 360 0 0 1 760 560 Z" fill="url(#shade)"/>
+  <rect x="30" y="552" width="740" height="22" rx="11" fill="url(#gold)"/>
+</svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>USB-C hub, three-quarter view, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="420" cy="660" rx="230" ry="20" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M250 600 C170 610 110 640 -20 650" fill="none" stroke="#1C1B19" stroke-width="12" stroke-linecap="round"/>
+  <path d="M252 560 L312 530 L622 530 L562 560 Z" fill="#3A3834"/>
+  <path d="M562 560 L622 530 L622 610 L562 640 Z" fill="#1C1B19"/>
+  <rect x="240" y="560" width="322" height="80" rx="12" fill="url(#ink)"/>
+  <rect x="290" y="586" width="48" height="28" rx="6" fill="#5E5A53"/>
+  <rect x="298" y="595" width="32" height="10" rx="2" fill="#1C1B19"/>
+  <rect x="354" y="586" width="48" height="28" rx="6" fill="#5E5A53"/>
+  <rect x="362" y="595" width="32" height="10" rx="2" fill="#1C1B19"/>
+  <rect x="418" y="593" width="44" height="14" rx="7" fill="#5E5A53"/>
+  <rect x="476" y="593" width="44" height="14" rx="7" fill="#5E5A53"/>
+  <path d="M330 545 H540" stroke="#B89560" stroke-width="3"/>
+  <circle cx="540" cy="600" r="5" fill="#B89560"/>
+</svg>

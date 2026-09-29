@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Power bank, port and charge indicator detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <rect x="100" y="300" width="600" height="800" rx="90" fill="url(#ivory)"/>
+  <rect x="340" y="380" width="120" height="36" rx="18" fill="#FAF7F0" stroke="#B89560" stroke-width="3"/>
+  <rect x="362" y="392" width="76" height="12" rx="6" fill="#A29D94"/>
+  <circle cx="310" cy="640" r="14" fill="#B89560"/>
+  <circle cx="370" cy="640" r="14" fill="#B89560"/>
+  <circle cx="430" cy="640" r="14" fill="#B89560"/>
+  <circle cx="490" cy="640" r="14" fill="#A29D94"/>
+  <rect x="200" y="520" width="400" height="4" fill="#B89560"/>
+</svg>

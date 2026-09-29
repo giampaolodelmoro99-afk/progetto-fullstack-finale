@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Illustrazioni demo</title>
+  <style>
+    :root {
+      --ink: #1C1B19;
+      --ink-muted: #5E5A53;
+      --ivory: #FAF7F0;
+      --divider: #E4DDCF;
+      --media: #F0EBE1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--ivory);
+      color: var(--ink);
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+    main { max-width: 1400px; margin: 0 auto; }
+    h1 { font-family: Georgia, serif; font-weight: 400; font-size: 2rem; margin: 0 0 8px; }
+    h2 { font-family: Georgia, serif; font-weight: 400; font-size: 1.5rem; margin: 48px 0 16px; }
+    h3 { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); margin: 24px 0 8px; }
+    p { color: var(--ink-muted); margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+    .grid.categories { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    figure { margin: 0; }
+    img { display: block; width: 100%; aspect-ratio: 4 / 5; background: var(--media); border: 1px solid var(--divider); border-radius: 8px; }
+    figcaption { font-size: 0.75rem; color: var(--ink-muted); margin-top: 6px; word-break: break-all; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid.categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Illustrazioni demo</h1>
+  <p>WebP generati da <code>scripts/render-illustrations.sh</code>. Per aggiornarli, modifica gli SVG in questa cartella e rilancia lo script.</p>
+
+  <h2>Prodotti</h2>
+  <p>Per ogni tipo due finiture, grafite e avorio, ciascuna con tre viste: frontale (copertina), tre quarti, dettaglio.</p>
+
+  <h3>Cuffie</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-graphite-front.webp" alt="Cuffie grafite, vista frontale"><figcaption>headphones-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-graphite-angle.webp" alt="Cuffie grafite, vista di tre quarti"><figcaption>headphones-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-graphite-detail.webp" alt="Cuffie grafite, dettaglio del padiglione"><figcaption>headphones-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-ivory-front.webp" alt="Cuffie avorio, vista frontale"><figcaption>headphones-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-ivory-angle.webp" alt="Cuffie avorio, vista di tre quarti"><figcaption>headphones-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/headphones-ivory-detail.webp" alt="Cuffie avorio, dettaglio del padiglione"><figcaption>headphones-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Auricolari</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-graphite-front.webp" alt="Auricolari grafite, vista frontale"><figcaption>earbuds-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-graphite-angle.webp" alt="Auricolari grafite, vista di tre quarti"><figcaption>earbuds-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-graphite-detail.webp" alt="Auricolari grafite, dettaglio della griglia"><figcaption>earbuds-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-ivory-front.webp" alt="Auricolari avorio, vista frontale"><figcaption>earbuds-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-ivory-angle.webp" alt="Auricolari avorio, vista di tre quarti"><figcaption>earbuds-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/earbuds-ivory-detail.webp" alt="Auricolari avorio, dettaglio della griglia"><figcaption>earbuds-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Diffusore</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-graphite-front.webp" alt="Diffusore grafite, vista frontale"><figcaption>speaker-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-graphite-angle.webp" alt="Diffusore grafite, vista di tre quarti"><figcaption>speaker-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-graphite-detail.webp" alt="Diffusore grafite, dettaglio dell'anello superiore"><figcaption>speaker-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-ivory-front.webp" alt="Diffusore avorio, vista frontale"><figcaption>speaker-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-ivory-angle.webp" alt="Diffusore avorio, vista di tre quarti"><figcaption>speaker-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/speaker-ivory-detail.webp" alt="Diffusore avorio, dettaglio dell'anello superiore"><figcaption>speaker-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Radio</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/radio-graphite-front.webp" alt="Radio grafite, vista frontale"><figcaption>radio-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/radio-graphite-angle.webp" alt="Radio grafite, vista di tre quarti"><figcaption>radio-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/radio-graphite-detail.webp" alt="Radio grafite, dettaglio di altoparlante e manopola"><figcaption>radio-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/radio-ivory-front.webp" alt="Radio avorio, vista frontale"><figcaption>radio-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/radio-ivory-angle.webp" alt="Radio avorio, vista di tre quarti"><figcaption>radio-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/radio-ivory-detail.webp" alt="Radio avorio, dettaglio di altoparlante e manopola"><figcaption>radio-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Caricatore</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/charger-graphite-front.webp" alt="Caricatore grafite, vista frontale"><figcaption>charger-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/charger-graphite-angle.webp" alt="Caricatore grafite, vista di tre quarti"><figcaption>charger-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/charger-graphite-detail.webp" alt="Caricatore grafite, dettaglio delle porte"><figcaption>charger-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/charger-ivory-front.webp" alt="Caricatore avorio, vista frontale"><figcaption>charger-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/charger-ivory-angle.webp" alt="Caricatore avorio, vista di tre quarti"><figcaption>charger-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/charger-ivory-detail.webp" alt="Caricatore avorio, dettaglio delle porte"><figcaption>charger-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Cavo</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/cable-graphite-front.webp" alt="Cavo grafite, vista frontale"><figcaption>cable-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/cable-graphite-angle.webp" alt="Cavo grafite, vista di tre quarti"><figcaption>cable-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/cable-graphite-detail.webp" alt="Cavo grafite, dettaglio del connettore"><figcaption>cable-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/cable-ivory-front.webp" alt="Cavo avorio, vista frontale"><figcaption>cable-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/cable-ivory-angle.webp" alt="Cavo avorio, vista di tre quarti"><figcaption>cable-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/cable-ivory-detail.webp" alt="Cavo avorio, dettaglio del connettore"><figcaption>cable-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Power bank</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-graphite-front.webp" alt="Power bank grafite, vista frontale"><figcaption>power-bank-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-graphite-angle.webp" alt="Power bank grafite, vista di tre quarti"><figcaption>power-bank-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-graphite-detail.webp" alt="Power bank grafite, dettaglio di porta e indicatori"><figcaption>power-bank-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-ivory-front.webp" alt="Power bank avorio, vista frontale"><figcaption>power-bank-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-ivory-angle.webp" alt="Power bank avorio, vista di tre quarti"><figcaption>power-bank-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/power-bank-ivory-detail.webp" alt="Power bank avorio, dettaglio di porta e indicatori"><figcaption>power-bank-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Caricatore wireless</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-graphite-front.webp" alt="Caricatore wireless grafite, vista frontale"><figcaption>wireless-charger-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-graphite-angle.webp" alt="Caricatore wireless grafite, vista di tre quarti"><figcaption>wireless-charger-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-graphite-detail.webp" alt="Caricatore wireless grafite, dettaglio della superficie"><figcaption>wireless-charger-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-ivory-front.webp" alt="Caricatore wireless avorio, vista frontale"><figcaption>wireless-charger-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-ivory-angle.webp" alt="Caricatore wireless avorio, vista di tre quarti"><figcaption>wireless-charger-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/wireless-charger-ivory-detail.webp" alt="Caricatore wireless avorio, dettaglio della superficie"><figcaption>wireless-charger-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Supporto</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/stand-graphite-front.webp" alt="Supporto grafite, vista laterale"><figcaption>stand-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/stand-graphite-angle.webp" alt="Supporto grafite, vista di tre quarti"><figcaption>stand-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/stand-graphite-detail.webp" alt="Supporto grafite, dettaglio della cerniera"><figcaption>stand-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/stand-ivory-front.webp" alt="Supporto avorio, vista laterale"><figcaption>stand-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/stand-ivory-angle.webp" alt="Supporto avorio, vista di tre quarti"><figcaption>stand-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/stand-ivory-detail.webp" alt="Supporto avorio, dettaglio della cerniera"><figcaption>stand-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Tastiera</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-graphite-front.webp" alt="Tastiera grafite, vista dall'alto"><figcaption>keyboard-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-graphite-angle.webp" alt="Tastiera grafite, vista di tre quarti"><figcaption>keyboard-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-graphite-detail.webp" alt="Tastiera grafite, dettaglio dei tasti"><figcaption>keyboard-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-ivory-front.webp" alt="Tastiera avorio, vista dall'alto"><figcaption>keyboard-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-ivory-angle.webp" alt="Tastiera avorio, vista di tre quarti"><figcaption>keyboard-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/keyboard-ivory-detail.webp" alt="Tastiera avorio, dettaglio dei tasti"><figcaption>keyboard-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Hub</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/hub-graphite-front.webp" alt="Hub grafite, vista frontale"><figcaption>hub-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/hub-graphite-angle.webp" alt="Hub grafite, vista di tre quarti"><figcaption>hub-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/hub-graphite-detail.webp" alt="Hub grafite, dettaglio delle porte"><figcaption>hub-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/hub-ivory-front.webp" alt="Hub avorio, vista frontale"><figcaption>hub-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/hub-ivory-angle.webp" alt="Hub avorio, vista di tre quarti"><figcaption>hub-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/hub-ivory-detail.webp" alt="Hub avorio, dettaglio delle porte"><figcaption>hub-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Mouse</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-graphite-front.webp" alt="Mouse grafite, vista dall'alto"><figcaption>mouse-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-graphite-angle.webp" alt="Mouse grafite, vista laterale"><figcaption>mouse-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-graphite-detail.webp" alt="Mouse grafite, dettaglio della rotella"><figcaption>mouse-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-ivory-front.webp" alt="Mouse avorio, vista dall'alto"><figcaption>mouse-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-ivory-angle.webp" alt="Mouse avorio, vista laterale"><figcaption>mouse-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/mouse-ivory-detail.webp" alt="Mouse avorio, dettaglio della rotella"><figcaption>mouse-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Orologio</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/watch-graphite-front.webp" alt="Orologio grafite, vista frontale"><figcaption>watch-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/watch-graphite-angle.webp" alt="Orologio grafite, vista di tre quarti"><figcaption>watch-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/watch-graphite-detail.webp" alt="Orologio grafite, dettaglio del quadrante"><figcaption>watch-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/watch-ivory-front.webp" alt="Orologio avorio, vista frontale"><figcaption>watch-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/watch-ivory-angle.webp" alt="Orologio avorio, vista di tre quarti"><figcaption>watch-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/watch-ivory-detail.webp" alt="Orologio avorio, dettaglio del quadrante"><figcaption>watch-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Cinturino</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/strap-graphite-front.webp" alt="Cinturino grafite, vista frontale"><figcaption>strap-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/strap-graphite-angle.webp" alt="Cinturino grafite, vista di tre quarti"><figcaption>strap-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/strap-graphite-detail.webp" alt="Cinturino grafite, dettaglio della fibbia"><figcaption>strap-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/strap-ivory-front.webp" alt="Cinturino avorio, vista frontale"><figcaption>strap-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/strap-ivory-angle.webp" alt="Cinturino avorio, vista di tre quarti"><figcaption>strap-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/strap-ivory-detail.webp" alt="Cinturino avorio, dettaglio della fibbia"><figcaption>strap-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Lampada</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-graphite-front.webp" alt="Lampada grafite, vista frontale"><figcaption>lamp-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-graphite-angle.webp" alt="Lampada grafite, vista di tre quarti"><figcaption>lamp-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-graphite-detail.webp" alt="Lampada grafite, dettaglio del bordo del paralume"><figcaption>lamp-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-ivory-front.webp" alt="Lampada avorio, vista frontale"><figcaption>lamp-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-ivory-angle.webp" alt="Lampada avorio, vista di tre quarti"><figcaption>lamp-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/lamp-ivory-detail.webp" alt="Lampada avorio, dettaglio del bordo del paralume"><figcaption>lamp-ivory-detail</figcaption></figure>
+  </div>
+
+  <h3>Sensore</h3>
+  <div class="grid">
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-graphite-front.webp" alt="Sensore grafite, vista frontale"><figcaption>sensor-graphite-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-graphite-angle.webp" alt="Sensore grafite, vista di tre quarti"><figcaption>sensor-graphite-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-graphite-detail.webp" alt="Sensore grafite, dettaglio del frontale"><figcaption>sensor-graphite-detail</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-ivory-front.webp" alt="Sensore avorio, vista frontale"><figcaption>sensor-ivory-front</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-ivory-angle.webp" alt="Sensore avorio, vista di tre quarti"><figcaption>sensor-ivory-angle</figcaption></figure>
+    <figure><img src="../../backend/database/seeders/assets/products/sensor-ivory-detail.webp" alt="Sensore avorio, dettaglio del frontale"><figcaption>sensor-ivory-detail</figcaption></figure>
+  </div>
+
+  <h2>Categorie</h2>
+  <p>Immagini 4:5: le tessere quadrate del negozio le ritagliano al centro (Fase 7).</p>
+  <div class="grid categories">
+    <figure><img src="../../frontend/src/assets/categories/audio.webp" alt="Categoria Audio"><figcaption>audio → audio.webp</figcaption></figure>
+    <figure><img src="../../frontend/src/assets/categories/charging.webp" alt="Categoria Ricarica ed energia"><figcaption>ricarica-ed-energia → charging.webp</figcaption></figure>
+    <figure><img src="../../frontend/src/assets/categories/desk.webp" alt="Categoria Scrivania"><figcaption>scrivania → desk.webp</figcaption></figure>
+    <figure><img src="../../frontend/src/assets/categories/wearables.webp" alt="Categoria Indossabili"><figcaption>indossabili → wearables.webp</figcaption></figure>
+    <figure><img src="../../frontend/src/assets/categories/smart-home.webp" alt="Categoria Casa smart"><figcaption>casa-smart → smart-home.webp</figcaption></figure>
+    <figure><img src="../../frontend/src/assets/categories/travel.webp" alt="Categoria Viaggio"><figcaption>viaggio → travel.webp</figcaption></figure>
+  </div>
+
+  <h2>Ripiego</h2>
+  <p>Per le categorie senza immagine e per i prodotti senza immagini.</p>
+  <div class="grid categories">
+    <figure><img src="../../frontend/src/assets/fallback.webp" alt="Immagine di ripiego"><figcaption>fallback.webp</figcaption></figure>
+  </div>
+</main>
+</body>
+</html>

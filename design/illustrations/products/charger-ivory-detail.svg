@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Wall charger, USB-C ports detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="410" cy="870" rx="300" ry="20" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="120" y="180" width="560" height="680" rx="50" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="4"/>
+  <rect x="230" y="440" width="180" height="54" rx="27" fill="#1C1B19"/>
+  <rect x="258" y="459" width="124" height="16" rx="8" fill="#5E5A53"/>
+  <rect x="230" y="560" width="180" height="54" rx="27" fill="#1C1B19"/>
+  <rect x="258" y="579" width="124" height="16" rx="8" fill="#5E5A53"/>
+  <rect x="470" y="300" width="120" height="6" fill="#B89560"/>
+  <rect x="470" y="322" width="70" height="6" fill="#B89560"/>
+</svg>

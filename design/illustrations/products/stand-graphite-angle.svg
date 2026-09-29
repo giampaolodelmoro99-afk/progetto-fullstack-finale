@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Laptop stand, three-quarter view, graphite finish</title>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="420" cy="728" rx="230" ry="24" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <g transform="translate(70 -40)">
+    <path d="M500 470 L518 470 L542 712 L522 712 Z" fill="#1C1B19"/>
+    <path d="M238 708 L500 466 L520 480 L264 712 Z" fill="#1C1B19"/>
+    <rect x="220" y="706" width="330" height="18" rx="6" fill="#1C1B19"/>
+  </g>
+  <path d="M234 708 L304 668 L304 686 L234 726 Z" fill="#1C1B19"/>
+  <path d="M506 470 L576 430 L588 440 L518 480 Z" fill="#3A3834"/>
+  <path d="M500 470 L518 470 L542 712 L522 712 Z" fill="#1C1B19"/>
+  <path d="M238 708 L500 466 L520 480 L264 712 Z" fill="#3A3834"/>
+  <rect x="220" y="706" width="330" height="18" rx="6" fill="#3A3834"/>
+  <rect x="220" y="686" width="14" height="30" rx="4" fill="#1C1B19"/>
+  <rect x="242" y="709" width="290" height="3" fill="#5E5A53"/>
+  <circle cx="510" cy="474" r="11" fill="url(#gold)"/>
+  <circle cx="580" cy="434" r="11" fill="url(#gold)"/>
+</svg>

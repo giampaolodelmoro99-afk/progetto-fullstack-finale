@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Watch, dial detail, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <rect x="318" y="0" width="164" height="220" fill="url(#ivory)"/>
+  <rect x="318" y="780" width="164" height="220" fill="url(#ivory)"/>
+  <circle cx="414" cy="520" r="316" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="706" y="468" width="40" height="64" rx="8" fill="url(#gold)"/>
+  <circle cx="400" cy="500" r="300" fill="#FFFFFF" stroke="#B89560" stroke-width="30"/>
+  <path d="M400 240 V285 M530 274.8 L515 300.8 M625.2 370 L599.2 385 M660 500 H615 M625.2 630 L599.2 615 M530 725.2 L515 699.2 M400 760 V715 M270 725.2 L285 699.2 M174.8 630 L200.8 615 M140 500 H185 M174.8 370 L200.8 385 M270 274.8 L285 300.8" stroke="#B89560" stroke-width="6" stroke-linecap="round"/>
+  <path d="M400 500 V340" stroke="#1C1B19" stroke-width="12" stroke-linecap="round"/>
+  <path d="M400 500 L553 628" stroke="#1C1B19" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="400" cy="500" r="14" fill="#B89560"/>
+  <circle cx="400" cy="500" r="6" fill="#1C1B19"/>
+</svg>

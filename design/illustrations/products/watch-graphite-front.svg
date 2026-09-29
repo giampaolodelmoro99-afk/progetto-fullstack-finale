@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Watch, front view, graphite finish</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3A3834"/>
+      <stop offset="1" stop-color="#1C1B19"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="766" rx="100" ry="14" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <rect x="358" y="250" width="84" height="510" rx="16" fill="url(#ink)"/>
+  <rect x="508" y="488" width="16" height="24" rx="4" fill="#B89560"/>
+  <circle cx="400" cy="500" r="104" fill="#FFFFFF" stroke="#B89560" stroke-width="14"/>
+  <path d="M400 412 V428 M472 500 H488 M400 572 V588 M312 500 H328" stroke="#1C1B19" stroke-width="4"/>
+  <path d="M400 500 V440" stroke="#1C1B19" stroke-width="6" stroke-linecap="round"/>
+  <path d="M400 500 L448 540" stroke="#1C1B19" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="400" cy="500" r="6" fill="#1C1B19"/>
+</svg>

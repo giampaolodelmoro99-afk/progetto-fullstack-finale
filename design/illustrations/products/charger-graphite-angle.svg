@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Wall charger, three-quarter view, graphite finish</title>
+  <defs>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="415" cy="722" rx="160" ry="16" fill="#1C1B19" opacity="0.16" filter="url(#blur)"/>
+  <path d="M300 470 L380 440 L520 470 L440 500 Z" fill="#5E5A53" stroke="#5E5A53" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M440 500 L520 470 L520 690 L440 730 Z" fill="#1C1B19" stroke="#1C1B19" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M300 470 L440 500 L440 730 L300 700 Z" fill="#3A3834" stroke="#3A3834" stroke-width="2" stroke-linejoin="round"/>
+  <g transform="translate(300 470) skewY(12.1)">
+    <rect x="40" y="85" width="46" height="14" rx="7" fill="#1C1B19"/>
+    <rect x="40" y="135" width="46" height="14" rx="7" fill="#1C1B19"/>
+  </g>
+  <g transform="translate(440 500) skewY(-20.6)">
+    <rect x="20" y="40" width="40" height="3" fill="#B89560"/>
+    <rect x="20" y="52" width="24" height="3" fill="#B89560"/>
+  </g>
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Earbuds with charging case, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="760" rx="240" ry="16" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <rect x="285" y="560" width="230" height="190" rx="80" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <path d="M290 625 H510" stroke="#E4DDCF" stroke-width="3"/>
+  <circle cx="400" cy="690" r="6" fill="#B89560"/>
+  <rect x="196" y="600" width="26" height="140" rx="13" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="196" y="722" width="26" height="18" rx="9" fill="#B89560"/>
+  <circle cx="209" cy="575" r="46" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <circle cx="209" cy="575" r="18" fill="none" stroke="#B89560" stroke-width="5"/>
+  <rect x="578" y="600" width="26" height="140" rx="13" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="578" y="722" width="26" height="18" rx="9" fill="#B89560"/>
+  <circle cx="591" cy="575" r="46" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <circle cx="591" cy="575" r="18" fill="none" stroke="#B89560" stroke-width="5"/>
+</svg>

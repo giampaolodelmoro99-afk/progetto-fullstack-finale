@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <title>Speaker, front view, ivory finish</title>
+  <defs>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4DDCF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#CDB27E"/>
+      <stop offset="1" stop-color="#B89560"/>
+    </linearGradient>
+    <pattern id="grille" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="8" r="2" fill="#A29D94"/>
+    </pattern>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1000" fill="#F0EBE1"/>
+  <ellipse cx="400" cy="768" rx="140" ry="16" fill="#1C1B19" opacity="0.14" filter="url(#blur)"/>
+  <path d="M300 350 H500 V680 Q500 760 420 760 H380 Q300 760 300 680 Z" fill="url(#ivory)" stroke="#E4DDCF" stroke-width="3"/>
+  <rect x="324" y="392" width="152" height="340" rx="50" fill="url(#grille)"/>
+  <rect x="286" y="318" width="228" height="62" rx="31" fill="url(#gold)"/>
+  <rect x="302" y="332" width="196" height="34" rx="17" fill="#CDB27E"/>
+  <circle cx="400" cy="349" r="7" fill="#76592B"/>
+</svg>
