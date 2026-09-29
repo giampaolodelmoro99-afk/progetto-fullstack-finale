@@ -55,7 +55,7 @@ tests/
 | Richiesta corretta | status corretto e struttura JSON (`assertJsonStructure`, `assertJsonPath`) |
 | Dati non validi | 422 con `errors` sui campi giusti; usa i `dataset` di Pest per coprire più casi |
 | Utente non autenticato | 401 |
-| Utente non autorizzato | 403 (cliente su rotta admin, cliente su risorsa di un altro) |
+| Utente non autorizzato | 403 (cliente su rotta admin, cliente su risorsa di un altro); 404 dove la Policy usa `denyAsNotFound()` (ordini del cliente) |
 | Risorsa inesistente | 404 dove applicabile |
 | Effetti collaterali | database (`assertDatabaseHas`), notifiche, eventi, file |
 
@@ -67,6 +67,42 @@ tests/
 - `is_new` ai bordi della finestra: creato 29 giorni fa sì, 31 giorni fa no (con `travelTo()`).
 - Prodotti correlati: massimo 4, stessa categoria, esclusi il prodotto corrente, gli esauriti e i disattivati; meno di 4 quando la categoria non ne ha abbastanza.
 - Prodotti disattivati o eliminati: assenti dall'elenco e 404 sul dettaglio.
+
+### Carrello
+
+- `summary.items_count` somma le quantità di tutte le righe, comprese quelle esaurite, disattivate o eliminate.
+- Subtotale, spedizione e totale escludono le righe non acquistabili; una riga con quantità oltre lo stock resta nei totali.
+- Spedizione: 690 sotto la soglia, 0 da 9900 in su; `free_shipping_remaining` con un dataset (subtotale 5800 → 4100, 9900 → 0, 12000 → 0).
+- `exceeds_stock`, `is_purchasable`, `line_total` null per le righe non acquistabili e `can_checkout` con un dataset di carrelli: vuoto, tutto acquistabile, una riga esaurita, una riga disattivata, una riga oltre lo stock.
+- `max_quantity` con un dataset: stock 3 → 3, stock 10 → 10, stock 25 → 10.
+- 422 su aggiunta o modifica oltre `max_quantity`, anche quando la somma con la quantità già presente supera il massimo; quantità 0 → 422.
+- Il carrello usa il prezzo attuale: cambiando il prezzo del prodotto cambiano `unit_price` e totali.
+- Un cliente non vede né modifica le righe del carrello di un altro.
+
+### Indirizzi
+
+- Dataset di dati non validi con 422 sul campo giusto: CAP `5612` e `561255`, provincia `pi`, `PIS` e `P1`, telefono mancante, più lungo di 20 caratteri, con lettere o con un `+` non iniziale.
+- Dati validi: CAP `56125`, provincia `PI`, telefono `+39 333 123 4567` e `3331234567`.
+- `country` salvato sempre come `IT`, anche se la richiesta invia un altro paese.
+
+### Checkout
+
+- Flusso riuscito: 201, ordine `paid` con `paid_at` e `terms_accepted_at`, righe e indirizzo in snapshot, stock decrementato, carrello svuotato, `payments.card_last_four` = `4242`.
+- Il numero completo della carta e il CVC non sono in nessuna tabella: `assertDatabaseMissing` su `payments` con il numero completo e nessuna colonna che li contenga.
+- 409 con l'elenco `{ product, requested, available }` per una riga esaurita, disattivata o con quantità oltre lo stock; nessun ordine creato e stock invariato.
+- 402 con la carta `4000 0000 0000 0002`: ordine `cancelled` senza `paid_at`, stock ripristinato, carrello intatto.
+- 422 senza `terms_accepted` o con `terms_accepted: false`.
+- Dataset della carta con 422 sul campo giusto: numero che non supera Luhn, numero di 12 e di 20 cifre, lettere nel numero, scadenza passata, mese `13`, formato `8/29`, CVC di 2 e di 4 cifre, intestatario mancante. La scadenza del mese corrente è valida (con `travelTo()`).
+- Indirizzo di un altro utente → 422; email non verificata → 403.
+- `dontFlash`: l'elenco del gestore delle eccezioni contiene `payment.number`, `payment.cvc`, `password`, `password_confirmation` e `current_password`, scritti come valori attesi nel test. Non serve un test con una richiesta non JSON: `ForceJsonResponse` rende JSON ogni richiesta API, quindi passerebbe comunque.
+- Con `Log::spy()`, un checkout riuscito e uno rifiutato non scrivono nei log il numero completo della carta né il CVC.
+
+### Ordini e visibilità
+
+- `GET /orders` restituisce solo gli ordini del cliente con `paid_at`: ne sono esclusi i tentativi falliti (`failedPayment()`), gli ordini `pending` e quelli di altri utenti; è incluso un ordine `cancelledAfterPayment()`.
+- `GET /orders/{order}`: 200 per un proprio ordine pagato, anche annullato dopo il pagamento; 404 per un tentativo fallito, per un ordine `pending` e per l'ordine di un altro cliente.
+- `OrderResource` con `payment.card_last_four` e `items[].cover` null quando il prodotto è stato eliminato.
+- Admin: `GET /admin/orders` include i tentativi falliti; `failed_payment=1` restituisce solo quelli; `GET /admin/orders/{order}` di un tentativo fallito → 200.
 
 ### Test di flusso
 
@@ -80,6 +116,7 @@ tests/
 - `OrderStatus::canTransitionTo()` con un dataset di tutte le coppie, ed etichette esatte di `label()` (In attesa, Pagato, Spedito, Consegnato, Annullato).
 - Disponibilità del prodotto con un dataset di stock 0, 1, 2, 3 e 4 (soglia 3): Esaurito, Ultimo pezzo, Ultimi 2 pezzi, Ultimi 3 pezzi, Disponibile. I valori attesi sono scritti nel test, non letti dalla configurazione.
 - Calcolo di subtotale, spedizione e totale.
+- `LuhnRule` con un dataset: `4242424242424242` e `4000000000000002` validi, `4242424242424241` non valido.
 - Generazione del numero d'ordine.
 - Verificatori del secondo fattore.
 
@@ -144,8 +181,10 @@ src/
 | Viste con dati | stati di caricamento, errore con "Riprova", vuoto, contenuto |
 | Catalogo | filtri e ordinamento (Novità, Prezzo crescente, Prezzo decrescente) che aggiornano la query string e i risultati, ritorno a pagina 1, limiti dello slider da `meta.price_range`, chip "Novità" ed etichetta di disponibilità ricevuti dall'API, correlati nascosti se vuoti |
 | Home e pagine statiche | hero con i dati del prodotto e con errore o 404, immagine di ripiego per una categoria senza immagine, link del footer verso le ancore di `/assistenza` e `/note-legali` |
-| Carrello | aggiunta, modifica quantità, rimozione, totali formattati |
-| Checkout | avanzamento degli step, email non verificata, pagamento rifiutato, successo |
+| Carrello | "N articoli" da `items_count` con le righe esaurite, totali formattati, selettore da 1 a `max_quantity`, riga esaurita con "—" e "Rimuovi dal carrello", "Procedi al checkout" disabilitato con `can_checkout` false, barra della spedizione gratuita, carrello vuoto con "Potrebbero piacerti", Snackbar dopo l'aggiunta |
+| Checkout | avanzamento dei tre passi, email non verificata, campo "Paese" non modificabile, validazione Zod di indirizzo e carta, "Paga" disabilitato senza accettazione delle condizioni o con `can_checkout` false, 402 che torna al passo 2 con i dati della carta conservati, 409 con "Disponibilità cambiata", 201 con navigazione alla conferma |
+| Dati della carta | dopo l'invio, riuscito e fallito, la MutationCache non contiene i dati della carta (`queryClient.getMutationCache()`), l'errore della mutation non contiene `config.data`, `localStorage` e `sessionStorage` sono vuoti, l'URL non contiene parametri della carta; rimontando la pagina il checkout riparte dal passo 1 con i campi vuoti |
+| Conferma d'ordine | dati letti da `GET /orders/{id}` (numero, stato, "Carta che termina con 4242", totali), immagine di ripiego per un prodotto eliminato, 404 con link agli ordini |
 | Sicurezza | login con secondo fattore, attivazione TOTP con codici di recupero, conferma dell'identità |
 | Admin | tabella prodotti, form prodotto, cambio di stato dell'ordine |
 

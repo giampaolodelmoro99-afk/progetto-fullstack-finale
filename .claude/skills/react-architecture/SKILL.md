@@ -1,11 +1,11 @@
 ---
 name: react-architecture
-description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore, TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419 e 423, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
+description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore, carrello, checkout con i dati della carta solo in memoria e conferma d'ordine, TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419 e 423, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
 ---
 
 # React — architettura del frontend
 
-Riferimento visivo del negozio: `design/mockups/01-negozio.pdf`. Testi e formati: `design/design-system/voice-and-content.md`.
+Riferimenti visivi: `design/mockups/01-negozio.pdf` (negozio) e `design/mockups/02-acquisto.pdf` (carrello, checkout, conferma). Testi e formati: `design/design-system/voice-and-content.md`.
 
 ## Stack
 
@@ -67,6 +67,7 @@ Una feature contiene tutto ciò che le appartiene, compresi i suoi test. Un elem
 - `ProtectedRoute`: se l'utente non è autenticato reindirizza a `/login` salvando la pagina di provenienza in `state.from`, così dopo il login si torna lì.
 - `GuestRoute`: login e registrazione reindirizzano a `/` se l'utente è già autenticato.
 - `AdminRoute`: se l'utente non è admin reindirizza a `/`.
+- Carrello, checkout e conferma d'ordine sono rotte protette.
 - Il checkout richiede email verificata: se non lo è, la pagina mostra l'invito a verificarla invece del form.
 - Le pagine admin si caricano con `React.lazy` e `Suspense`, con un fallback di caricamento.
 - `errorElement` con `ErrorPage`; rotta `*` con `NotFoundPage`.
@@ -84,7 +85,11 @@ export const paths = {
   supportSection: (section) => `/assistenza#${section}`,
   legal: '/note-legali',
   legalSection: (section) => `/note-legali#${section}`,
+  cart: '/cart',
+  checkout: '/checkout',
+  checkoutSuccess: (orderId) => `/checkout/success/${orderId}`,
   accountOrders: '/account/orders',
+  accountOrder: (orderId) => `/account/orders/${orderId}`,
 };
 ```
 
@@ -156,6 +161,47 @@ Dal mockup `01-negozio.pdf`:
 - Il numero di prodotti mostrato sotto il titolo arriva da `meta.total`.
 - Il dettaglio prodotto carica i correlati con `GET /products/{slug}/related`; se l'elenco è vuoto la sezione non si mostra.
 - `is_new` e `availability` arrivano dall'API: il frontend li mostra, non li calcola.
+- Il selettore di quantità della pagina prodotto va da 1 a `max_quantity` del prodotto.
+- Dopo l'aggiunta al carrello compare uno Snackbar "Aggiunto al carrello" con l'azione "Vai al carrello"; si invalida `cart`.
+
+## Carrello (`/cart`)
+
+Dal mockup `02-acquisto.pdf`. Tutti i valori arrivano dalla `CartResource` (skill `ecommerce-domain`): il frontend non ricalcola totali, conteggi o disponibilità.
+
+- Titolo "Il tuo carrello" con "N articoli" da `summary.items_count`; lo stesso valore alimenta il badge dell'AppBar.
+- Ogni riga: selettore di quantità da 1 a `max_quantity`, prezzo unitario "cad." e `line_total`. Le righe non acquistabili (`is_purchasable: false`) mostrano l'etichetta di disponibilità al posto del selettore, "—" al posto del totale e un avviso con "Rimuovi dal carrello".
+- Riepilogo con subtotale, spedizione ("Gratuita" quando è 0), totale e, se `free_shipping_remaining` è maggiore di 0, la barra "Ti mancano … per la spedizione gratuita".
+- "Procedi al checkout" disabilitato quando `can_checkout` è false, con il motivo accanto ("Rimuovi i prodotti esauriti per procedere al checkout").
+- Carrello vuoto: messaggio con "Scopri il negozio" e sezione "Potrebbero piacerti" con `GET /products?in_stock=1&sort=newest&per_page=4`.
+- Modifica della quantità e rimozione sono mutation che invalidano `cart`.
+
+## Checkout (`/checkout`)
+
+- Tre passi: Indirizzo, Pagamento, Riepilogo. Il riepilogo dell'ordine a lato (a scomparsa su mobile) legge `cart`.
+- Email non verificata: al posto del passo 1 compare l'invito a confermarla con "Invia di nuovo l'email".
+- **Stato del checkout:** passo corrente, indirizzo scelto, dati della carta e accettazione delle condizioni vivono in un `useReducer` di `CheckoutPage`, solo in memoria. Ricaricando la pagina il checkout riparte dal passo 1 con i campi vuoti.
+- **Passo 1, indirizzo:** card selezionabili degli indirizzi dell'utente (predefinito preselezionato) e form "Nuovo indirizzo" con le regole della skill `ecommerce-domain` replicate nello schema Zod. Il campo "Paese" mostra "Italia" e non è modificabile.
+- **Passo 2, pagamento:** intestatario, numero, scadenza `MM/AA` e CVC, con validazione Zod dello stesso formato del backend; nota "Ambiente dimostrativo: nessun addebito reale."
+- **Passo 3, riepilogo:** indirizzo e carta ("Carta che termina con 4242") con "Modifica", prodotti, totali, checkbox "Ho letto e accetto le condizioni di vendita" (link a `paths.legalSection('condizioni-di-vendita')`) e pulsante "Paga {totale}". "Paga" è disabilitato senza accettazione o quando `can_checkout` è false; in quel caso compare l'avviso "Disponibilità cambiata" con "Torna al carrello".
+- **Esiti di `POST /checkout`:**
+  - 201: si svuota lo stato della carta, si invalidano `cart` e `orders` e si naviga a `paths.checkoutSuccess(order.id)`
+  - 402: `Alert` "Pagamento non riuscito" con "Modifica la carta", che torna al passo 2 conservando i dati in memoria
+  - 409: si invalida `cart` e compare "Disponibilità cambiata" con "Torna al carrello"
+  - 422: errori mappati sui campi del passo corrispondente
+
+### Dati della carta
+
+- Esistono solo nello stato in memoria del checkout. Mai in cache di TanStack Query, `localStorage`, `sessionStorage`, URL, query string, `state` della navigazione, log o console.
+- Si inviano solo con `POST /checkout`.
+- `useMutation` conserva le `variables` nella MutationCache: il payload con la carta **non** si passa come variabile. L'hook `usePlaceOrder(getPayload)` riceve una funzione che legge i dati dallo stato del checkout al momento dell'invio e si chiama con `mutate()` senza argomenti.
+- L'errore di axios contiene `config.data`, cioè il corpo della richiesta con la carta, e TanStack Query salva l'errore nello stato della mutation: la funzione API del checkout intercetta l'errore e rilancia quello normalizzato da `normalizeApiError`, senza la richiesta originale.
+- I campi della carta hanno `autoComplete` corretto (`cc-name`, `cc-number`, `cc-exp`, `cc-csc`) e `inputMode="numeric"` dove serve.
+
+## Conferma d'ordine (`/checkout/success/:orderId`)
+
+- Legge `GET /orders/{orderId}` con l'hook del dettaglio ordine: la pagina funziona anche ricaricandola e non dipende dallo stato del checkout.
+- Mostra "Grazie per il tuo ordine" con l'email dell'utente, numero, data, stato, "Carta che termina con {card_last_four}", indirizzo, prodotti e totali; pulsanti "Vedi il tuo ordine" (`paths.accountOrder(id)`) e "Continua lo shopping".
+- 404 (ordine non pagato o di un altro utente): stato d'errore con link agli ordini.
 
 ## Dati dal server (TanStack Query)
 
@@ -229,6 +275,7 @@ export function useProducts(filters) {
 - Dati del server: TanStack Query.
 - Stato di interfaccia locale: `useState`.
 - Stato globale: solo autenticazione, notifiche (`NotificationProvider` con Snackbar) e conferma dell'identità (`IdentityConfirmationProvider`).
+- Stato del checkout: locale alla pagina, mai globale né persistito (sezione "Checkout").
 - Niente Redux né Zustand.
 
 ## Stati di una vista

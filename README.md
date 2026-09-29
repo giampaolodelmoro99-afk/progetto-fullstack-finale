@@ -108,3 +108,14 @@ Da completare quando verranno creati i seeder degli utenti.
 | Cliente demo | — | — | — |
 | Cliente con doppia autenticazione | — | — | — |
 | Cliente con email non verificata | — | — | — |
+
+## Carte di test
+
+Il pagamento è simulato: nessun addebito reale. Scadenza qualsiasi non passata nel formato MM/AA, CVC di 3 cifre qualsiasi.
+
+| Numero | Esito |
+|---|---|
+| 4242 4242 4242 4242 | pagamento approvato |
+| 4000 0000 0000 0002 | pagamento rifiutato (errore "Pagamento non riuscito") |
+
+Un ordine con pagamento rifiutato resta nel database come tentativo fallito: lo vede solo l'admin, non compare negli ordini del cliente.

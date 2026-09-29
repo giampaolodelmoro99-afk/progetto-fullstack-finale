@@ -12,6 +12,7 @@ Fonti:
 | `design/design-system/` | design system "Casa del Silicio" di Claude Design: `theme.js` di riferimento, colori, tipografia, componenti |
 | `design/design-system/voice-and-content.md` | regole di voce e contenuti, vincolanti per ogni testo dell'interfaccia |
 | `design/mockups/01-negozio.pdf` | mockup del negozio: home, catalogo, prodotto, stati di caricamento e vuoto, desktop e mobile |
+| `design/mockups/02-acquisto.pdf` | mockup dell'acquisto: carrello (pieno, vuoto, con righe esaurite, caricamento), checkout in tre passi con errori, email da verificare, conferma d'ordine, desktop e mobile |
 
 ## Tema
 
@@ -109,7 +110,19 @@ Riassunto delle regole di `design/design-system/voice-and-content.md`, che resta
 | Prodotto esaurito | quantità e pulsante disabilitati, `Alert` informativo "Prodotto esaurito" che rimanda ai correlati |
 | Prodotti correlati | griglia di card prodotto sotto il dettaglio; nascosta se l'elenco è vuoto |
 | Rassicurazioni | tre voci con icona: spedizione gratuita sopra 99,00 €, reso entro 30 giorni, garanzia di 2 anni |
-| Checkout | `Stepper` orizzontale su desktop e verticale su mobile |
+| Aggiunta al carrello | `Snackbar` "Aggiunto al carrello" con azione "Vai al carrello" e `IconButton` di chiusura |
+| Riga del carrello | miniatura, categoria in `overline`, nome, prezzo "cad.", `Select` "Quantità" da 1 a `max_quantity`, totale della riga, azione "Rimuovi" con icona; righe separate da `Divider` |
+| Riga del carrello non acquistabile | stessa riga dentro un riquadro con bordo `error.main`: `Chip` "Esaurito" al posto della quantità, "—" al posto del totale, `Alert` "Prodotto esaurito" con pulsante "Rimuovi dal carrello" |
+| Riepilogo del carrello | `Card` con subtotale, spedizione ("Gratuita" o importo, con "Standard, consegna in 24/48 ore"), totale con «IVA inclusa», `LinearProgress` determinata "Ti mancano … per la spedizione gratuita" quando serve, `Alert` del motivo e pulsante "Procedi al checkout" disabilitato quando il checkout è bloccato |
+| Barra fissa del carrello e del checkout su mobile | in fondo allo schermo, «Totale, IVA inclusa» con l'importo e il pulsante principale del passo |
+| Carrello vuoto | card con icona, "Il tuo carrello è vuoto", "Scopri il negozio"; sotto, "Potrebbero piacerti" con quattro card prodotto |
+| Checkout | desktop: `Stepper` orizzontale Indirizzo, Pagamento, Riepilogo, con il riepilogo dell'ordine in una colonna a destra; mobile: nome del passo, "Passo N di 3", `LinearProgress` determinata e "Poi: …", con il riepilogo dell'ordine in un pannello richiudibile ("Riepilogo ordine", N articoli, totale) |
+| Scelta dell'indirizzo | card selezionabili con `Radio`, bordo marcato sulla selezionata, `Chip` "Predefinito"; pulsante "Aggiungi un indirizzo" che apre il form in linea |
+| Form dell'indirizzo | nome e cognome, via e numero civico, città, CAP e provincia sulla stessa riga su desktop, "Paese" con valore "Italia" non modificabile (`disabled` o `readOnly`), telefono, `Checkbox` "Imposta come predefinito", pulsanti "Annulla" e "Salva indirizzo" |
+| Dati della carta | intestatario, numero con icona della carta, scadenza con `helperText` "MM/AA", CVC con `helperText` "3 cifre sul retro"; nota informativa "Ambiente dimostrativo: nessun addebito reale." |
+| Controlla e paga | sezioni "Indirizzo di spedizione" e "Pagamento" con link "Modifica", elenco prodotti, totali, `Checkbox` delle condizioni di vendita con link, pulsante "Paga {totale}" con icona del lucchetto |
+| Errori del checkout | `Alert` `error` "Pagamento non riuscito" con azione "Modifica la carta"; `Alert` `warning` "Disponibilità cambiata" con azione "Torna al carrello" e l'etichetta di disponibilità sulla riga coinvolta |
+| Conferma d'ordine | icona di successo, "Grazie per il tuo ordine", card con numero d'ordine, data, `Chip` dello stato, pagamento e indirizzo; card "Riepilogo dell'ordine"; pulsanti "Vedi il tuo ordine" e "Continua lo shopping" |
 | Email non verificata | `Alert` persistente con azione "Invia di nuovo l'email" |
 | Codice di verifica | `TextField` numerico con `inputMode="numeric"`, `autoComplete="one-time-code"` e link "Usa un codice di recupero" |
 | Attivazione doppia autenticazione | `Stepper` in tre passi: QR code e chiave manuale, verifica del codice, codici di recupero |
@@ -165,4 +178,4 @@ Solo `@mui/icons-material`.
 2. Associa ogni elemento del mockup a un componente MUI esistente.
 3. Non copiare CSS o markup HTML dell'export: il design è un riferimento visivo, l'implementazione è MUI.
 4. Se un elemento non ha un equivalente MUI, componilo con componenti MUI e `sx`, e segnalalo nel piano.
-5. Dove il mockup e una decisione approvata divergono, vale la decisione: per esempio l'ordinamento predefinito è "Novità" (il mockup mostra "Rilevanza") e i correlati sono della stessa categoria.
+5. Dove il mockup e una decisione approvata divergono, vale la decisione: per esempio l'ordinamento predefinito è "Novità" (il mockup mostra "Rilevanza"), i correlati sono della stessa categoria e il campo "Paese" dell'indirizzo non è modificabile (il mockup mostra un select).

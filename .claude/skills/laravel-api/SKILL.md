@@ -92,12 +92,14 @@ final class ProductController extends Controller
 - Non usare `before()` per concedere tutto all'admin: ogni permesso è esplicito.
 - Il cliente accede solo alle proprie risorse (`$order->user_id === $user->id`).
 - Il middleware `role:admin` protegge l'area admin come prima barriera; le Policy restano comunque obbligatorie.
+- Quando l'esistenza stessa della risorsa non va rivelata, la Policy nega con `Response::denyAsNotFound()` (404) invece di un 403. Caso del progetto: `OrderPolicy::view` per il cliente consente solo i propri ordini con `paid_at` valorizzato e risponde 404 per tutti gli altri; l'admin vede tutti gli ordini. L'elenco del cliente applica lo stesso criterio con lo scope `visibleToCustomer`.
 
 ## Form Request
 
 - Una per azione di scrittura o per validare i filtri di un elenco: `Store{Model}Request`, `Update{Model}Request`, `Index{Model}Request`.
 - Regole in forma di array, con `Rule::enum()`, `Rule::exists()`, `Rule::unique()->ignore()` negli update.
-- `prepareForValidation()` per normalizzare l'input (trim, lowercase delle email, cast).
+- `prepareForValidation()` per normalizzare l'input (trim, lowercase delle email, cast; spazi rimossi dal numero della carta).
+- Regole di indirizzi e checkout: tabelle di `StoreAddressRequest` e `PlaceOrderRequest` nella skill `ecommerce-domain`. Il numero della carta si valida con una Rule dedicata (`LuhnRule` in `App\Rules`); `country` non è tra le regole degli indirizzi perché lo imposta il server a `IT`.
 - Messaggi in italiano tramite `lang/it/validation.php`; nomi dei campi leggibili con `attributes()`.
 
 ```php
@@ -168,6 +170,19 @@ final class StoreProductRequest extends FormRequest
 - Eccezioni di dominio in `App\Exceptions` con metodo `render()` che restituisce JSON e lo status corretto (`InsufficientStockException` → 409, `InvalidOrderTransitionException` → 422, `PaymentFailedException` → 402).
 - Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... } }`, con `errors` presente solo per il 422.
 - Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403.
+- Dati sensibili mai rimandati indietro o salvati in sessione: in `withExceptions()` si aggiungono a `dontFlash` i campi della carta insieme a quelli delle password:
+
+```php
+$exceptions->dontFlash([
+    'current_password',
+    'password',
+    'password_confirmation',
+    'payment.number',
+    'payment.cvc',
+]);
+```
+
+- Numero della carta, CVC e scadenza non compaiono mai in log, messaggi di eccezione, eventi o risposte: le eccezioni di pagamento portano solo il riferimento dell'ordine e l'esito.
 
 ## Enum, eventi, notifiche, servizi
 
@@ -188,7 +203,8 @@ final class StoreProductRequest extends FormRequest
 - Stati espliciti per ogni variante utile ai test:
   - `UserFactory`: `admin()`, `customer()`, `unverified()`, `withTwoFactor()`
   - `ProductFactory`: `inactive()`, `outOfStock()`, `lastUnits(int $stock = 2)` (sotto `last_units_threshold`), `lowStock()` (sotto `low_stock_threshold`), `newArrival()` e `older()` (`created_at` dentro o fuori `new_arrival_days`); la categoria si assegna con `for(Category::factory())` o `recycle()`
-  - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelled()`, ognuno con i timestamp coerenti
+  - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelledAfterPayment()` (con `paid_at` e `cancelled_at`), `failedPayment()` (`cancelled` senza `paid_at`), ognuno con i timestamp coerenti
+  - `AddressFactory`: indirizzi italiani validi (CAP di 5 cifre, sigla di provincia, telefono), `country` sempre `IT`
 - Le relazioni si creano con `for()`, `has()` e `recycle()`.
 - Gli stati coerenti si costruiscono con `afterCreating()` quando servono (es. righe d'ordine e totali).
 - I test usano solo le factory, mai i seeder.
