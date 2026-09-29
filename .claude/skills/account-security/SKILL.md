@@ -89,7 +89,7 @@ Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`
 
 1. `POST /register`: crea un `customer` con `password_changed_at` valorizzata, invia l'email di verifica, avvia la sessione. Il frontend porta a `/verify-email` senza parametri: "Controlla la tua email", con il link valido 24 ore e "Invia di nuovo il link".
 2. Il link nell'email punta al frontend (`/verify-email?...`) e contiene i parametri firmati dell'API: si configura con `VerifyEmail::createUrlUsing()`, che firma con `URL::temporarySignedRoute()` la rotta `v1.verification.verify` (le rotte hanno il prefisso di nome `v1.`). La callback personalizzata legge da sé la scadenza da `config('auth.verification.expire')`: 24 ore.
-3. La pagina del frontend chiama `POST /email/verify/{id}/{hash}` inoltrando `expires` e `signature`. La rotta è in `public.php` e **non richiede l'autenticazione**: la protegge solo la firma del link, che copre id dell'utente, hash dell'email e scadenza.
+3. La pagina del frontend chiama `POST /email/verify/{id}/{hash}` inoltrando `expires` e `signature`. La rotta è in `public.php` con il middleware `signed` e **non richiede l'autenticazione**: la protegge solo la firma del link, che copre id dell'utente, hash dell'email e scadenza.
    - **Motivo:** chi si registra dal computer e apre l'email dal telefono non deve fare login solo per confermare l'indirizzo. La firma basta perché lega il link a quell'utente e a quell'indirizzo, e scade.
    - Non si usano la rotta e la Form Request standard di Laravel (`EmailVerificationRequest`), che richiedono l'utente autenticato. Il parametro `{id}` **non** usa il route model binding, perché la gestione centralizzata trasformerebbe un utente inesistente in 404: una Action cerca l'utente con `find()` e, se non esiste, lancia la stessa eccezione del 403 con lo stesso messaggio; poi verifica che `hash` corrisponda a `sha1` dell'email attuale (`hash_equals`) e, se non è già verificato, valorizza `email_verified_at` e scrive l'evento `email_verified`.
    - Firma non valida o scaduta → 403. Utente inesistente o `hash` che non corrisponde all'email attuale (per esempio dopo un cambio email) → 403 con lo stesso messaggio, così non si rivela nulla. La pagina mostra "Il link è scaduto" con "Invia un nuovo link".
@@ -106,11 +106,11 @@ Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`
 2. Senza doppia autenticazione: rigenera la sessione e restituisce l'utente.
 3. Con doppia autenticazione: **non** autentica. Salva in sessione `login.pending_user_id` con scadenza `login_challenge_ttl` e risponde `{ "two_factor_required": true, "methods": [...] }`.
 4. `POST /login/two-factor` con `method` e `code`, oppure con la risposta della passkey ottenuta da `POST /login/two-factor/passkey-options`. Se riesce, autentica e rigenera la sessione.
-   - Challenge mancante o scaduta (`login.pending_user_id` assente o oltre `login_challenge_ttl`): 422 con `{ "message": "La verifica è scaduta: accedi di nuovo.", "code": "two_factor_challenge_expired" }`. Il frontend torna al login.
+   - Challenge mancante o scaduta (`login.pending_user_id` assente o oltre `login_challenge_ttl`): `TwoFactorChallengeExpiredException`, 422 con `{ "message": "La verifica è scaduta: accedi di nuovo.", "code": "two_factor_challenge_expired" }`. Il frontend torna al login.
    - Codice sbagliato: 422 con errore sul campo `code` e nessun `code` di primo livello. Il frontend resta sulla pagina.
    - Non si usa il 419, che appartiene al CSRF e viene ripetuto dall'interceptor.
 5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login`. La passkey da sola basta, non si chiede altro.
-6. Credenziali errate: 422 con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi, così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
+6. Credenziali errate: `InvalidCredentialsException` (422) con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi (non si usa `ValidationException`, che porta sempre `errors`), così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
 
 ### Recupero password
 
@@ -233,7 +233,7 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 
 - `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
 - `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`.
-- `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification`.
+- `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification` con un solo contatore condiviso: per un utente autenticato sono 6 richieste al minuto in totale tra le due rotte. Il test del 429 usa una rotta sola.
 - Oltre il limite si risponde 429 con messaggio in italiano e header `Retry-After` in secondi.
 - Frontend e backend sono su origini diverse: `config/cors.php` include `Retry-After` in `exposed_headers`, altrimenti il browser non lo rende leggibile ad axios.
 - Il frontend mostra «Troppi tentativi. Riprova tra N secondi», con N preso da `Retry-After` tramite `normalizeApiError`.

@@ -90,7 +90,7 @@ tests/
 - Flusso riuscito: 201, ordine `paid` con `paid_at` e `terms_accepted_at`, righe e indirizzo in snapshot, stock decrementato, carrello svuotato, `payments.card_last_four` = `4242`.
 - Il numero completo della carta e il CVC non sono in nessuna tabella: `assertDatabaseMissing` su `payments` con il numero completo e nessuna colonna che li contenga.
 - 409 con l'elenco `{ product, requested, available }` per una riga esaurita, disattivata o con quantità oltre lo stock; nessun ordine creato e stock invariato.
-- 402 con la carta `4000 0000 0000 0002`: ordine `cancelled` senza `paid_at`, stock ripristinato, carrello intatto.
+- 402 con la carta `4000 0000 0000 0002`: ordine `cancelled` senza `paid_at`, stock ripristinato, carrello intatto, riga `payments` con `status` `failed` e `card_last_four` `0002`, cronologia `null → pending` e `pending → cancelled` con `changed_by` null e `reason` «Carta rifiutata dalla banca».
 - 422 senza `terms_accepted` o con `terms_accepted: false`.
 - Dataset della carta con 422 sul campo giusto: numero che non supera Luhn, numero di 12 e di 20 cifre, lettere nel numero, scadenza passata, mese `13`, formato `8/29`, CVC di 2 e di 4 cifre, intestatario mancante. La scadenza del mese corrente è valida (con `travelTo()`).
 - Indirizzo di un altro utente → 422; email non verificata → 403.
@@ -104,20 +104,61 @@ tests/
 - `OrderResource` con `payment.card_last_four` e `items[].cover` null quando il prodotto è stato eliminato.
 - Admin: `GET /admin/orders` include i tentativi falliti; `failed_payment=1` restituisce solo quelli; `GET /admin/orders/{order}` di un tentativo fallito → 200.
 
+### Impostazioni del negozio
+
+- `GET /shop/settings` da ospite: 200 con `shipping_cost` 690 e `free_shipping_threshold` 9900, valori scritti nel test; nessun'altra chiave.
+- `GET /admin/settings`: 200 per l'admin con in più `low_stock_threshold` 5; 401 da ospite, 403 per il cliente.
+
+### Cronologia e annullamento
+
+- Una riga di cronologia per ogni transizione, con `from_status`, `to_status`, `changed_by` e `reason` attesi: creazione, pagamento riuscito, pagamento rifiutato, spedizione e consegna dall'admin, annullamento dal cliente e dall'admin.
+- Descrizioni esatte della tabella della skill `ecommerce-domain`, scritte nel test; la variante admin con «da {nome}», quella del cliente senza autore.
+- `GET /orders/{order}` del cliente: `status_history` senza le chiavi `changed_by` e `reason` (`assertJsonMissingPath`).
+- `CancelOrderAction`, dal cliente e dall'admin: rimborso riuscito → stato `cancelled` con `cancelled_at`, scorte ripristinate, pagamento `refunded`, riga di cronologia con l'autore.
+- Rimborso fallito (gateway finto dal container): 502 con `code` `refund_failed`; stato dell'ordine, `cancelled_at`, scorte e `payments.status` invariati; nessuna nuova riga di cronologia; nessuna notifica.
+- Annullamento di un ordine non annullabile (`pending`, spedito, consegnato, già annullato): 422 e il gateway non viene chiamato, sia dal cliente sia dall'admin.
+- `POST /orders/{order}/cancel` su un ordine di un altro cliente e su un tentativo fallito → 404; `can_cancel` true solo per `paid`.
+- Doppio annullamento: la seconda richiesta non rimborsa di nuovo e non scrive una seconda riga di cronologia.
+- Notifiche con `Notification::fake()`: una sola email per spedito, consegnato e annullato con rimborso; nessuna notifica di transizione per `pending → paid` (solo la conferma di `OrderPlaced`) e nessuna email per il pagamento rifiutato.
+
+### Admin
+
+- Accesso: ogni rotta admin risponde 401 da ospite e 403 per il cliente.
+- Coerenza dashboard-elenco: con gli stessi dati del test, per ogni voce di `orders_by_status` il `count` coincide con `meta.total` di `GET /admin/orders?status={stato}&paid_month={period.month}`, e la somma dei conteggi coincide con `orders_month`; i dati comprendono un tentativo fallito, un ordine annullato dopo il pagamento e un ordine pagato il mese precedente e ancora `paid`.
+- Dashboard, con `travelTo()` a metà mese e dati costruiti nel test:
+  - ordine pagato e poi annullato: escluso da `revenue_month`, contato in `orders_month` e in `orders_by_status` come Annullato
+  - tentativo fallito e ordine `pending`: esclusi da tutti i dati
+  - ordine pagato il mese precedente: escluso dai dati del mese, ma contato in `orders_to_ship` se è ancora `paid`
+  - ordine pagato il primo giorno del mese alle 00:30 ora italiana: incluso
+  - `orders_by_status` senza `pending` e con somma uguale a `orders_month`
+  - `latest_orders`: al massimo 5, solo con `paid_at`, per `created_at` decrescente
+  - scorte basse con un dataset: stock 0 e 5 inclusi, 6 escluso, disattivato ed eliminato esclusi; `low_stock_products` al massimo 5 per stock crescente
+- Categorie:
+  - slug generato dal nome alla creazione (`Casa smart` → `casa-smart`) e invariato dopo un `PATCH` che cambia il nome o invia `slug`
+  - 422 per nome duplicato, per un nome che genera uno slug già usato, per un nome di 51 caratteri e una descrizione di 256; rinominare una categoria con la sola differenza di maiuscole è valido
+  - `DELETE`: 204 senza prodotti; 409 con un prodotto; 409 con un solo prodotto eliminato con soft delete; `can_delete` e `products_count` coerenti con questi casi
+  - `GET /categories` pubblico: comprende una categoria senza prodotti, ordinate per `id`
+- Prodotti, con un dataset di 422: SKU `cds-aud-001`, `CDS AUD 001`, `CDS_AUD`, SKU già usato da un prodotto attivo e da un prodotto eliminato; `short_description` mancante e di 161 caratteri (160 valida); `price` 0, `12.5` e 100000000; `stock` -1 e 1000000; il 422 dello SKU già usato ha il messaggio «Questo SKU è già in uso». Nell'update lo SKU del prodotto stesso è valido.
+- Filtri di `GET /admin/products`: `search` per nome e per SKU, `category`, `status`; include i disattivati, esclude gli eliminati; `stock_status` con un dataset di stock 0, 1, 4, 5 e 6.
+- Immagini, con `Storage::fake('public')`: caricamento di JPG, PNG e WebP con `alt` uguale al nome del prodotto e posizioni accodate; 422 per GIF, per un file di 5121 KB e per più di 10 file; `DELETE` con file rimosso e posizioni ricompattate; `PATCH` del prodotto con `images` riordinate e `alt` modificati; 422 per `images` con un id di un altro prodotto, con un id mancante o duplicato.
+- Ordini: `search` per parte del numero e per email del cliente; `status`; `failed_payment=1`; `paid_month` con un dataset (ordine pagato il 1° settembre alle 00:30 ora italiana incluso in `2026-09`, pagato il 31 agosto alle 23:30 ora italiana escluso, tentativo fallito e ordine `pending` esclusi) e 422 per `2026-9`, `2026-13` e `settembre`; `paid_month` con `failed_payment=1` vuoto; combinazione di `status=paid` e `failed_payment=1` vuota; ordine per `created_at` decrescente; `items_count` come somma delle quantità; `allowed_transitions` per ogni stato; `PATCH .../status` con `paid` o `pending` → 422; `cancelled` su un ordine `pending` → 422 senza chiamare il gateway; `delivered` su un ordine `paid` → 422; `shipped` scrive la riga con l'admin come autore.
+
 ### Test di flusso
 
 - Checkout completo, stock insufficiente, pagamento rifiutato con ripristino dello stock e carrello intatto.
 - Annullamento dell'ordine con ripristino dello stock.
-- Transizioni di stato consentite e vietate.
+- Transizioni di stato consentite e vietate, ognuna con la sua riga di cronologia.
 - Flussi di sicurezza elencati nella skill `account-security`.
 
 ### Unit test
 
 - `OrderStatus::canTransitionTo()` con un dataset di tutte le coppie, ed etichette esatte di `label()` (In attesa, Pagato, Spedito, Consegnato, Annullato).
+- Etichette esatte di `PaymentStatus::label()`: Riuscito, Non riuscito, Rimborsato.
 - Disponibilità del prodotto con un dataset di stock 0, 1, 2, 3 e 4 (soglia 3): Esaurito, Ultimo pezzo, Ultimi 2 pezzi, Ultimi 3 pezzi, Disponibile. I valori attesi sono scritti nel test, non letti dalla configurazione.
 - Calcolo di subtotale, spedizione e totale.
 - `LuhnRule` con un dataset: `4242424242424242` e `4000000000000002` validi, `4242424242424241` non valido.
 - Generazione del numero d'ordine.
+- Generazione dello slug di prodotti e categorie.
 - Verificatori del secondo fattore.
 
 ### Test di architettura
@@ -148,10 +189,10 @@ src/
 ├── test/
 │   ├── setup.js                 # jest-dom, avvio e reset del server MSW
 │   ├── renderWithProviders.jsx  # tema, QueryClient nuovo per ogni test, router in memoria, AuthProvider
-│   ├── factories.js             # buildUser, buildProduct, buildCart, buildOrder
+│   ├── factories.js             # buildUser, buildProduct, buildCart, buildOrder, buildCategory, buildAdminProduct, buildAdminOrder, buildDashboard
 │   └── mocks/
 │       ├── server.js
-│       └── handlers.js          # risposte di successo predefinite
+│       └── handlers.js          # risposte di successo predefinite, comprese /shop/settings, /admin/settings e /categories
 └── features/cart/components/CartItemRow.test.jsx
 ```
 
@@ -174,19 +215,20 @@ src/
 
 | Area | Casi |
 |---|---|
-| Utility | `formatPrice` (349,00 €, 1.249,00 € con il punto delle migliaia, 0,00 €), `formatDate`, `normalizeApiError` (compreso il 429 con `Retry-After: 45` → `retryAfter` 45 e «Troppi tentativi. Riprova tra 45 secondi», e senza header → `retryAfter` null; `code` dalla risposta, null se manca) |
+| Utility | `formatDateTimeShort` («29 set 2026, 16:52»), `formatDayTimeShort` («29 set, 16:52»), `formatMonthYear` («Settembre 2026»); `parseEuroToCents` con un dataset (`249,00` → 24900, `249,5` → 24950, `249` → 24900, `0,01` → 1) e rifiuto di `1.249`, `249.00`, `249,001` e testo vuoto; `formatCentsForInput` (34900 → «349,00», 124900 → «1249,00»); `formatPrice` (349,00 €, 1.249,00 € con il punto delle migliaia, 0,00 €), `formatDate`, `normalizeApiError` (compreso il 429 con `Retry-After: 45` → `retryAfter` 45 e «Troppi tentativi. Riprova tra 45 secondi», e senza header → `retryAfter` null; `code` dalla risposta, null se manca) |
 | httpClient | ripetizione dopo 419, gestione del 423 con conferma e ripetizione |
 | Rotte | redirect al login con ritorno alla pagina di partenza, blocco dell'area admin, pagine ospite |
 | Form | validazione Zod, errori 422 del server mostrati sui campi, pulsante disabilitato durante l'invio |
 | Viste con dati | stati di caricamento, errore con "Riprova", vuoto, contenuto |
 | Catalogo | filtri e ordinamento (Novità, Prezzo crescente, Prezzo decrescente) che aggiornano la query string e i risultati, ritorno a pagina 1, limiti dello slider da `meta.price_range`, chip "Novità" ed etichetta di disponibilità ricevuti dall'API, correlati nascosti se vuoti |
-| Home e pagine statiche | hero con i dati del prodotto e con errore o 404, immagine di ripiego per una categoria senza immagine, link del footer verso le ancore di `/assistenza` e `/note-legali` |
+| Home e pagine statiche | hero con i dati del prodotto e con errore o 404, immagine di ripiego per una categoria senza immagine (es. "Viaggio"), menu, `Drawer` e footer con le categorie ricevute da `GET /categories` (compresa una sesta categoria) e con solo "Novità" se la richiesta fallisce, link del footer verso le ancore di `/assistenza` e `/note-legali` |
+| Impostazioni del negozio | testi della spedizione gratuita con l'importo ricevuto da `/shop/settings` (un valore diverso da quello reale nel test, es. 12000 → «120,00 €», per dimostrare che non è scritto nel codice), Skeleton durante il caricamento, elemento omesso in caso di errore |
 | Carrello | "N articoli" da `items_count` con le righe esaurite, totali formattati, selettore da 1 a `max_quantity`, riga esaurita con "—" e "Rimuovi dal carrello", "Procedi al checkout" disabilitato con `can_checkout` false, barra della spedizione gratuita, carrello vuoto con "Potrebbero piacerti", Snackbar dopo l'aggiunta |
 | Checkout | avanzamento dei tre passi, email non verificata, campo "Paese" non modificabile, validazione Zod di indirizzo e carta, "Paga" disabilitato senza accettazione delle condizioni o con `can_checkout` false, 402 che torna al passo 2 con i dati della carta conservati, 409 con "Disponibilità cambiata", 201 con navigazione alla conferma |
 | Dati della carta | dopo l'invio, riuscito e fallito, la MutationCache non contiene i dati della carta (`queryClient.getMutationCache()`), l'errore della mutation non contiene `config.data`, `localStorage` e `sessionStorage` sono vuoti, l'URL non contiene parametri della carta; rimontando la pagina il checkout riparte dal passo 1 con i campi vuoti |
 | Conferma d'ordine | dati letti da `GET /orders/{id}` (numero, stato, "Carta che termina con 4242", totali), immagine di ripiego per un prodotto eliminato, 404 con link agli ordini |
 | Sicurezza | login con secondo fattore (app, codice di recupero, passkey solo se in `methods`), credenziali errate (422 con `code` `invalid_credentials`) con un solo avviso e nessun errore sui campi, challenge scaduta (422 con `code` `two_factor_challenge_expired`) che riporta al login e codice sbagliato che resta sulla pagina con l'errore sul campo, messaggio 429 al login, verifica email da ospite con esito positivo e l'indirizzo preso dalla risposta, banner di email non verificata assente nelle pagine di accesso, `PasswordRequirements` che si aggiorna mentre si scrive e `newPasswordSchema` (9 caratteri, senza maiuscola, senza minuscola, senza numero), pagine dai link email (successo e link scaduto), reset con la sezione di verifica solo se richiesta, cambio password con secondo fattore in linea solo con la doppia autenticazione attiva, attivazione TOTP con codici di recupero, conferma dell'identità (esplicita e dopo 423, con la descrizione dell'operazione), cambio email con il `Dialog` "Nuova email" dopo la conferma, avviso di cambio in sospeso con "Annulla la richiesta", attività recente con "Mostra altre attività" che sparisce all'ultima pagina |
-| Area account | menu account per ospite e utente autenticato, navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, dialog di annullamento dell'ordine con "Mantieni l'ordine" e "Annulla l'ordine" |
-| Admin | tabella prodotti, form prodotto, cambio di stato dell'ordine |
+| Area account | menu account per ospite e utente autenticato, navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, timeline da `status_history`, "Annulla l'ordine" solo con `can_cancel`, dialog di annullamento con "Mantieni l'ordine" e "Annulla l'ordine", 502 `refund_failed` con il dialog aperto e il messaggio |
+| Admin | layout con la voce attiva e il titolo della pagina, nome ed email nell'`AppBar`; dashboard con indicatori, «N pezzi o meno» dalle impostazioni admin e link filtrati (ogni stato con `status` e `paid_month`); elenco ordini con `paid_month` nella query string mostrato come `Chip` «Pagati a Settembre 2026» e rimosso con la sua X, con ritorno a pagina 1; elenco prodotti e ordini con filtri nella query string, ritorno a pagina 1, ricerca con attesa (timer finti di Vitest), stato vuoto con "Azzera filtri", «N ordini» e «1 ordine»; form prodotto: validazione Zod (SKU, descrizione breve di 161 caratteri, prezzo `1.249`), prezzo inviato in centesimi, errori 422 sui campi e conteggio nell'`Alert`, su/giù della scheda tecnica, dopo la creazione navigazione alla modifica senza dialog, dialog delle modifiche non salvate con "Resta sulla pagina" ed "Esci senza salvare", "Annulla" che ripristina i valori, messaggio sulle immagini nel nuovo prodotto; immagini: file non validi scartati con il messaggio, caricamento che non perde gli `alt` non salvati, ← → che cambiano l'ordine inviato; categorie: slug in sola lettura, elimina disabilitato con tooltip, 409 mostrato, invalidazione di `categories`; dettaglio ordine: azioni da `allowed_transitions`, dialog di annullamento con rimborso e scorte, 502 `refund_failed` con il dialog aperto, pagamento rifiutato con `Chip` "Annullato", `Alert` con il motivo e nessuna azione |
 
 Fuori perimetro: test end-to-end con Playwright, extra facoltativo della Fase 10.

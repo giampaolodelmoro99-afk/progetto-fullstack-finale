@@ -1,6 +1,6 @@
 ---
 name: ecommerce-domain
-description: Regole di business dell'e-commerce — entità e colonne, importi in centesimi, snapshot degli ordini, gestione dello stock con lock, carrello, checkout, dati della carta, indirizzi solo in Italia, stati dell'ordine e visibilità per il cliente, pagamenti simulati, novità e disponibilità calcolate, dati demo dei seeder e mappa delle API del negozio. Usala per modelli, migration, factory, seeder, carrello, checkout, ordini, pagamenti e ogni schermata che mostra questi dati.
+description: Regole di business dell'e-commerce — entità e colonne, importi in centesimi, snapshot degli ordini, gestione dello stock con lock, carrello, checkout, dati della carta, indirizzi solo in Italia, stati dell'ordine, cronologia degli stati e visibilità per il cliente, pagamenti simulati e rimborsi, annullamento, novità e disponibilità calcolate, impostazioni del negozio esposte al frontend, area admin (dashboard, prodotti, immagini, categorie, ordini), dati demo dei seeder e mappa delle API. Usala per modelli, migration, factory, seeder, carrello, checkout, ordini, pagamenti, admin e ogni schermata che mostra questi dati.
 ---
 
 # Dominio e-commerce — regole di business
@@ -8,7 +8,10 @@ description: Regole di business dell'e-commerce — entità e colonne, importi i
 Fonti delle decisioni sul negozio:
 - mockup del Design A (negozio): `design/mockups/01-negozio.pdf`
 - mockup del Design B (carrello, checkout, conferma): `design/mockups/02-acquisto.pdf`
+- mockup del Design D (pannello di amministrazione): `design/mockups/04-admin.pdf`
 - parole fisse per stati e disponibilità, nomi dei prodotti: `design/design-system/voice-and-content.md`
+
+Dove un mockup e una decisione approvata divergono vale la decisione; l'elenco delle divergenze è nella skill `mui-design-system`.
 
 ## Entità del negozio
 
@@ -18,19 +21,21 @@ Le tabelle dell'account e della sicurezza sono descritte nella skill `account-se
 |---|---|---|
 | users | name, email, password, role, email_verified_at | `role`: `customer` o `admin` |
 | addresses | user_id, full_name, street, city, postal_code, province, country, phone, is_default | un solo indirizzo predefinito per utente; `country` sempre `IT` |
-| categories | name, slug, description | cinque categorie fisse, nessuna sottocategoria |
-| products | category_id, name, slug, sku, short_description, description, specifications (JSON), price, stock, is_active, created_at, deleted_at | una sola categoria per prodotto, `price` in centesimi, soft delete |
+| categories | name, slug, description | gestite dall'admin, nessuna sottocategoria; `slug` unico, generato dal nome alla creazione e mai più modificabile |
+| products | category_id, name, slug, sku, short_description, description, specifications (JSON), price, stock, is_active, created_at, updated_at, deleted_at | una sola categoria per prodotto, `sku` unico, `price` in centesimi, soft delete |
 | product_images | product_id, path, alt, position | la prima per `position` è la copertina |
 | carts | user_id (unico) | un carrello per utente |
 | cart_items | cart_id, product_id, quantity | unico su (cart_id, product_id); nessun prezzo salvato |
-| orders | user_id, number, status, subtotal, shipping_cost, total, shipping_address (JSON), terms_accepted_at, paid_at, shipped_at, delivered_at, cancelled_at | importi in centesimi |
+| orders | user_id, number, status, subtotal, shipping_cost, total, shipping_address (JSON), terms_accepted_at, paid_at, shipped_at, delivered_at, cancelled_at | importi in centesimi; le colonne `*_at` servono a filtri e statistiche |
 | order_items | order_id, product_id (nullable), product_name, product_sku, unit_price, quantity, line_total | snapshot al momento dell'acquisto |
-| payments | order_id, provider, provider_reference, amount, status, card_last_four | mai dati completi della carta |
+| order_status_changes | order_id, from_status (nullable), to_status, changed_by (nullable), reason (nullable), created_at | una riga per ogni cambio di stato; `changed_by` null = sistema; nessun `updated_at` |
+| payments | order_id, provider, provider_reference, amount, status, card_last_four | una riga per tentativo di addebito, riuscito o rifiutato; mai dati completi della carta |
 
 ### Colonne dei prodotti
 
 - `category_id`: obbligatoria, `foreignId()->constrained()` con `restrictOnDelete()`, coerente con la regola che una categoria con prodotti non si elimina.
-- `short_description`: frase breve mostrata sotto il nome nella pagina del prodotto, massimo 255 caratteri.
+- `sku`: obbligatorio, solo lettere maiuscole, numeri e trattini (`^[A-Z0-9-]+$`), unico anche rispetto ai prodotti eliminati con soft delete, perché lo snapshot degli ordini lo conserva e deve restare univoco.
+- `short_description`: obbligatoria, frase breve mostrata sotto il nome nella pagina del prodotto, massimo 160 caratteri.
 - `description`: testo lungo della sezione "Descrizione".
 - `specifications`: elenco ordinato di coppie per la scheda tecnica, cast `array`, ordine di visualizzazione uguale a quello dell'elenco:
 
@@ -47,7 +52,7 @@ Le tabelle dell'account e della sicurezza sono descritte nella skill `account-se
 Non sono colonne: li calcola il backend e li espone la `ProductResource`. Il frontend non li ricalcola.
 
 - `is_new`: `true` se `created_at` rientra negli ultimi `config('shop.new_arrival_days')` giorni.
-- `availability`: oggetto `{ "status": "...", "label": "..." }` calcolato dallo stock:
+- `availability`: oggetto `{ "status": "...", "label": "..." }` calcolato dallo stock, per i clienti:
 
 | Stock | `status` | `label` |
 |---|---|---|
@@ -57,6 +62,14 @@ Non sono colonne: li calcola il backend e li espone la `ProductResource`. Il fro
 | oltre la soglia | `available` | Disponibile |
 
 - `max_quantity`: `min(stock, config('shop.max_quantity_per_item'))`, usato dal selettore di quantità nella pagina prodotto e nel carrello.
+- `stock_status` (solo `Admin\ProductResource`): stesso formato di `availability`, ma con la soglia del magazzino `low_stock_threshold`:
+
+| Stock | `status` | `label` |
+|---|---|---|
+| 0 | `out_of_stock` | Esaurito |
+| 1 | `low_stock` | Ultimo pezzo |
+| da 2 a `config('shop.low_stock_threshold')` | `low_stock` | Ultimi N pezzi |
+| oltre la soglia | `available` | Disponibile |
 
 ## Configurazione
 
@@ -68,28 +81,46 @@ Non sono colonne: li calcola il backend e li espone la `ProductResource`. Il fro
 | `free_shipping_threshold` | 9900 | subtotale da cui la spedizione è gratuita |
 | `new_arrival_days` | 30 | finestra delle novità (`is_new`, filtro `new`) |
 | `last_units_threshold` | 3 | soglia degli "Ultimi N pezzi" mostrata ai clienti |
-| `low_stock_threshold` | 5 | soglia delle scorte basse nella dashboard admin |
+| `low_stock_threshold` | 5 | soglia delle scorte basse nell'area admin |
 | `max_quantity_per_item` | 10 | quantità massima di un prodotto in una riga del carrello |
 
 `last_units_threshold` e `low_stock_threshold` sono distinte: la prima riguarda la comunicazione al cliente, la seconda il riordino in magazzino.
+
+### Impostazioni esposte al frontend
+
+Il frontend non scrive mai a mano importi o soglie della configurazione: li legge da due endpoint.
+
+`GET /shop/settings` (pubblico), usato per tutti i testi sulla spedizione del negozio (rassicurazioni, pagina prodotto, carrello, checkout, pagine statiche):
+
+```json
+{ "data": { "shipping_cost": 690, "free_shipping_threshold": 9900 } }
+```
+
+`GET /admin/settings` (admin), usato da dashboard, elenco prodotti e form prodotto; contiene gli stessi valori più la soglia delle scorte basse:
+
+```json
+{ "data": { "shipping_cost": 690, "free_shipping_threshold": 9900, "low_stock_threshold": 5 } }
+```
 
 ## Regole
 
 1. **Importi in centesimi** (`unsignedInteger`), mai float. I prezzi sono IVA inclusa: nessun calcolo delle imposte.
 2. **Il server non si fida del client.** Prezzi, totali e disponibilità si ricalcolano sempre dal database; il client invia solo id e quantità.
 3. **Snapshot all'acquisto.** `order_items` copia nome, SKU e prezzo; `orders.shipping_address` copia l'indirizzo. Modificare o eliminare prodotti e indirizzi non altera gli ordini esistenti.
-4. **Stock.** Si verifica e si decrementa in transazione con `lockForUpdate()` sui prodotti coinvolti. Se è insufficiente si lancia `InsufficientStockException` (409) con l'elenco dei prodotti problematici. Lo stock torna disponibile quando un ordine viene annullato.
+4. **Stock.** Si verifica, si decrementa e si ripristina sempre in transazione con `lockForUpdate()` sui prodotti coinvolti. Se è insufficiente si lancia `InsufficientStockException` (409) con l'elenco dei prodotti problematici. Lo stock torna disponibile quando un ordine viene annullato, sia per pagamento rifiutato sia per annullamento dopo il pagamento.
 5. **Catalogo pubblico:** solo prodotti `is_active` e non eliminati. I prodotti con stock 0 sono visibili ma non acquistabili.
 6. **Carrello:** solo per utenti autenticati, con le regole della sezione "Carrello".
 7. **Checkout solo con email verificata** (middleware `verified`).
 8. **Spedizione:** solo in Italia. Costo fisso `shipping_cost` (6,90 €), gratuita quando il subtotale raggiunge `free_shipping_threshold` (99,00 €).
 9. **Numero d'ordine** leggibile e univoco nel formato `ORD-{anno}-{id a 6 cifre}`, es. `ORD-2026-000042`.
 10. **Ruoli:** la registrazione crea solo `customer`; l'admin nasce dal seeder.
-11. **Categorie:** cinque categorie fisse, senza sottocategorie. Ogni prodotto appartiene a una sola categoria. Una categoria con prodotti associati non si elimina (409).
-12. **Scorte basse:** nella dashboard admin sono i prodotti con stock tra 1 e `low_stock_threshold`.
+11. **Categorie:** gestite dall'admin, senza sottocategorie. Ogni prodotto appartiene a una sola categoria. Lo slug si genera dal nome alla creazione e non si modifica più. Una categoria collegata a prodotti, **compresi quelli eliminati con soft delete**, non si elimina (409): la FK `restrictOnDelete` lo impedirebbe comunque, ma con un errore 500.
+12. **Scorte basse:** prodotti attivi e non eliminati con stock minore o uguale a `low_stock_threshold`, esauriti compresi.
 13. **Novità:** un prodotto è nuovo se creato negli ultimi `new_arrival_days` giorni; lo stesso criterio vale per `is_new` e per il filtro `new=1`.
 14. **Disponibilità:** status ed etichetta seguono la tabella dei valori calcolati, con le parole fisse di `voice-and-content.md`.
 15. **Visibilità degli ordini:** il cliente vede solo i propri ordini con `paid_at` valorizzato; l'admin li vede tutti (sezione "Ordini").
+16. **Cronologia:** ogni cambio di stato, compresa la creazione dell'ordine, scrive una riga in `order_status_changes` (sezione "Cronologia degli stati").
+17. **Periodo "mese corrente":** si calcola nel fuso dell'applicazione (`Europe/Rome`), dal primo giorno del mese alle 00:00 all'ultimo alle 23:59:59.
 
 ## Catalogo
 
@@ -108,8 +139,14 @@ Parametri, validati da `IndexProductRequest`:
 | `page`, `per_page` | interi | paginazione |
 
 - Ordinamenti: `newest` per `created_at` decrescente; `price_asc` e `price_desc` per prezzo. A parità si ordina per `id`, così la paginazione è stabile.
-- Oltre a `data`, `links` e `meta` della paginazione, `meta.price_range` contiene `{ "min": ..., "max": ... }` in centesimi: il prezzo minimo e massimo dei prodotti attivi della categoria filtrata, o di tutto il catalogo se `category` manca. Gli altri filtri non lo influenzano, così i limiti dello slider del prezzo restano fermi mentre l'utente lo muove.
+- Oltre a `data`, `links` e `meta` della paginazione, `meta.price_range` contiene `{ "min": ..., "max": ... }` in centesimi: il prezzo minimo e massimo dei prodotti attivi della categoria filtrata, o di tutto il catalogo se `category` manca. Gli altri filtri non lo influenzano, così i limiti dello slider del prezzo restano fermi mentre l'utente lo muove. Per una categoria senza prodotti attivi `min` e `max` valgono `null`.
 - "Potrebbero piacerti" nel carrello vuoto usa lo stesso endpoint: `GET /products?in_stock=1&sort=newest&per_page=4`.
+
+### Categorie (`GET /categories`)
+
+- Tutte le categorie, anche quelle senza prodotti (es. "Viaggio" nei dati demo), ordinate per `id`: le nuove compaiono in fondo.
+- Menu, footer e categorie in evidenza del negozio le leggono da qui, non da un elenco fisso.
+- L'indirizzo del catalogo di una categoria è `/products?category={slug}`.
 
 ### Prodotti correlati (`GET /products/{product:slug}/related`)
 
@@ -212,10 +249,10 @@ Parametri, validati da `IndexProductRequest`:
 
 1. Verifica che il carrello non sia vuoto e che l'indirizzo scelto appartenga all'utente.
 2. Verifica che il carrello sia acquistabile: nessuna riga non acquistabile e nessuna quantità oltre lo stock. Altrimenti `InsufficientStockException` (409) con l'elenco `[{ "product": "...", "requested": 2, "available": 1 }]`; prodotti esauriti, disattivati o eliminati hanno `available: 0`.
-3. Transazione: lock dei prodotti, stesso controllo della disponibilità sotto lock, creazione dell'ordine `pending` con righe, snapshot dell'indirizzo e `terms_accepted_at`, decremento dello stock.
+3. Transazione: lock dei prodotti, stesso controllo della disponibilità sotto lock, creazione dell'ordine `pending` con righe, snapshot dell'indirizzo e `terms_accepted_at`, riga di cronologia `null → pending`, decremento dello stock.
 4. Fuori dalla transazione: addebito tramite `PaymentGateway`.
-5. Pagamento riuscito: ordine `paid` con `paid_at`, record in `payments` con le sole ultime 4 cifre, svuotamento del carrello, evento `OrderPlaced` che invia l'email di conferma. Risposta 201 con la `OrderResource`.
-6. Pagamento fallito: ordine `cancelled` senza `paid_at`, ripristino dello stock, carrello intatto, `PaymentFailedException` (402) con messaggio chiaro. L'ordine resta nel database come tentativo fallito, non è visibile al cliente.
+5. Pagamento riuscito, in `DB::transaction()` con `lockForUpdate()` sull'ordine: riga in `payments` con `status` `succeeded` e le sole ultime 4 cifre, transizione `pending → paid` (valorizza `paid_at`), svuotamento del carrello. Dopo il commit, evento `OrderPlaced` che invia l'email di conferma: è l'unica email del pagamento riuscito. Risposta 201 con la `OrderResource`.
+6. Pagamento rifiutato, in `DB::transaction()` con `lockForUpdate()` su ordine e prodotti: riga in `payments` con `status` `failed`, `card_last_four` e importo; transizione `pending → cancelled` senza autore e con `reason` uguale al motivo restituito dal gateway (es. «Carta rifiutata dalla banca»); ripristino dello stock. Poi: carrello intatto; `PaymentFailedException` (402) con messaggio chiaro. L'ordine resta nel database come tentativo fallito, con stato Annullato e senza `paid_at`: lo vede solo l'admin. Nessuna email.
 
 ### Dati della carta
 
@@ -249,40 +286,95 @@ L'etichetta arriva dall'API (`{ "value": "paid", "label": "Pagato" }`); il front
 | Da | A | Chi |
 |---|---|---|
 | pending | paid | sistema, a pagamento riuscito |
-| pending | cancelled | sistema, a pagamento fallito |
+| pending | cancelled | sistema, a pagamento rifiutato |
 | paid | shipped | admin |
 | paid | cancelled | admin o cliente (rimborso e ripristino dello stock) |
 | shipped | delivered | admin |
 
-`delivered` e `cancelled` sono stati finali. Una transizione non consentita lancia `InvalidOrderTransitionException` (422). Ogni transizione valorizza il timestamp corrispondente e invia una notifica email al cliente, tranne `pending → cancelled` per pagamento fallito, che ha già la risposta 402.
+`delivered` e `cancelled` sono stati finali. Una transizione non consentita lancia `InvalidOrderTransitionException` (422). Ogni transizione passa da `ChangeOrderStatusAction` (skill `laravel-api`), che valorizza il timestamp corrispondente e scrive la riga di cronologia; l'unica riga scritta altrove è quella della creazione (`null → pending`), in `PlaceOrderAction`.
 
-### Forma della `OrderResource`
+`canTransitionTo()` dice solo se una coppia di stati è ammessa, non chi può farla: le transizioni del sistema (`pending → paid`, `pending → cancelled`) le esegue solo `PlaceOrderAction`. Cliente e admin agiscono solo sugli ordini `paid` o `shipped` secondo la colonna "Chi".
+
+Notifiche email al cliente, elenco chiuso:
+
+| Transizione | Email |
+|---|---|
+| pending → paid | nessuna notifica di transizione: la conferma d'ordine arriva da `OrderPlaced` |
+| pending → cancelled | nessuna: il cliente ha già la risposta 402 |
+| paid → shipped | ordine spedito |
+| shipped → delivered | ordine consegnato |
+| paid → cancelled | ordine annullato con rimborso |
+
+### Cronologia degli stati
+
+- Ogni riga di `order_status_changes` registra `from_status` (null per la creazione), `to_status`, l'autore in `changed_by` (null = sistema) e un `reason` facoltativo, oggi usato solo per il motivo del pagamento rifiutato.
+- Le colonne `*_at` di `orders` restano e si valorizzano insieme alla riga: servono a filtri e statistiche, la cronologia serve a mostrare la storia.
+- Ordine delle righe: `created_at` crescente, poi `id`.
+- La descrizione la compone il backend. La variante del cliente non contiene mai l'autore né il `reason`; quella admin aggiunge «da {nome}» quando c'è un autore.
+
+| Transizione | Autore | Descrizione (cliente e admin) | Aggiunta nella variante admin |
+|---|---|---|---|
+| — → pending | sistema | Ordine ricevuto, in attesa del pagamento | — |
+| pending → paid | sistema | Pagamento con carta riuscito | — |
+| pending → cancelled | sistema | Pagamento non riuscito: {reason} | — (riga visibile solo all'admin) |
+| paid → shipped | admin | Segnato come spedito | « da {nome}» |
+| shipped → delivered | admin | Segnato come consegnato | « da {nome}» |
+| paid → cancelled | admin o cliente | Annullato e rimborsato | « da {nome}» |
+
+### Annullamento di un ordine pagato (`CancelOrderAction`)
+
+Una sola Action, usata sia da `POST /orders/{order}/cancel` (cliente) sia da `PATCH /admin/orders/{order}/status` con `cancelled` (admin), riceve l'ordine e l'autore ed esegue i passi in quest'ordine:
+
+1. Controlla che l'ordine sia `paid` e abbia un pagamento `succeeded`; altrimenti `InvalidOrderTransitionException` (422) prima di qualunque effetto, senza chiamare il gateway. Un ordine `pending`, `shipped`, `delivered` o già `cancelled` non si annulla da qui.
+2. Rimborso del pagamento `succeeded` tramite `PaymentGateway::refund()`, **fuori dalla transazione** perché è una chiamata a un servizio esterno. Il gateway riceve l'id del pagamento come chiave di idempotenza, così una seconda richiesta di rimborso dello stesso pagamento non rimborsa due volte.
+3. Se il rimborso fallisce: `RefundFailedException` (502) e **nessun cambiamento**. Stato dell'ordine, scorte e pagamento restano invariati e non si scrive nessuna riga di cronologia.
+4. Se il rimborso riesce, in una transazione con `lockForUpdate()` su ordine, pagamento e prodotti: si ricontrolla sotto lock che l'ordine sia ancora `paid` e il pagamento ancora `succeeded` (se nel frattempo un'altra richiesta l'ha annullato, si esce senza effetti e si restituisce l'ordine attuale); poi ripristino delle scorte delle righe il cui prodotto esiste ancora, pagamento a `refunded`, transizione `paid → cancelled` tramite `ChangeOrderStatusAction` con l'autore (cliente o admin). La notifica al cliente parte dopo il commit.
+
+Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il gateway prima del lock; la chiave di idempotenza evita il doppio rimborso, il ricontrollo sotto lock evita la doppia transizione.
+
+### Forma della `OrderResource` (cliente)
 
 ```json
 {
   "id": 42,
   "number": "ORD-2026-000042",
   "status": { "value": "paid", "label": "Pagato" },
-  "created_at": "2026-09-28T10:15:00+02:00",
-  "paid_at": "2026-09-28T10:15:02+02:00",
+  "created_at": "2026-09-28T18:41:00+02:00",
+  "paid_at": "2026-09-28T18:42:00+02:00",
   "subtotal": 49600,
   "shipping_cost": 0,
   "total": 49600,
   "shipping_address": { "full_name": "Giulia Ferri", "street": "Via San Martino 42", "postal_code": "56125", "city": "Pisa", "province": "PI", "country": "IT", "phone": "+39 333 123 4567" },
   "payment": { "card_last_four": "4242" },
   "items": [
-    { "product_name": "Cuffie Aria", "product_sku": "...", "unit_price": 34900, "quantity": 1, "line_total": 34900, "cover": { "url": "...", "alt": "..." } }
+    { "product_name": "Cuffie Aria", "product_sku": "CDS-AUD-001", "unit_price": 34900, "quantity": 1, "line_total": 34900, "cover": { "url": "...", "alt": "..." } }
+  ],
+  "status_history": [
+    { "status": { "value": "pending", "label": "In attesa" }, "description": "Ordine ricevuto, in attesa del pagamento", "created_at": "2026-09-28T18:41:00+02:00" },
+    { "status": { "value": "paid", "label": "Pagato" }, "description": "Pagamento con carta riuscito", "created_at": "2026-09-28T18:42:00+02:00" }
   ]
 }
 ```
 
 - `items[].cover`: copertina attuale del prodotto se esiste ancora, altrimenti `null`; il frontend mostra un'immagine di ripiego. Nome, SKU e prezzi vengono sempre dallo snapshot.
-- `payment` compare solo se esiste un pagamento riuscito; mai altri dati della carta.
+- `payment` compare solo se esiste un pagamento `succeeded` o `refunded`; mai altri dati della carta.
+- `status_history`: senza `changed_by` e senza `reason`.
+- `can_cancel`: calcolato dal backend (`status` `paid`), usato dal frontend per mostrare "Annulla l'ordine".
+
+`POST /orders/{order}/cancel` è autorizzato da `OrderPolicy::cancel` con lo stesso criterio di `view`: ordini di altri utenti e ordini senza `paid_at` → 404 con `denyAsNotFound()`; ordine proprio non annullabile → 422.
 
 ## Pagamenti
 
-- Interfaccia `App\Contracts\PaymentGateway` con `charge(Order $order, array $paymentData): PaymentResult` e `refund(Payment $payment): PaymentResult`.
-- `FakePaymentGateway` è il driver predefinito (`PAYMENT_DRIVER=fake`): approva ogni carta con formato valido, tranne quelle che terminano con `0002`, che vengono rifiutate per poter mostrare il caso di errore nella demo.
+- Interfaccia `App\Contracts\PaymentGateway` con `charge(Order $order, array $paymentData): PaymentResult` e `refund(Payment $payment): PaymentResult`. `PaymentResult` contiene l'esito, il riferimento del provider e, se l'esito è negativo, il motivo in italiano.
+- Enum `PaymentStatus`:
+
+| Valore | Etichetta |
+|---|---|
+| `succeeded` | Riuscito |
+| `failed` | Non riuscito |
+| `refunded` | Rimborsato |
+
+- `FakePaymentGateway` è il driver predefinito (`PAYMENT_DRIVER=fake`): approva ogni carta con formato valido, tranne quelle che terminano con `0002`, che vengono rifiutate con il motivo «Carta rifiutata dalla banca» per poter mostrare il caso di errore nella demo. Il rimborso riesce sempre; i test del rimborso fallito sostituiscono il gateway tramite il container.
 - Carte di test, documentate nel README:
 
 | Numero | Esito |
@@ -294,11 +386,124 @@ L'etichetta arriva dall'API (`{ "value": "paid", "label": "Pagato" }`); il front
 - Numero completo, scadenza e CVC non vengono mai salvati né scritti nei log; si conservano solo le ultime quattro cifre.
 - Un driver Stripe in modalità test è un'estensione opzionale.
 
+## Area admin
+
+Riferimento visivo: `design/mockups/04-admin.pdf`. Tutte le rotte hanno prefisso `/admin` e richiedono il ruolo `admin`.
+
+### Dashboard (`GET /admin/dashboard`)
+
+Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid_at` valorizzato): i tentativi falliti e gli ordini `pending` non entrano mai.
+
+| Dato | Definizione |
+|---|---|
+| `revenue_month` | somma di `total` degli ordini con `paid_at` nel mese corrente, esclusi quelli ora `cancelled` |
+| `orders_month` | numero di ordini con `paid_at` nel mese corrente, in qualunque stato attuale |
+| `orders_to_ship` | numero di ordini in stato `paid`, senza limite di periodo |
+| `low_stock_count` | numero di prodotti con scorte basse (regola 12) |
+| `orders_by_status` | ordini con `paid_at` nel mese corrente raggruppati per stato attuale (`paid`, `shipped`, `delivered`, `cancelled`); la somma è uguale a `orders_month`. Non c'è `pending`: un ordine con `paid_at` non è mai in attesa. Il link di ogni stato apre l'elenco ordini con `status` e `paid_month` del mese mostrato, così i risultati coincidono con il conteggio |
+| `latest_orders` | tra gli ordini con `paid_at` valorizzato, i 5 più recenti per `created_at` decrescente, poi `id` |
+| `low_stock_products` | al massimo 5 prodotti con scorte basse, per stock crescente e poi nome, con `stock_status` e copertina |
+
+```json
+{
+  "data": {
+    "period": { "month": "2026-09" },
+    "revenue_month": 874200,
+    "orders_month": 24,
+    "orders_to_ship": 6,
+    "low_stock_count": 4,
+    "orders_by_status": [
+      { "status": { "value": "paid", "label": "Pagato" }, "count": 6 },
+      { "status": { "value": "shipped", "label": "Spedito" }, "count": 5 },
+      { "status": { "value": "delivered", "label": "Consegnato" }, "count": 11 },
+      { "status": { "value": "cancelled", "label": "Annullato" }, "count": 2 }
+    ],
+    "latest_orders": [
+      { "id": 47, "number": "ORD-2026-000047", "customer": { "name": "Marco Bellini" }, "created_at": "...", "total": 69800, "status": { "value": "paid", "label": "Pagato" } }
+    ],
+    "low_stock_products": [
+      { "id": 31, "name": "Radio Onda Portatile", "stock_status": { "status": "out_of_stock", "label": "Esaurito" }, "cover": { "url": "...", "alt": "..." } }
+    ]
+  }
+}
+```
+
+### Prodotti
+
+`GET /admin/products`, filtri validati da `Admin\IndexProductRequest`:
+
+| Parametro | Valori | Effetto |
+|---|---|---|
+| `search` | testo | cerca in nome e SKU |
+| `category` | slug | prodotti della categoria |
+| `status` | `active`, `inactive` | prodotti visibili o disattivati nel negozio |
+| `page`, `per_page` | `per_page` tra 10, 25 e 50 | paginazione |
+
+- Comprende i prodotti disattivati, non quelli eliminati. Ordine per `sku`, poi `id`, come nel mockup.
+- `Admin\ProductResource`: `id`, `name`, `slug`, `sku`, `category` (`id`, `name`, `slug`), `short_description`, `description`, `specifications`, `price`, `stock`, `stock_status`, `is_active`, `cover`, `images` (`id`, `url`, `alt`, `position`, solo nel dettaglio), `updated_at`.
+
+Validazione di `StoreProductRequest` e `UpdateProductRequest`:
+
+| Campo | Regole |
+|---|---|
+| `category_id` | obbligatorio, categoria esistente |
+| `name` | obbligatorio, massimo 255 caratteri |
+| `sku` | obbligatorio, massimo 64 caratteri, `^[A-Z0-9-]+$` («Usa solo lettere maiuscole, numeri e trattini»), unico tra tutti i prodotti compresi gli eliminati, con il messaggio «Questo SKU è già in uso» (nell'update si ignora il prodotto stesso) |
+| `short_description` | obbligatoria, massimo 160 caratteri |
+| `description` | facoltativa, massimo 5000 caratteri |
+| `specifications` | presente, array di al massimo 20 coppie `label` (massimo 64) e `value` (massimo 255), entrambe obbligatorie |
+| `price` | obbligatorio, intero in centesimi, da 1 a 99999999 (999.999,99 €, coerente con le 6 cifre intere del form); il frontend converte l'importo in euro scritto con la virgola |
+| `stock` | obbligatorio, intero, da 0 a 999999 |
+| `is_active` | obbligatorio, booleano |
+| `images` | solo nell'update, facoltativo: array con **tutte** le immagini del prodotto nell'ordine voluto, ognuna con `id` (immagine di questo prodotto) e `alt` (obbligatorio, massimo 255). Id mancanti, duplicati o di un altro prodotto → 422 |
+
+- Lo slug del prodotto si genera dal nome alla creazione.
+- Eliminazione: soft delete. Il prodotto sparisce da catalogo e negozio; gli ordini che lo contengono restano invariati grazie allo snapshot.
+
+### Immagini dei prodotti
+
+- `POST /admin/products/{product}/images`, multipart con `images[]`: da 1 a 10 file per richiesta, ognuno JPG, PNG o WebP (`mimes:jpg,jpeg,png,webp`) e al massimo 5 MB (`max:5120`). Le immagini si accodano dopo l'ultima `position`; `alt` iniziale uguale al nome del prodotto. Risposta 201 con l'elenco aggiornato delle immagini.
+- `DELETE /admin/products/{product}/images/{image}`: elimina subito il file e la riga, e ricompatta le posizioni. 204.
+- Ordine e testi alternativi si salvano con `PATCH /admin/products/{product}` tramite `images`.
+- Le immagini si aggiungono solo a un prodotto già salvato: il form "Nuovo prodotto" non le accetta.
+
+### Categorie
+
+- `GET /admin/categories`: tutte, ordinate per `id`, con `Admin\CategoryResource`: `id`, `name`, `slug`, `description`, `products_count` (prodotti non eliminati, attivi e disattivati) e `can_delete` (false se esistono prodotti collegati, compresi gli eliminati). Entrambi i valori si caricano nella query con `withCount` (il secondo su `products` con `withTrashed()`), senza una query per riga.
+- Nell'update, il controllo dello slug derivato ignora la categoria stessa: rinominare "Casa smart" in "Casa Smart" è valido.
+- `POST /admin/categories` e `PATCH /admin/categories/{category}`: `name` obbligatorio, massimo 50 caratteri, unico, e lo slug che ne deriva non deve essere già usato da un'altra categoria (422 su `name`, «Esiste già una categoria con questo nome»); `description` facoltativa, massimo 255 caratteri. `slug` non fa parte delle regole: si genera alla creazione e un `PATCH` che lo contiene lo ignora.
+- `DELETE /admin/categories/{category}`: 204, oppure 409 se `can_delete` è false.
+
+### Ordini
+
+`GET /admin/orders`, filtri validati da `Admin\IndexOrderRequest`:
+
+| Parametro | Valori | Effetto |
+|---|---|---|
+| `search` | testo | numero d'ordine o email del cliente che contengono il testo |
+| `status` | valore di `OrderStatus` | ordini nello stato |
+| `failed_payment` | `1` | solo i tentativi falliti (`cancelled` e `paid_at` nullo) |
+| `paid_month` | `AAAA-MM` (`date_format:Y-m`, es. `2026-09`) | solo ordini con `paid_at` in quel mese, con i limiti calcolati nel fuso dell'applicazione (regola 17), come nella dashboard |
+| `page`, `per_page` | `per_page` tra 10, 25 e 50 | paginazione |
+
+- Filtri combinati in AND: `paid_month` insieme a `failed_payment=1` non restituisce nulla, perché i tentativi falliti non hanno `paid_at`. Il criterio del mese di pagamento è uno scope (`paidInMonth`) condiviso da `GetDashboardStatsAction` e dall'elenco, così dashboard ed elenco non possono divergere. Ordine per `created_at` decrescente, poi `id`. `meta.total` alimenta «N ordini».
+- Riga dell'elenco: `id`, `number`, `customer` (`name`, `email`), `created_at`, `items_count` (somma delle quantità, caricata con `withSum('items', 'quantity')`), `total`, `status`, `failed_payment` (booleano, stesso nome del filtro).
+
+`GET /admin/orders/{order}` restituisce `Admin\OrderResource`: i campi della `OrderResource` del cliente, più:
+- `customer`: `name` ed `email` dell'utente; il telefono è quello dello snapshot dell'indirizzo
+- `items_count`
+- `failed_payment`
+- `allowed_transitions`: array di stringhe con i valori verso cui l'admin può portare l'ordine adesso (`paid` → `["shipped", "cancelled"]`, `shipped` → `["delivered"]`, altrimenti `[]`)
+- `payment`: `card_last_four`, `status` (`{ value, label }`), `amount` e `created_at` dell'ultimo tentativo, anche se `failed`. Il motivo del rifiuto non è nel pagamento: sia l'`Alert` sia la riga "Motivo" della card Pagamento leggono il `reason` della riga di cronologia `cancelled`
+- `status_history`: con `changed_by` (`{ id, name }` oppure `null` per il sistema), `reason` e la descrizione nella variante admin
+
+`PATCH /admin/orders/{order}/status` con `{ "status": "shipped" }`: la Form Request accetta solo `shipped`, `delivered` e `cancelled` (`Rule::in`), quindi `paid` e `pending` → 422. `shipped` e `delivered` passano da `ChangeOrderStatusAction` con l'admin come autore, `cancelled` da `CancelOrderAction`. Un valore ammesso ma non consentito dallo stato attuale (es. `delivered` su un ordine `paid`, `cancelled` su un ordine `pending`) → 422 da `InvalidOrderTransitionException`. Risposta con `Admin\OrderResource`.
+
 ## Dati demo
 
 Il negozio è **Casa del Silicio**: elettronica e accessori tech della propria linea.
 
-### Categorie (fisse)
+### Categorie
 
 | Slug | Nome | Descrizione |
 |---|---|---|
@@ -307,25 +512,30 @@ Il negozio è **Casa del Silicio**: elettronica e accessori tech della propria l
 | `scrivania` | Scrivania | Supporti, tastiere, accessori |
 | `indossabili` | Indossabili | Orologi e cinturini |
 | `casa-smart` | Casa smart | Luci e clima |
+| `viaggio` | Viaggio | Custodie e adattatori per chi viaggia |
+
+"Viaggio" non ha prodotti: mostra la categoria vuota nel negozio e l'eliminazione consentita nell'admin.
 
 ### Prodotti
 
-- Da 40 a 60 prodotti realistici, distribuiti su tutte le categorie, con alcuni esauriti, alcuni negli ultimi pezzi (da 1 a 3), alcuni sotto la soglia admin e alcuni disattivati.
-- Nomi secondo `voice-and-content.md`: un sostantivo più un nome evocativo italiano, con maiuscola, nessun marchio di terzi. Riferimenti dai mockup: Cuffie Aria, Cuffie Aria Studio, Auricolari Sussurro, Diffusore Eco, Diffusore Eco Mini, Radio Onda, Radio Onda Portatile, Caricatore Brezza 65 W, Cavo Seta USB-C 1 m, Supporto Colle in alluminio, Orologio Meridiana, Lampada Faro.
+- Da 40 a 60 prodotti realistici, distribuiti sulle prime cinque categorie, con alcuni esauriti, alcuni negli ultimi pezzi (da 1 a 3), alcuni sotto la soglia admin e alcuni disattivati.
+- SKU nel formato `CDS-{AREA}-{NNN}` (es. `CDS-AUD-001`, `CDS-RIC-010`), conforme a `^[A-Z0-9-]+$`.
+- Nomi secondo `voice-and-content.md`: un sostantivo più un nome evocativo italiano, con maiuscola, nessun marchio di terzi. Riferimenti dai mockup: Cuffie Aria, Cuffie Aria Studio, Auricolari Sussurro, Auricolari Sussurro Sport, Diffusore Eco, Diffusore Eco Mini, Radio Onda, Radio Onda Portatile, Caricatore Brezza 65 W, Cavo Seta USB-C 1 m, Supporto Colle in alluminio, Orologio Meridiana, Lampada Faro.
 - Unità con lo spazio (65 W, 1 m).
-- Ogni prodotto ha `short_description`, `description` su più paragrafi e da 4 a 8 voci in `specifications`.
+- Ogni prodotto ha `short_description` (massimo 160 caratteri), `description` su più paragrafi e da 4 a 8 voci in `specifications`.
 - Alcuni prodotti hanno un `created_at` negli ultimi 30 giorni, calcolato in modo deterministico rispetto alla data del seeding, così la sezione Novità è popolata. Gli altri sono distribuiti sui mesi precedenti.
 - Il prodotto dell'hero della home, `cuffie-aria`, esiste sempre, è attivo, disponibile e tra le novità.
 
 ### Utenti e ordini
 
 - Utenti fissi, documentati nel README con le credenziali:
-  - un admin, senza doppia autenticazione
+  - l'admin **Marta Lenzi**, senza doppia autenticazione
   - un cliente demo con email verificata, indirizzi italiani validi e ordini in tutti gli stati
   - un cliente demo con doppia autenticazione attiva e segreto TOTP fisso, riportato nel README solo per la demo, così si può aggiungere all'app di autenticazione durante la presentazione
   - un cliente con email non verificata
 - Da 15 a 30 clienti casuali.
-- Ordini distribuiti sugli ultimi 6 mesi, così fatturato e grafici della dashboard hanno valori sensati, compresi alcuni tentativi di pagamento falliti visibili solo all'admin.
+- Ordini distribuiti sugli ultimi 6 mesi, con ordini pagati anche nel mese corrente, così fatturato e dashboard hanno valori sensati, compresi alcuni tentativi di pagamento falliti visibili solo all'admin.
+- Ogni ordine ha la cronologia coerente con il suo stato e i suoi timestamp, con Marta Lenzi come autrice delle transizioni dell'admin, e la riga in `payments` (`succeeded`, `failed` o `refunded`).
 - Il carrello del cliente demo contiene almeno una riga con un prodotto esaurito, per mostrare il blocco del checkout.
 
 ## Mappa delle API del negozio
@@ -337,7 +547,8 @@ Prefisso comune: `/api/v1`. Autenticazione, account e sicurezza sono nella skill
 | Metodo | Percorso | Descrizione |
 |---|---|---|
 | GET | /health | stato del servizio |
-| GET | /categories | elenco delle cinque categorie con descrizione |
+| GET | /shop/settings | `shipping_cost` e `free_shipping_threshold` per i testi del negozio |
+| GET | /categories | elenco delle categorie con descrizione, ordinate per `id` |
 | GET | /categories/{category:slug} | dettaglio categoria |
 | GET | /products | elenco con `search`, `category`, `min_price`, `max_price`, `in_stock`, `new`, `sort`, `page`, `per_page`; `meta.price_range` per lo slider |
 | GET | /products/{product:slug} | dettaglio prodotto con descrizione, scheda tecnica, immagini e `max_quantity` |
@@ -355,21 +566,22 @@ Prefisso comune: `/api/v1`. Autenticazione, account e sicurezza sono nella skill
 | DELETE | /cart | svuotamento carrello |
 | POST | /checkout | creazione ordine e pagamento (email verificata); 201, 409 per disponibilità, 402 per pagamento rifiutato, 422 per dati non validi |
 | GET | /orders | storico degli ordini pagati (`paid_at` valorizzato) |
-| GET | /orders/{order} | dettaglio di un ordine pagato; 404 per ordini non pagati o di altri utenti |
-| POST | /orders/{order}/cancel | annullamento da parte del cliente |
+| GET | /orders/{order} | dettaglio di un ordine pagato con `status_history`; 404 per ordini non pagati o di altri utenti |
+| POST | /orders/{order}/cancel | annullamento da parte del cliente con `CancelOrderAction`; 422 se non annullabile, 502 se il rimborso fallisce |
 
 **Admin** (prefisso `/admin`, ruolo `admin`)
 
 | Metodo | Percorso | Descrizione |
 |---|---|---|
-| GET | /admin/dashboard | fatturato del mese, ordini per stato, prodotti con scorte basse (`low_stock_threshold`), ultimi ordini |
-| GET, POST, PATCH, DELETE | /admin/products | gestione prodotti (`apiResource`), con `category_id`, `short_description` e `specifications` |
-| POST | /admin/products/{product}/images | caricamento immagini |
+| GET | /admin/settings | impostazioni del negozio più `low_stock_threshold` |
+| GET | /admin/dashboard | indicatori, ordini per stato, ultimi ordini e scorte basse (sezione "Dashboard") |
+| GET, POST, PATCH, DELETE | /admin/products | gestione prodotti (`apiResource`) con filtri `search`, `category`, `status`; `images` nel `PATCH` per ordine e testi alternativi |
+| POST | /admin/products/{product}/images | caricamento di una o più immagini |
 | DELETE | /admin/products/{product}/images/{image} | rimozione immagine |
-| GET, POST, PATCH, DELETE | /admin/categories | gestione categorie (`apiResource`) |
-| GET | /admin/orders | tutti gli ordini, compresi i tentativi falliti, con filtri `status` e `failed_payment` |
-| GET | /admin/orders/{order} | dettaglio ordine |
-| PATCH | /admin/orders/{order}/status | cambio di stato |
+| GET, POST, PATCH, DELETE | /admin/categories | gestione categorie (`apiResource`), slug generato e non modificabile, 409 se collegata a prodotti |
+| GET | /admin/orders | tutti gli ordini, compresi i tentativi falliti, con `search`, `status`, `failed_payment` e `paid_month` |
+| GET | /admin/orders/{order} | dettaglio ordine con cliente, pagamento, cronologia e `allowed_transitions` |
+| PATCH | /admin/orders/{order}/status | cambio di stato (`shipped`, `delivered`, `cancelled`); 422 per transizione non consentita, 502 se il rimborso fallisce |
 
 ### Forma della `ProductResource`
 

@@ -21,7 +21,7 @@ app/
 ├── Events/  Listeners/
 ├── Exceptions/                # eccezioni di dominio con render()
 ├── Http/
-│   ├── Controllers/Api/V1/{Auth,Catalog,Cart,Checkout,Account,Admin}/
+│   ├── Controllers/Api/V1/{Auth,Shop,Catalog,Cart,Checkout,Account,Admin}/
 │   ├── Middleware/            # ForceJsonResponse, EnsureUserHasRole, EnsureIdentityConfirmed
 │   ├── Requests/{Area}/{Model}/
 │   └── Resources/             # pubbliche; Resources/Admin/ per le varianti admin
@@ -48,11 +48,12 @@ routes/
 ## Rotte
 
 - `routes/api.php` include i file di `routes/api/v1/` con prefisso `v1` e nome `v1.`.
-- `public.php`: catalogo, health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
+- `public.php`: catalogo, impostazioni del negozio (`GET /shop/settings`), health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
 - `customer.php`: middleware `auth:sanctum`.
 - `admin.php`: middleware `auth:sanctum` e `role:admin`, prefisso `admin`, nome `admin.`.
 - Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`).
-- Prodotti e categorie pubblici usano il route model binding sullo slug: `{product:slug}`.
+- Prodotti e categorie pubblici usano il route model binding sullo slug: `{product:slug}`. Le rotte admin usano l'id: `{product}`, `{category}`, `{order}`.
+- Impostazioni: `Shop\SettingsController` (`GET /shop/settings`) e `Admin\SettingsController` (`GET /admin/settings`), invocabili, restituiscono rispettivamente `SettingsResource` e `Admin\SettingsResource`, costruite sui valori di `config/shop.php` (skill `ecommerce-domain`, "Impostazioni esposte al frontend").
 - Rate limiter nominati definiti in `AppServiceProvider` (vedi anche la skill `account-security`).
 
 ## Controller
@@ -70,7 +71,7 @@ final class ProductController extends Controller
     {
         $product = $createProduct->execute($request->validated());
 
-        return ProductResource::make($product->load(['category', 'images']))
+        return Admin\ProductResource::make($product->load(['category', 'images']))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
@@ -117,19 +118,25 @@ final class StoreProductRequest extends FormRequest
         return [
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'name' => ['required', 'string', 'max:255'],
-            'sku' => ['required', 'string', 'max:64', Rule::unique('products', 'sku')],
-            'short_description' => ['required', 'string', 'max:255'],
+            'sku' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9-]+$/', Rule::unique('products', 'sku')],
+            'short_description' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:5000'],
             'specifications' => ['present', 'array', 'max:20'],
             'specifications.*.label' => ['required', 'string', 'max:64'],
             'specifications.*.value' => ['required', 'string', 'max:255'],
-            'price' => ['required', 'integer', 'min:1'],
-            'stock' => ['required', 'integer', 'min:0'],
+            'price' => ['required', 'integer', 'min:1', 'max:99999999'],
+            'stock' => ['required', 'integer', 'min:0', 'max:999999'],
             'is_active' => ['required', 'boolean'],
         ];
     }
 }
 ```
+
+- Il messaggio dell'unicità dello SKU è «Questo SKU è già in uso», in `messages()` della Form Request.
+- `Rule::unique('products', 'sku')` controlla tutte le righe, comprese quelle eliminate con soft delete: è il comportamento voluto (skill `ecommerce-domain`), quindi **non** si aggiunge `withoutTrashed()`. In `UpdateProductRequest` si usa `->ignore($this->route('product'))`.
+- `UpdateProductRequest` accetta anche `images` (tutte le immagini del prodotto, nell'ordine voluto, con `id` e `alt`) e un `after()` verifica che gli id siano esattamente quelli del prodotto. Il caricamento dei file ha una richiesta dedicata, `StoreProductImagesRequest`, con `images` array da 1 a 10 elementi e `images.*` con `image`, `mimes:jpg,jpeg,png,webp` e `max:5120`.
+- Le Form Request delle categorie non contengono `slug`: `validated()` non lo restituisce mai, quindi un `PATCH` che lo invia non lo modifica. L'unicità dello slug derivato si controlla in `after()` con `Str::slug($this->name)`, escludendo nell'update la categoria stessa, con l'errore sul campo `name`.
+- `Admin\UpdateOrderStatusRequest` accetta `status` solo tra `shipped`, `delivered` e `cancelled` (`Rule::in`): le transizioni del sistema non sono raggiungibili dall'API.
 
 ## API Resource
 
@@ -139,7 +146,8 @@ final class StoreProductRequest extends FormRequest
 - Date in ISO 8601 (`toIso8601String()`).
 - Enum esposti come oggetto: `{ "value": "paid", "label": "Pagato" }`.
 - Elenchi paginati con `ProductResource::collection($paginator)`, che produce `data`, `links` e `meta`.
-- Resource distinte quando la forma cambia: `ProductResource` (pubblica) e `Admin\ProductResource` (con SKU, stock reale, stato attivo).
+- Resource distinte quando la forma cambia: `ProductResource` (pubblica) e `Admin\ProductResource` (con SKU, stock reale, `stock_status`, stato attivo), `OrderResource` e `Admin\OrderResource` (cliente, `allowed_transitions`, pagamento anche fallito), `OrderStatusChangeResource` (senza autore né `reason`) e `Admin\OrderStatusChangeResource` (con `changed_by`, `reason` e descrizione con l'autore), `CategoryResource` e `Admin\CategoryResource` (con `products_count` e `can_delete`). Le forme sono nella skill `ecommerce-domain`.
+- La descrizione di una riga di cronologia si compone in un solo punto, un metodo del modello `OrderStatusChange` (es. `description(bool $withAuthor)`), che le due Resource chiamano.
 - Nessun dato sensibile nelle Resource: mai password, segreti TOTP, codici di recupero o token.
 
 ## Action
@@ -148,17 +156,24 @@ final class StoreProductRequest extends FormRequest
 - Dipendenze iniettate nel costruttore.
 - Più scritture correlate stanno in `DB::transaction()`.
 - In caso di problema lanciano eccezioni di dominio, non restituiscono codici d'errore.
-- Chiamate a servizi esterni (pagamenti) mai dentro una transazione.
+- Chiamate a servizi esterni (pagamenti e rimborsi) mai dentro una transazione.
+- Cambi di stato dell'ordine:
+  - `ChangeOrderStatusAction::execute(Order $order, OrderStatus $to, ?User $by = null, ?string $reason = null)` è l'unico punto che cambia `orders.status`: apre sempre `DB::transaction()` (annidata con savepoint quando il chiamante ne ha già una), rilegge l'ordine con `lockForUpdate()`, controlla `canTransitionTo()` (altrimenti `InvalidOrderTransitionException`), valorizza il timestamp corrispondente, scrive la riga in `order_status_changes` e invia la notifica al cliente solo per le transizioni dell'elenco chiuso della skill `ecommerce-domain` (`paid → shipped`, `shipped → delivered`, `paid → cancelled`). La notifica usa `afterCommit()`, così parte solo se la transazione va a buon fine. Così anche spedito e consegnato, chiamati dal controller, sono transazionali senza che il controller usi `DB`.
+  - La creazione dell'ordine in `PlaceOrderAction` scrive la riga iniziale (`from_status` null, `to_status` `pending`) nella stessa transazione.
+  - `CancelOrderAction::execute(Order $order, User $by)` è l'unica via di annullamento di un ordine pagato, usata dal controller del cliente e da quello admin. Ordine dei passi: controllo che l'ordine sia `paid` con un pagamento `succeeded`; rimborso con `PaymentGateway::refund()` **fuori** dalla transazione, con l'id del pagamento come chiave di idempotenza; se fallisce, `RefundFailedException` senza nessun cambiamento; se riesce, `DB::transaction()` con `lockForUpdate()` su ordine, pagamento e prodotti, nuovo controllo dello stato sotto lock, ripristino dello stock, pagamento a `refunded` e `ChangeOrderStatusAction` con l'autore (dettagli nella skill `ecommerce-domain`).
+- La dashboard admin si calcola in `GetDashboardStatsAction`, perché i controller non contengono query complesse.
+- Le categorie si eliminano con `DeleteCategoryAction`, che lancia `CategoryHasProductsException` (409) se esistono prodotti collegati, contati con `withTrashed()`.
 
 ## Modelli
 
 - `$fillable` esplicito; `$hidden` per ogni attributo sensibile; cast nel metodo `casts()` (enum, boolean, datetime, integer, encrypted).
 - Relazioni con tipo di ritorno dichiarato.
-- Filtri come scope locali: `search`, `inCategory`, `priceBetween`, `inStock`, `active`, `newArrivals`; ordinamenti con uno scope `sortBy` che accetta solo `newest`, `price_asc` e `price_desc` e aggiunge `id` come secondo criterio.
+- Filtri come scope locali: `search`, `inCategory`, `priceBetween`, `inStock`, `active`, `newArrivals`; per gli ordini `paidInMonth(string $month)`, con i limiti del mese nel fuso dell'applicazione, usato sia dalla dashboard sia dal filtro `paid_month` dell'elenco admin; ordinamenti con uno scope `sortBy` che accetta solo `newest`, `price_asc` e `price_desc` e aggiunge `id` come secondo criterio.
 - Valori calcolati (`is_new`, `availability` del prodotto) in un solo punto, un accessor o una piccola classe dedicata, letti dalle soglie di `config/shop.php`: la Resource li espone, i controller non li calcolano.
 - `Model::shouldBeStrict(! app()->isProduction())` in `AppServiceProvider`: in sviluppo il lazy loading e gli attributi mancanti generano un errore.
 - Eager loading esplicito dove si caricano le relazioni.
-- Slug generati in un Observer.
+- Slug generati in un Observer. `ProductObserver` e `CategoryObserver` lo impostano solo in `creating`: lo slug della categoria non cambia più, nemmeno se cambia il nome.
+- `OrderStatusChange` ha `const UPDATED_AT = null`, cast di `from_status` e `to_status` a `OrderStatus` e la relazione `changedBy()` verso `User`.
 
 ## Middleware personalizzati
 
@@ -169,10 +184,10 @@ final class StoreProductRequest extends FormRequest
 
 ## Errori
 
-- Eccezioni di dominio in `App\Exceptions` con metodo `render()` che restituisce JSON e lo status corretto (`InsufficientStockException` → 409, `InvalidOrderTransitionException` → 422, `PaymentFailedException` → 402).
-- Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... }, "code": "..." }`, con `errors` presente solo per il 422 con errori sui campi e `code` presente solo quando il frontend deve distinguere errori con lo stesso status. I valori di `code` sono stringhe stabili in snake_case (es. `two_factor_challenge_expired`), definite nell'eccezione che le produce.
+- Eccezioni di dominio in `App\Exceptions` con metodo `render()` che restituisce JSON e lo status corretto (`InsufficientStockException` → 409, `InvalidOrderTransitionException` → 422, `PaymentFailedException` → 402, `CategoryHasProductsException` → 409, `RefundFailedException` → 502 con `code` `refund_failed` e il messaggio «Il rimborso non è riuscito: l'ordine non è stato annullato. Riprova tra poco.»).
+- Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... }, "code": "..." }`, con `errors` presente solo per il 422 con errori sui campi e `code` presente solo quando il frontend deve distinguere errori con lo stesso status. I valori di `code` sono stringhe stabili in snake_case (es. `two_factor_challenge_expired`), definite nell'eccezione che le produce (es. `InvalidCredentialsException` → `invalid_credentials`, `TwoFactorChallengeExpiredException` → `two_factor_challenge_expired`).
 - Le risposte 429 includono l'header `Retry-After`, esposto al frontend da `config/cors.php`.
-- Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403.
+- Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403, `InvalidSignatureException` del middleware `signed` → 403 JSON con lo stesso messaggio italiano dell'eccezione che la verifica email lancia per un link non valido (skill `account-security`), così firma non valida, utente inesistente e hash sbagliato sono indistinguibili.
 - Dati sensibili mai rimandati indietro o salvati in sessione: in `withExceptions()` si aggiungono a `dontFlash` i campi della carta insieme a quelli delle password:
 
 ```php
@@ -199,14 +214,18 @@ $exceptions->dontFlash([
 - `foreignId()->constrained()` con `cascadeOnDelete()`, `restrictOnDelete()` o `nullOnDelete()` scelti consapevolmente e motivati nel piano.
 - Indici sulle colonne usate nei filtri e negli ordinamenti.
 - `unsignedInteger` per importi e stock.
+- `order_status_changes`: `order_id` con `cascadeOnDelete()` (la cronologia non esiste senza l'ordine), `changed_by` nullable con `restrictOnDelete()` (null significa sistema: un utente eliminato non deve diventare "sistema"; il progetto non elimina utenti che hanno ordini o transizioni), `from_status` nullable, `to_status`, `reason` nullable, solo `timestamp('created_at')`, indice su (`order_id`, `created_at`).
+- `payments.status` con indice, perché l'admin distingue i tentativi rifiutati.
+- Il fuso dell'applicazione è `Europe/Rome` (`config/app.php`): il "mese corrente" della dashboard e le date delle Resource dipendono da questo.
 
 ## Factory
 
 - Ogni modello ha una factory, con dati realistici in italiano (`fake('it_IT')`, locale Faker `it_IT` in `.env`).
 - Stati espliciti per ogni variante utile ai test:
   - `UserFactory`: `admin()`, `customer()`, `unverified()`, `withTwoFactor()` (segreto, codici di recupero e `two_factor_confirmed_at`), `withPasskey(string $name = 'MacBook di prova')` (una passkey finta, senza doppia autenticazione; si definisce dopo la scelta della libreria WebAuthn, perché scrive nella sua tabella), `withPendingEmailChange(string $newEmail)` (richiesta in sospeso non scaduta); `password_changed_at` è sempre valorizzata
-  - `ProductFactory`: `inactive()`, `outOfStock()`, `lastUnits(int $stock = 2)` (sotto `last_units_threshold`), `lowStock()` (sotto `low_stock_threshold`), `newArrival()` e `older()` (`created_at` dentro o fuori `new_arrival_days`); la categoria si assegna con `for(Category::factory())` o `recycle()`
-  - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelledAfterPayment()` (con `paid_at` e `cancelled_at`), `failedPayment()` (`cancelled` senza `paid_at`), ognuno con i timestamp coerenti
+  - `CategoryFactory`: nome e descrizione realistici; lo slug lo genera l'Observer
+  - `ProductFactory`: `inactive()`, `outOfStock()`, `lastUnits(int $stock = 2)` (sotto `last_units_threshold`), `lowStock(int $stock = 4)` (entro `low_stock_threshold`), `newArrival()` e `older()` (`created_at` dentro o fuori `new_arrival_days`), più `trashed()` per il soft delete; la categoria si assegna con `for(Category::factory())` o `recycle()`
+  - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelledAfterPayment()` (con `paid_at` e `cancelled_at`), `failedPayment(string $reason = 'Carta rifiutata dalla banca')` (`cancelled` senza `paid_at`), ognuno con i timestamp coerenti e, in `afterCreating()`, le righe di cronologia e la riga in `payments` corrispondenti (`succeeded`, `refunded` per `cancelledAfterPayment()`, `failed` per `failedPayment()`)
   - `AddressFactory`: indirizzi italiani validi (CAP di 5 cifre, sigla di provincia, telefono), `country` sempre `IT`
 - Le relazioni si creano con `for()`, `has()` e `recycle()`.
 - Gli stati coerenti si costruiscono con `afterCreating()` quando servono (es. righe d'ordine e totali).
@@ -215,11 +234,11 @@ $exceptions->dontFlash([
 ## Seeder
 
 - Un seeder per responsabilità, tutti richiamati da `DatabaseSeeder` nell'ordine corretto:
-  - `UserSeeder`: admin e clienti demo con credenziali fisse, più clienti casuali
-  - `CategorySeeder`: le cinque categorie fisse, con slug e descrizione, elencate nella skill `ecommerce-domain`
+  - `UserSeeder`: l'admin Marta Lenzi e i clienti demo con credenziali fisse, più clienti casuali
+  - `CategorySeeder`: le sei categorie dei dati demo, con slug e descrizione, elencate nella skill `ecommerce-domain` ("Viaggio" senza prodotti)
   - `ProductSeeder`: prodotti per categoria con immagini da `database/seeders/assets/`, nomi secondo `design/design-system/voice-and-content.md`, `created_at` deterministici per avere novità e prodotti più vecchi
   - `AddressSeeder`: indirizzi per i clienti
-  - `OrderSeeder`: ordini in tutti gli stati, distribuiti sugli ultimi mesi
+  - `OrderSeeder`: ordini in tutti gli stati, distribuiti sugli ultimi mesi e anche nel mese corrente, con cronologia e pagamenti coerenti
 - I dati fissi (categorie, prodotti principali, utenti demo) sono deterministici; i dati di contorno possono essere casuali.
 - Le credenziali demo sono documentate nel README.
 - `make fresh` ricrea il database pronto per la demo; lo script di avvio esegue i seeder solo se il database è vuoto.
