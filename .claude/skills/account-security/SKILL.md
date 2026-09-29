@@ -1,19 +1,22 @@
 ---
 name: account-security
-description: Autenticazione e sicurezza dell'account — registrazione con verifica email, login con secondo fattore opzionale, doppia autenticazione TOTP con codici di recupero, passkey WebAuthn, conferma dell'identità per le operazioni sensibili, recupero e cambio password, cambio email, sessioni, notifiche e registro degli eventi di sicurezza. Usala per qualsiasi lavoro su login, account, profilo e sicurezza, sia nel backend sia nel frontend.
+description: Autenticazione e sicurezza dell'account — registrazione con verifica email, login con doppia autenticazione opzionale, TOTP con codici di recupero, passkey WebAuthn per l'accesso senza password e come secondo fattore, conferma dell'identità per le operazioni sensibili, recupero e cambio password, cambio email, sessioni, notifiche e registro degli eventi di sicurezza. Usala per qualsiasi lavoro su login, account, profilo e sicurezza, sia nel backend sia nel frontend.
 ---
 
 # Sicurezza dell'account
 
+Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pagine raggiunte dai link email, area account, sicurezza, dialog di conferma). Dove il mockup e questa skill divergono, vale questa skill.
+
 ## Principi
 
-1. Il secondo fattore è **opzionale**: è l'utente a decidere se attivarlo, dalla pagina Sicurezza. Vale per tutti i ruoli.
-2. Esistono due tipi di secondo fattore, attivabili anche insieme: **TOTP** (app di autenticazione) e **passkey** (WebAuthn).
-3. Un utente "ha il secondo fattore" se ha il TOTP confermato oppure almeno una passkey registrata: `User::hasSecondFactor()`.
-4. Una volta attivo, il secondo fattore è richiesto al login, al recupero password e in ogni operazione sensibile.
-5. Ogni operazione sensibile invia una notifica email e scrive un evento di sicurezza.
-6. I segreti non si salvano mai in chiaro e non compaiono mai nelle risposte, tranne nel momento in cui l'utente deve vederli una sola volta.
-7. Le risposte non rivelano se un indirizzo email è registrato.
+1. La doppia autenticazione è **opzionale**: è l'utente a decidere se attivarla, dalla pagina Sicurezza. Vale per tutti i ruoli.
+2. La doppia autenticazione è attiva **solo** se il TOTP è confermato (`two_factor_confirmed_at` non null). `User::hasSecondFactor()` dipende solo dal TOTP.
+3. Le **passkey** (WebAuthn) permettono sempre l'accesso senza password. Quando la doppia autenticazione è attiva valgono anche come secondo fattore al posto del codice: al login, al recupero password, al cambio password e nella conferma dell'identità. Senza doppia autenticazione non si chiedono mai come secondo fattore.
+4. I **codici di recupero** esistono solo con il TOTP: si generano alla sua conferma e si cancellano alla sua disattivazione. Registrare una passkey non genera codici.
+5. Con la doppia autenticazione attiva il secondo fattore (codice TOTP, codice di recupero o passkey) è richiesto al login con password, al recupero password, al cambio password e in ogni operazione sensibile.
+6. Ogni operazione sensibile invia una notifica email e scrive un evento di sicurezza.
+7. I segreti non si salvano mai in chiaro e non compaiono mai nelle risposte, tranne nel momento in cui l'utente deve vederli una sola volta.
+8. Le risposte non rivelano se un indirizzo email è registrato.
 
 ## Librerie
 
@@ -22,6 +25,7 @@ description: Autenticazione e sicurezza dell'account — registrazione con verif
 - Passkey: libreria WebAuthn per Laravel, candidate `laragear/webauthn` e `spatie/laravel-passkeys`. Verifica la compatibilità con la versione di Laravel installata e proponi la scelta prima di installarla. La crittografia WebAuthn non si scrive a mano.
 - Frontend passkey: `@simplewebauthn/browser` (`startRegistration`, `startAuthentication`, `browserSupportsWebAuthn`).
 - Le passkey funzionano su `http://localhost` perché i browser lo considerano un contesto sicuro. Relying party: id `localhost`, origine ammessa `http://localhost:5173`.
+- User agent: parser interno senza dipendenze (sezione "Eventi di sicurezza").
 - Niente Fortify: rotte e struttura seguono le convenzioni del progetto (`/api/v1`, Action, Resource).
 
 ## Dati
@@ -29,19 +33,28 @@ description: Autenticazione e sicurezza dell'account — registrazione con verif
 | Tabella o colonna | Contenuto | Protezione |
 |---|---|---|
 | users.email_verified_at | data di verifica | — |
+| users.password_changed_at | data dell'ultima impostazione della password: registrazione, cambio, reset | — |
 | users.two_factor_secret | segreto TOTP | cast `encrypted`, `$hidden` |
-| users.two_factor_recovery_codes | elenco degli hash dei codici di recupero | cast `encrypted:array`, `$hidden` |
-| users.two_factor_confirmed_at | data di attivazione, null se non attivo | — |
+| users.two_factor_recovery_codes | elenco degli hash dei codici di recupero, null senza TOTP | cast `encrypted:array`, `$hidden` |
+| users.two_factor_confirmed_at | data di attivazione della doppia autenticazione, null se non attiva | — |
 | users.two_factor_last_used_step | ultimo intervallo TOTP usato | impedisce il riutilizzo dello stesso codice |
 | passkeys (tabella della libreria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
 | password_reset_tokens | token di reset di Laravel | hash, scadenza 60 minuti |
 | email_change_requests | user_id, new_email, token_hash, cancel_token_hash, expires_at, confirmed_at, cancelled_at | hash, scadenza 60 minuti, monouso |
-| security_events | user_id, type, ip_address, user_agent, metadata (JSON), created_at | nessun segreto nei metadata |
+| security_events | user_id, type, ip_address, user_agent (grezzo), metadata (JSON), created_at | nessun segreto nei metadata |
 | sessions | sessioni del driver `database` | usate per chiudere le altre sessioni |
 
-Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano.
+- `password_changed_at` si aggiunge con una nuova migration e la `UserFactory` la valorizza.
+- Negli eventi `passkey_added` e `passkey_removed`, e nel `login` fatto con una passkey, i `metadata` contengono `passkey_name`: il nome della passkey al momento dell'evento.
+
+Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano (es. `login` → "Accesso effettuato", `password_changed` → "Password cambiata", `passkey_added` → "Passkey aggiunta", `two_factor_enabled` → "Doppia autenticazione attivata").
 
 ## Configurazione
+
+`config/auth.php`:
+
+- `verification.expire`: 1440 minuti (il link di verifica email vale 24 ore)
+- `passwords.users.expire`: 60 minuti
 
 `config/security.php`:
 
@@ -49,109 +62,163 @@ Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`
 - `login_challenge_ttl`: 300 secondi
 - `email_change_ttl`: 60 minuti
 - `recovery_codes_count`: 8
+- `security_events_per_page`: 10
 
 ## Architettura del secondo fattore
 
 - Interfaccia `App\Contracts\Security\SecondFactorVerifier` con `verify(User $user, array $payload): bool`.
 - Implementazioni: `TotpVerifier`, `RecoveryCodeVerifier`, `PasskeyVerifier`.
-- `VerifySecondFactorAction` sceglie l'implementazione in base al campo `method` (`totp`, `recovery_code`, `passkey`) e lancia `InvalidSecondFactorException` (422) se la verifica fallisce.
+- `VerifySecondFactorAction` si usa solo se `hasSecondFactor()`: sceglie l'implementazione in base al campo `method` (`totp`, `recovery_code`, `passkey`) e lancia `InvalidSecondFactorException` (422) se la verifica fallisce.
+- I metodi disponibili, restituiti nel campo `methods` delle risposte, sono `totp` e `recovery_code`, più `passkey` se l'utente ha almeno una passkey registrata.
 - Il TOTP accetta una finestra di un intervallo e rifiuta intervalli già usati.
 - Un codice di recupero usato viene rimosso; se ne restano due o meno, la risposta lo segnala e il frontend invita a rigenerarli.
 - Nei test `PasskeyVerifier` si sostituisce con un'implementazione finta tramite il container.
 
 ## Conferma dell'identità (step-up)
 
-- Endpoint `POST /me/confirm-identity` con `password` e, se l'utente ha il secondo fattore, `method` più `code` oppure la risposta della passkey.
+- Endpoint `POST /me/confirm-identity` con `password` e, se la doppia autenticazione è attiva, `method` più `code` oppure la risposta della passkey (opzioni da `POST /me/confirm-identity/passkey-options`).
 - Se riuscita, la sessione salva `identity_confirmed_at`, valida per `confirmation_timeout`.
-- Middleware `EnsureIdentityConfirmed`, alias `identity.confirmed`: se la conferma manca o è scaduta risponde **423** con `{ "message": "...", "requires": ["password", "second_factor"] }`, dove `second_factor` compare solo se l'utente ce l'ha.
-- Il frontend intercetta il 423, apre `ConfirmIdentityDialog` e ripete la richiesta originale.
+- Middleware `EnsureIdentityConfirmed`, alias `identity.confirmed`: se la conferma manca o è scaduta risponde **423** con `{ "message": "...", "requires": ["password", "second_factor"] }`, dove `second_factor` compare solo se `hasSecondFactor()`.
+- Il frontend intercetta il 423, apre `ConfirmIdentityDialog` e ripete la richiesta originale. La richiesta può portare nella sua configurazione una descrizione dell'operazione, che il dialog mostra (es. «Per disattivare la doppia autenticazione, conferma che sei tu.»).
+- Il frontend può anche aprire la conferma in modo esplicito prima di un'azione che richiede altri dati all'utente (cambio email).
 - La conferma si azzera al logout e dopo ogni cambio password.
 
 ## Flussi
 
 ### Registrazione e verifica email
 
-1. `POST /register`: crea un `customer`, invia l'email di verifica, avvia la sessione.
-2. Il link nell'email punta al frontend (`/verify-email?...`) e contiene i parametri firmati dell'API: si configura con `VerifyEmail::createUrlUsing()`.
-3. La pagina del frontend chiama `POST /email/verify/{id}/{hash}` inoltrando `expires` e `signature`.
-4. `POST /email/verification-notification` reinvia l'email (limitato).
+1. `POST /register`: crea un `customer` con `password_changed_at` valorizzata, invia l'email di verifica, avvia la sessione. Il frontend porta a `/verify-email` senza parametri: "Controlla la tua email", con il link valido 24 ore e "Invia di nuovo il link".
+2. Il link nell'email punta al frontend (`/verify-email?...`) e contiene i parametri firmati dell'API: si configura con `VerifyEmail::createUrlUsing()`, che firma con `URL::temporarySignedRoute()` la rotta `v1.verification.verify` (le rotte hanno il prefisso di nome `v1.`). La callback personalizzata legge da sé la scadenza da `config('auth.verification.expire')`: 24 ore.
+3. La pagina del frontend chiama `POST /email/verify/{id}/{hash}` inoltrando `expires` e `signature`. La rotta è in `public.php` e **non richiede l'autenticazione**: la protegge solo la firma del link, che copre id dell'utente, hash dell'email e scadenza.
+   - **Motivo:** chi si registra dal computer e apre l'email dal telefono non deve fare login solo per confermare l'indirizzo. La firma basta perché lega il link a quell'utente e a quell'indirizzo, e scade.
+   - Non si usano la rotta e la Form Request standard di Laravel (`EmailVerificationRequest`), che richiedono l'utente autenticato. Il parametro `{id}` **non** usa il route model binding, perché la gestione centralizzata trasformerebbe un utente inesistente in 404: una Action cerca l'utente con `find()` e, se non esiste, lancia la stessa eccezione del 403 con lo stesso messaggio; poi verifica che `hash` corrisponda a `sha1` dell'email attuale (`hash_equals`) e, se non è già verificato, valorizza `email_verified_at` e scrive l'evento `email_verified`.
+   - Firma non valida o scaduta → 403. Utente inesistente o `hash` che non corrisponde all'email attuale (per esempio dopo un cambio email) → 403 con lo stesso messaggio, così non si rivela nulla. La pagina mostra "Il link è scaduto" con "Invia un nuovo link".
+   - Utente già verificato con link valido → 200, senza nuovo evento: la pagina mostra comunque "Email confermata".
+   - La risposta 200 è `{ "data": { "email": "..." } }` con l'indirizzo appena confermato: la pagina lo mostra («Grazie: l'indirizzo {email} è confermato.»), così un altro utente autenticato che apre il link di qualcun altro vede quale indirizzo è stato confermato e non pensa che sia il proprio.
+   - Limiter `verification`, per utente se autenticato e per IP altrimenti.
+   - La verifica non avvia una sessione: l'ospite resta ospite.
+4. `POST /email/verification-notification` reinvia l'email (autenticato, limitato).
 5. Senza email verificata l'utente naviga e usa il carrello, ma il checkout è bloccato dal middleware `verified`.
 
 ### Login
 
 1. `POST /login` con email e password.
-2. Senza secondo fattore: rigenera la sessione e restituisce l'utente.
-3. Con secondo fattore: **non** autentica. Salva in sessione `login.pending_user_id` con scadenza `login_challenge_ttl` e risponde `{ "two_factor_required": true, "methods": [...] }`.
+2. Senza doppia autenticazione: rigenera la sessione e restituisce l'utente.
+3. Con doppia autenticazione: **non** autentica. Salva in sessione `login.pending_user_id` con scadenza `login_challenge_ttl` e risponde `{ "two_factor_required": true, "methods": [...] }`.
 4. `POST /login/two-factor` con `method` e `code`, oppure con la risposta della passkey ottenuta da `POST /login/two-factor/passkey-options`. Se riesce, autentica e rigenera la sessione.
-5. Accesso senza password con passkey: `POST /passkeys/login/options`, poi `POST /passkeys/login`.
-6. Credenziali errate: messaggio generico "Credenziali non valide", mai "email non trovata".
+   - Challenge mancante o scaduta (`login.pending_user_id` assente o oltre `login_challenge_ttl`): 422 con `{ "message": "La verifica è scaduta: accedi di nuovo.", "code": "two_factor_challenge_expired" }`. Il frontend torna al login.
+   - Codice sbagliato: 422 con errore sul campo `code` e nessun `code` di primo livello. Il frontend resta sulla pagina.
+   - Non si usa il 419, che appartiene al CSRF e viene ripetuto dall'interceptor.
+5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login`. La passkey da sola basta, non si chiede altro.
+6. Credenziali errate: 422 con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi, così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
 
 ### Recupero password
 
 1. `POST /forgot-password` con l'email: risponde **sempre** lo stesso messaggio generico, che l'indirizzo esista o no.
-2. Il link nell'email punta al frontend: `/reset-password?token=...&email=...`.
-3. `POST /reset-password/check` con token ed email: se il token è valido risponde `{ "requires_second_factor": bool, "methods": [...] }`.
-4. `POST /reset-password` con token, email, nuova password, conferma e, se richiesto, il secondo fattore. Per la passkey le opzioni si ottengono da `POST /reset-password/passkey-options` con token ed email.
-5. Dopo il reset: tutte le sessioni dell'utente chiuse, notifica email, evento `password_reset`, nessun login automatico.
+2. Il link nell'email punta al frontend: `/reset-password?token=...&email=...`. Scade dopo 60 minuti.
+3. `POST /reset-password/check` con token ed email: se il token è valido risponde `{ "requires_second_factor": bool, "methods": [...] }`; se non lo è, 422 e la pagina mostra "Il link è scaduto".
+4. `POST /reset-password` con token, email, nuova password, conferma e, se la doppia autenticazione è attiva, il secondo fattore: codice TOTP, codice di recupero o passkey. Per la passkey le opzioni si ottengono da `POST /reset-password/passkey-options` con token ed email.
+5. Dopo il reset: `password_changed_at` aggiornata, tutte le sessioni dell'utente chiuse, notifica email, evento `password_reset`, nessun login automatico.
 
 ### Cambio password
 
-- `PUT /me/password` con `current_password`, `password` e `password_confirmation`.
-- La password attuale è sempre richiesta nella richiesta stessa.
-- Se l'utente ha il secondo fattore, la rotta richiede anche la conferma dell'identità.
-- Dopo il cambio: le altre sessioni vengono chiuse, la sessione corrente è rigenerata, notifica email, evento `password_changed`.
+- `PUT /me/password` con `current_password`, `password`, `password_confirmation` e, se la doppia autenticazione è attiva, `method` più `code` oppure la risposta della passkey (opzioni da `POST /me/password/passkey-options`).
+- Il secondo fattore si chiede **in linea**, nel form stesso (mockup, pagina Sicurezza): la rotta non usa `identity.confirmed`, così la password non viene chiesta due volte.
+- Secondo fattore mancante con doppia autenticazione attiva → 422 sul campo `code`.
+- Dopo il cambio: `password_changed_at` aggiornata, altre sessioni chiuse, sessione corrente rigenerata, conferma dell'identità azzerata, notifica email, evento `password_changed`.
 
 ### Cambio email
 
-1. `POST /me/email` con il nuovo indirizzo, protetto da `identity.confirmed` (password, più secondo fattore se attivo). Il nuovo indirizzo deve essere diverso dall'attuale e non già registrato.
+1. `POST /me/email` con il nuovo indirizzo, protetto da `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). Il nuovo indirizzo deve essere diverso dall'attuale e non già registrato.
 2. Crea una `email_change_requests` (annulla eventuali richieste precedenti in sospeso) e invia:
    - al **nuovo** indirizzo il link di conferma: `/confirm-email-change?token=...`
    - al **vecchio** indirizzo un avviso con il link di annullamento: `/cancel-email-change?token=...`
 3. `POST /email-change/confirm` con il token: ricontrolla l'unicità, aggiorna l'email e `email_verified_at`, notifica il vecchio indirizzo, evento `email_changed`.
 4. `POST /email-change/cancel` con il token di annullamento: annulla la richiesta, evento `email_change_cancelled`, e il messaggio consiglia di cambiare la password.
-5. Finché la richiesta non è confermata, l'email dell'account resta quella vecchia.
+5. `DELETE /me/email-change` (autenticato, senza conferma dell'identità, limiter `email-change`): annulla dal profilo la richiesta in sospeso, invia all'indirizzo attuale l'avviso di cambio annullato, evento `email_change_cancelled`, risposta 204. Senza richiesta in sospeso risponde 404.
+6. `UserResource` espone `pending_email_change`: `{ "new_email": "...", "expires_at": "..." }` per una richiesta non confermata, non annullata e non scaduta, altrimenti `null`.
+7. Finché la richiesta non è confermata, l'email dell'account resta quella vecchia.
 
 ### Doppia autenticazione TOTP
 
 1. `POST /me/two-factor` (`identity.confirmed`): genera un segreto non ancora confermato e restituisce QR code SVG e chiave per l'inserimento manuale.
-2. `POST /me/two-factor/confirm` con un codice valido: attiva il TOTP e restituisce i codici di recupero in chiaro, **una sola volta**.
+2. `POST /me/two-factor/confirm` con un codice valido: attiva la doppia autenticazione e restituisce i codici di recupero in chiaro, **una sola volta**.
 3. `POST /me/two-factor/recovery-codes` (`identity.confirmed`): rigenera i codici, invalida i precedenti, li mostra una sola volta.
-4. `DELETE /me/two-factor` (`identity.confirmed`): disattiva il TOTP, chiude le altre sessioni, notifica, evento.
+4. `DELETE /me/two-factor` (`identity.confirmed`): disattiva la doppia autenticazione, cancella segreto e codici di recupero, chiude le altre sessioni, notifica, evento. Le passkey restano e continuano a permettere l'accesso senza password.
 5. Formato dei codici di recupero: `XXXX-XXXX`, salvati come hash e monouso.
 
 ### Passkey
 
 1. `GET /me/passkeys`: elenco con nome, data di creazione e ultimo utilizzo.
-2. `POST /me/passkeys/options` (`identity.confirmed`), poi `POST /me/passkeys` con la risposta del browser e un nome scelto dall'utente.
+2. `POST /me/passkeys/options` (`identity.confirmed`), poi `POST /me/passkeys` con la risposta del browser e un nome scelto dall'utente. Evento `passkey_added` con `passkey_name`.
 3. `PATCH /me/passkeys/{passkey}`: rinomina.
-4. `DELETE /me/passkeys/{passkey}` (`identity.confirmed`): rimozione, notifica, evento.
-5. Alla prima passkey registrata, se l'utente non ha codici di recupero, se ne generano e si mostrano una sola volta. L'interfaccia consiglia di registrare almeno due passkey.
+4. `DELETE /me/passkeys/{passkey}` (`identity.confirmed`): rimozione, notifica, evento `passkey_removed` con `passkey_name`.
+5. L'interfaccia consiglia di registrare almeno due passkey, su dispositivi diversi.
 6. Se il browser non supporta WebAuthn, le opzioni passkey non vengono mostrate.
 
-### Sessioni ed eventi
+### Panoramica, sessioni ed eventi
 
-- `GET /me/security`: panoramica (TOTP attivo, numero di passkey, codici di recupero rimasti, email verificata).
-- `GET /me/security-events`: ultimi eventi paginati.
+- `GET /me/security`:
+
+```json
+{
+  "data": {
+    "two_factor_enabled": true,
+    "two_factor_confirmed_at": "2026-09-12T21:40:00+02:00",
+    "recovery_codes_remaining": 6,
+    "recovery_codes_total": 8,
+    "passkeys_count": 2,
+    "email_verified": true,
+    "password_changed_at": "2026-09-12T21:31:00+02:00"
+  }
+}
+```
+
+  Senza doppia autenticazione `two_factor_confirmed_at` è null e i conteggi dei codici sono 0.
+- `GET /me/security-events`: eventi dell'utente dal più recente, paginati a `security_events_per_page` (10), con `meta` e `links` della paginazione standard.
 - Extra opzionale: `GET /me/sessions`, `DELETE /me/sessions/{id}`, `DELETE /me/sessions` per le altre sessioni.
+
+### Eventi di sicurezza
+
+- Il database conserva lo user agent grezzo; l'etichetta si calcola nella risposta.
+- `App\Support\UserAgentLabel`, parser interno senza dipendenze, trasforma lo user agent in «Browser su sistema» (es. "Chrome su macOS", "Safari su iOS"). Riconosce almeno Chrome, Safari, Firefox, Edge e Opera, e Windows, macOS, iOS, iPadOS, Android e Linux; l'ordine dei controlli tiene conto che Edge e Opera contengono anche "Chrome" e Chrome contiene anche "Safari". Se browser o sistema non si riconoscono, o lo user agent manca, restituisce «Dispositivo sconosciuto».
+- `SecurityEventResource`:
+
+```json
+{
+  "id": 42,
+  "type": "passkey_added",
+  "label": "Passkey aggiunta",
+  "device": "Safari su macOS",
+  "ip_address": "93.45.112.18",
+  "passkey_name": "MacBook di Giulia",
+  "created_at": "2026-09-20T18:02:00+02:00"
+}
+```
+
+  `passkey_name` è null per gli eventi che non riguardano una passkey.
 
 ## Riepilogo delle protezioni
 
-| Operazione | Senza secondo fattore | Con secondo fattore |
+| Operazione | Doppia autenticazione non attiva | Doppia autenticazione attiva |
 |---|---|---|
-| Login | password | password + secondo fattore, oppure solo passkey |
-| Recupero password | link via email | link via email + secondo fattore o codice di recupero |
-| Cambio password | password attuale | password attuale + secondo fattore |
-| Cambio email | password + verifica del nuovo indirizzo + avviso al vecchio | lo stesso + secondo fattore |
-| Disattivare TOTP, rimuovere passkey, rigenerare codici | — | password + secondo fattore |
+| Login | password, oppure solo passkey | password + (codice TOTP, codice di recupero o passkey), oppure solo passkey |
+| Recupero password | link via email | link via email + (codice TOTP, codice di recupero o passkey) |
+| Cambio password | password attuale | password attuale + (codice TOTP, codice di recupero o passkey), nel form |
+| Cambio email | conferma dell'identità con password + verifica del nuovo indirizzo + avviso al vecchio | lo stesso, con conferma dell'identità con password + secondo fattore |
+| Attivare il TOTP, aggiungere o rimuovere una passkey | conferma dell'identità con password | conferma dell'identità con password + secondo fattore |
+| Disattivare il TOTP, rigenerare i codici | — | conferma dell'identità con password + secondo fattore |
+| Annullare un cambio email in sospeso | sessione autenticata o link dell'email | sessione autenticata o link dell'email |
 
 ## Notifiche email (in italiano)
 
-Verifica email, reset password, password cambiata, conferma cambio email (nuovo indirizzo), avviso cambio email (vecchio indirizzo), email cambiata, doppia autenticazione attivata o disattivata, codici di recupero rigenerati, codice di recupero usato, passkey aggiunta o rimossa. Ogni avviso indica data, ora e dispositivo, e invita a cambiare la password se l'operazione non è stata fatta dall'utente.
+Verifica email, reset password, password cambiata, conferma cambio email (nuovo indirizzo), avviso cambio email (vecchio indirizzo), cambio email annullato dal profilo, email cambiata, doppia autenticazione attivata o disattivata, codici di recupero rigenerati, codice di recupero usato, passkey aggiunta o rimossa. Ogni avviso indica data, ora e dispositivo (etichetta di `UserAgentLabel`), e invita a cambiare la password se l'operazione non è stata fatta dall'utente. L'email di verifica dice che il link vale 24 ore; quelle di reset e di cambio email dicono 60 minuti.
 
 ## Password
 
 - `Password::defaults()` in `AppServiceProvider`: minimo 10 caratteri, lettere maiuscole e minuscole, numeri, `uncompromised()`.
 - `uncompromised()` è disattivato nell'ambiente di test perché fa una chiamata esterna.
+- Lo schema Zod della password nel frontend rispecchia le stesse regole (almeno 10 caratteri, maiuscole e minuscole, numeri). Il controllo `uncompromised` resta solo nel backend: il suo errore arriva come 422 e si mostra sul campo.
 
 ## Rate limiting
 
@@ -160,32 +227,60 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 | `login` | 5 al minuto per email + IP |
 | `two-factor` | 5 al minuto per sessione |
 | `password-reset` | 3 ogni 10 minuti per email + IP |
-| `verification` | 6 al minuto per utente |
+| `verification` | 6 al minuto per utente, per IP se ospite |
 | `email-change` | 3 all'ora per utente |
 | `identity-confirmation` | 5 al minuto per utente |
 
-Oltre il limite si risponde 429 con messaggio in italiano; il frontend mostra dopo quanti secondi riprovare.
+- `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
+- `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`.
+- `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification`.
+- Oltre il limite si risponde 429 con messaggio in italiano e header `Retry-After` in secondi.
+- Frontend e backend sono su origini diverse: `config/cors.php` include `Retry-After` in `exposed_headers`, altrimenti il browser non lo rende leggibile ad axios.
+- Il frontend mostra «Troppi tentativi. Riprova tra N secondi», con N preso da `Retry-After` tramite `normalizeApiError`.
 
 ## Frontend
 
-- Pagine in `features/auth`: login, verifica secondo fattore al login, registrazione, verifica email, password dimenticata, reset password, conferma e annullamento del cambio email.
-- Pagine in `features/security`: sicurezza dell'account con TOTP, codici di recupero, passkey, cambio password, eventi recenti. Il cambio email sta nel profilo in `features/account`.
-- `IdentityConfirmationProvider` gestisce il 423 intercettato da `httpClient` e mostra `ConfirmIdentityDialog`.
-- Banner di email non verificata in `StoreLayout` con reinvio.
+- Pagine in `features/auth`: login, verifica in due passaggi al login, registrazione, verifica email ("Controlla la tua email", "Email confermata", "Il link è scaduto"), password dimenticata, reset password, conferma e annullamento del cambio email. Testi e stati dal mockup `03-account.pdf`.
+- Pagine in `features/security`: sicurezza dell'account con password (ultima modifica e cambio con secondo fattore in linea), doppia autenticazione, codici di recupero, passkey, attività recente. Il cambio email sta nel profilo in `features/account`.
+- Cambio email dal profilo: "Cambia email" apre prima la conferma dell'identità, poi un `Dialog` con il campo "Nuova email" (non presente nel mockup). Con una richiesta in sospeso il profilo mostra l'avviso con "Annulla la richiesta", che chiama `DELETE /me/email-change`.
+- `IdentityConfirmationProvider` gestisce il 423 intercettato da `httpClient` e mostra `ConfirmIdentityDialog`; espone anche una funzione per chiedere la conferma in modo esplicito.
+- Banner di email non verificata in `StoreLayout` con reinvio, nascosto nelle pagine di `AuthLayout` (accesso e pagine dai link email), dove sarebbe un doppione.
+- Gli errori che il frontend deve distinguere oltre allo status hanno un campo `code` stabile (es. `two_factor_challenge_expired`), esposto da `normalizeApiError`.
 - Campi del codice con `autoComplete="one-time-code"`; campi password con `current-password` o `new-password`.
+- Sotto i campi della nuova password, l'elenco dei requisiti si aggiorna mentre l'utente scrive, con le stesse regole dello schema Zod.
 - I codici di recupero si mostrano una volta sola, con copia e download in un file `.txt`.
+- L'attività recente mostra la prima pagina e il pulsante "Mostra altre attività" finché ci sono pagine successive.
 
 ## Test obbligatori
 
 Oltre ai casi standard della skill `testing`:
 
-- login con e senza secondo fattore, challenge scaduta, codice errato, codice riutilizzato
+- login con e senza doppia autenticazione, codice riutilizzato
+- challenge scaduta (`travelTo()` oltre 300 secondi) e challenge assente: 422 con `code` `two_factor_challenge_expired`; codice errato: 422 con errore sul campo `code` e senza `code` di primo livello
+- credenziali errate: 422 con `code` `invalid_credentials` e senza `errors`, stessa risposta per email inesistente e password sbagliata
+- utente con sole passkey e senza TOTP: `hasSecondFactor()` false, login con password senza challenge, accesso con passkey riuscito, nessun codice di recupero generato, 423 con `requires` senza `second_factor`
+- utente con TOTP e passkey: la passkey è accettata come secondo fattore al login, al reset, al cambio password e nella conferma dell'identità; `methods` contiene `passkey`
+- utente con TOTP senza passkey: `methods` non contiene `passkey`
+- disattivazione del TOTP: codici di recupero cancellati, passkey conservate
 - ogni rotta `identity.confirmed` risponde 423 senza conferma e 200 dopo la conferma
 - codice di recupero accettato una sola volta
+- verifica email da ospite con link valido → 200 con l'email confermata in `data.email`, `email_verified_at` valorizzata, nessuna sessione avviata
+- verifica email da ospite oltre il limite → 429 con `Retry-After`
+- verifica email da autenticato con link valido → 200
+- verifica email con utente già verificato → 200, `email_verified_at` invariata, nessun nuovo evento
+- verifica email con firma alterata → 403; con `hash` che non corrisponde all'email attuale ma firma valida → 403; con id inesistente → 403
+- link di verifica email valido dopo 23 ore e scaduto dopo 25 (`travelTo()`) → 403; link di reset e di cambio email scaduti dopo 61 minuti
 - forgot password con email inesistente: stessa risposta di quella esistente
 - reset con secondo fattore richiesto e mancante → 422
-- cambio email: il vecchio indirizzo resta fino alla conferma, token scaduto, token riutilizzato, annullamento
+- cambio password con doppia autenticazione attiva e secondo fattore mancante → 422; con secondo fattore valido → 200
+- `password_changed_at` valorizzata alla registrazione, al cambio e al reset
+- cambio email: il vecchio indirizzo resta fino alla conferma, token scaduto, token riutilizzato, annullamento dal link
+- `DELETE /me/email-change`: 204 con evento `email_change_cancelled`, avviso inviato all'indirizzo attuale ed email invariata, 404 senza richiesta in sospeso, 401 da ospite; `pending_email_change` in `GET /me` prima e dopo
 - chiusura delle altre sessioni dopo cambio e reset password
+- `UserAgentLabel` (unit), con user agent reali scritti a mano nel test: Chrome su macOS, Safari su iOS, Safari su iPadOS, Firefox su Windows, Firefox su Linux, Edge su Windows (non Chrome), Opera su Windows (non Chrome), Chrome su Android, stringa vuota e stringa sconosciuta → «Dispositivo sconosciuto»
+- `POST /me/password/passkey-options` e `POST /me/confirm-identity/passkey-options`: 401 da ospite; 422 per un utente senza passkey; 200 con le opzioni per un utente con passkey (verificatore finto); per entrambe 422 anche per un utente con passkey ma senza doppia autenticazione attiva
+- `GET /me/security-events`: 10 elementi per pagina con `meta`, solo gli eventi dell'utente, `device` e `passkey_name` negli eventi passkey
+- `GET /me/security` con i valori attesi per un utente con e senza doppia autenticazione
 - notifiche inviate (`Notification::fake()`) ed eventi di sicurezza registrati
 - segreti mai presenti nelle risposte JSON
-- rate limiting sulle rotte di autenticazione
+- rate limiting sulle rotte di autenticazione, su `PUT /me/password` (sesto tentativo nel minuto) e su `DELETE /me/email-change`: 429 con header `Retry-After`

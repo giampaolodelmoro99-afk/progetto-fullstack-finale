@@ -174,7 +174,7 @@ src/
 
 | Area | Casi |
 |---|---|
-| Utility | `formatPrice` (349,00 €, 1.249,00 € con il punto delle migliaia, 0,00 €), `formatDate`, `normalizeApiError` |
+| Utility | `formatPrice` (349,00 €, 1.249,00 € con il punto delle migliaia, 0,00 €), `formatDate`, `normalizeApiError` (compreso il 429 con `Retry-After: 45` → `retryAfter` 45 e «Troppi tentativi. Riprova tra 45 secondi», e senza header → `retryAfter` null; `code` dalla risposta, null se manca) |
 | httpClient | ripetizione dopo 419, gestione del 423 con conferma e ripetizione |
 | Rotte | redirect al login con ritorno alla pagina di partenza, blocco dell'area admin, pagine ospite |
 | Form | validazione Zod, errori 422 del server mostrati sui campi, pulsante disabilitato durante l'invio |
@@ -185,7 +185,8 @@ src/
 | Checkout | avanzamento dei tre passi, email non verificata, campo "Paese" non modificabile, validazione Zod di indirizzo e carta, "Paga" disabilitato senza accettazione delle condizioni o con `can_checkout` false, 402 che torna al passo 2 con i dati della carta conservati, 409 con "Disponibilità cambiata", 201 con navigazione alla conferma |
 | Dati della carta | dopo l'invio, riuscito e fallito, la MutationCache non contiene i dati della carta (`queryClient.getMutationCache()`), l'errore della mutation non contiene `config.data`, `localStorage` e `sessionStorage` sono vuoti, l'URL non contiene parametri della carta; rimontando la pagina il checkout riparte dal passo 1 con i campi vuoti |
 | Conferma d'ordine | dati letti da `GET /orders/{id}` (numero, stato, "Carta che termina con 4242", totali), immagine di ripiego per un prodotto eliminato, 404 con link agli ordini |
-| Sicurezza | login con secondo fattore, attivazione TOTP con codici di recupero, conferma dell'identità |
+| Sicurezza | login con secondo fattore (app, codice di recupero, passkey solo se in `methods`), credenziali errate (422 con `code` `invalid_credentials`) con un solo avviso e nessun errore sui campi, challenge scaduta (422 con `code` `two_factor_challenge_expired`) che riporta al login e codice sbagliato che resta sulla pagina con l'errore sul campo, messaggio 429 al login, verifica email da ospite con esito positivo e l'indirizzo preso dalla risposta, banner di email non verificata assente nelle pagine di accesso, `PasswordRequirements` che si aggiorna mentre si scrive e `newPasswordSchema` (9 caratteri, senza maiuscola, senza minuscola, senza numero), pagine dai link email (successo e link scaduto), reset con la sezione di verifica solo se richiesta, cambio password con secondo fattore in linea solo con la doppia autenticazione attiva, attivazione TOTP con codici di recupero, conferma dell'identità (esplicita e dopo 423, con la descrizione dell'operazione), cambio email con il `Dialog` "Nuova email" dopo la conferma, avviso di cambio in sospeso con "Annulla la richiesta", attività recente con "Mostra altre attività" che sparisce all'ultima pagina |
+| Area account | menu account per ospite e utente autenticato, navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, dialog di annullamento dell'ordine con "Mantieni l'ordine" e "Annulla l'ordine" |
 | Admin | tabella prodotti, form prodotto, cambio di stato dell'ordine |
 
 Fuori perimetro: test end-to-end con Playwright, extra facoltativo della Fase 10.

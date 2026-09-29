@@ -30,10 +30,12 @@ app/
 ├── Observers/
 ├── Policies/
 ├── Providers/
-└── Services/{Area}/           # implementazioni delle interfacce
+├── Services/{Area}/           # implementazioni delle interfacce
+└── Support/                   # piccole classi di utilità senza stato (UserAgentLabel)
 config/
+├── cors.php                   # origine del frontend, credenziali, exposed_headers con Retry-After
 ├── shop.php                   # spedizione, soglie ultimi pezzi e scorte basse, giorni delle novità
-└── security.php               # tempi di conferma e scadenze
+└── security.php               # tempi di conferma, scadenze, eventi per pagina
 database/
 ├── factories/
 └── seeders/
@@ -46,7 +48,7 @@ routes/
 ## Rotte
 
 - `routes/api.php` include i file di `routes/api/v1/` con prefisso `v1` e nome `v1.`.
-- `public.php`: catalogo, health check, registrazione, login, recupero password, conferme via link.
+- `public.php`: catalogo, health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
 - `customer.php`: middleware `auth:sanctum`.
 - `admin.php`: middleware `auth:sanctum` e `role:admin`, prefisso `admin`, nome `admin.`.
 - Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`).
@@ -168,7 +170,8 @@ final class StoreProductRequest extends FormRequest
 ## Errori
 
 - Eccezioni di dominio in `App\Exceptions` con metodo `render()` che restituisce JSON e lo status corretto (`InsufficientStockException` → 409, `InvalidOrderTransitionException` → 422, `PaymentFailedException` → 402).
-- Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... } }`, con `errors` presente solo per il 422.
+- Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... }, "code": "..." }`, con `errors` presente solo per il 422 con errori sui campi e `code` presente solo quando il frontend deve distinguere errori con lo stesso status. I valori di `code` sono stringhe stabili in snake_case (es. `two_factor_challenge_expired`), definite nell'eccezione che le produce.
+- Le risposte 429 includono l'header `Retry-After`, esposto al frontend da `config/cors.php`.
 - Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403.
 - Dati sensibili mai rimandati indietro o salvati in sessione: in `withExceptions()` si aggiungono a `dontFlash` i campi della carta insieme a quelli delle password:
 
@@ -201,7 +204,7 @@ $exceptions->dontFlash([
 
 - Ogni modello ha una factory, con dati realistici in italiano (`fake('it_IT')`, locale Faker `it_IT` in `.env`).
 - Stati espliciti per ogni variante utile ai test:
-  - `UserFactory`: `admin()`, `customer()`, `unverified()`, `withTwoFactor()`
+  - `UserFactory`: `admin()`, `customer()`, `unverified()`, `withTwoFactor()` (segreto, codici di recupero e `two_factor_confirmed_at`), `withPasskey(string $name = 'MacBook di prova')` (una passkey finta, senza doppia autenticazione; si definisce dopo la scelta della libreria WebAuthn, perché scrive nella sua tabella), `withPendingEmailChange(string $newEmail)` (richiesta in sospeso non scaduta); `password_changed_at` è sempre valorizzata
   - `ProductFactory`: `inactive()`, `outOfStock()`, `lastUnits(int $stock = 2)` (sotto `last_units_threshold`), `lowStock()` (sotto `low_stock_threshold`), `newArrival()` e `older()` (`created_at` dentro o fuori `new_arrival_days`); la categoria si assegna con `for(Category::factory())` o `recycle()`
   - `OrderFactory`: `pending()`, `paid()`, `shipped()`, `delivered()`, `cancelledAfterPayment()` (con `paid_at` e `cancelled_at`), `failedPayment()` (`cancelled` senza `paid_at`), ognuno con i timestamp coerenti
   - `AddressFactory`: indirizzi italiani validi (CAP di 5 cifre, sigla di provincia, telefono), `country` sempre `IT`

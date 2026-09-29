@@ -1,11 +1,11 @@
 ---
 name: react-architecture
-description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore, carrello, checkout con i dati della carta solo in memoria e conferma d'ordine, TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419 e 423, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
+description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore, carrello, checkout con i dati della carta solo in memoria e conferma d'ordine, pagine raggiunte dai link email, area account con profilo, ordini e sicurezza, TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419, 423 e 429, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
 ---
 
 # React — architettura del frontend
 
-Riferimenti visivi: `design/mockups/01-negozio.pdf` (negozio) e `design/mockups/02-acquisto.pdf` (carrello, checkout, conferma). Testi e formati: `design/design-system/voice-and-content.md`.
+Riferimenti visivi: `design/mockups/01-negozio.pdf` (negozio), `design/mockups/02-acquisto.pdf` (carrello, checkout, conferma) e `design/mockups/03-account.pdf` (accesso, registrazione, pagine dai link email, area account, sicurezza). Testi e formati: `design/design-system/voice-and-content.md`.
 
 ## Stack
 
@@ -38,7 +38,7 @@ src/
 ├── hooks/
 ├── theme/
 ├── test/                     # setup, utility e mock dei test
-├── utils/                    # format.js, normalizeApiError.js
+├── utils/                    # format.js, normalizeApiError.js, passwordRules.js
 └── pages/                    # NotFoundPage, ErrorPage
 ```
 
@@ -60,12 +60,13 @@ Una feature contiene tutto ciò che le appartiene, compresi i suoi test. Un elem
 - `createBrowserRouter` in `app/router/router.jsx`, `RouterProvider` (da `react-router/dom`) in `App.jsx`.
 - Percorsi centralizzati in `app/router/paths.js`; nessuna stringa di percorso sparsa nei componenti.
 - Layout come rotte genitore con `<Outlet />`:
-  - `StoreLayout`: `/`, `/products`, `/products/:slug`, `/cart`, `/checkout`, `/checkout/success/:orderId`, `/assistenza`, `/note-legali`
+  - `StoreLayout` (con il banner di email non verificata, nascosto nelle rotte di `AuthLayout`): `/`, `/products`, `/products/:slug`, `/cart`, `/checkout`, `/checkout/success/:orderId`, `/assistenza`, `/note-legali`
   - `AccountLayout` dentro `StoreLayout`: `/account/profile`, `/account/addresses`, `/account/orders`, `/account/orders/:orderId`, `/account/security`
-  - `AuthLayout`: `/login`, `/login/two-factor`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`, `/confirm-email-change`, `/cancel-email-change`
+  - `AuthLayout` dentro `StoreLayout` (header, navigazione e footer restano visibili, il layout centra la card): `/login`, `/login/two-factor`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`, `/confirm-email-change`, `/cancel-email-change`
   - `AdminLayout`: `/admin`, `/admin/products`, `/admin/products/new`, `/admin/products/:productId/edit`, `/admin/categories`, `/admin/orders`, `/admin/orders/:orderId`
 - `ProtectedRoute`: se l'utente non è autenticato reindirizza a `/login` salvando la pagina di provenienza in `state.from`, così dopo il login si torna lì.
-- `GuestRoute`: login e registrazione reindirizzano a `/` se l'utente è già autenticato.
+- `GuestRoute`: login, verifica in due passaggi, registrazione e password dimenticata reindirizzano a `/` se l'utente è già autenticato. Le pagine raggiunte dai link email non sono né protette né ospiti: funzionano in entrambi i casi.
+- `/account` reindirizza a `/account/profile`.
 - `AdminRoute`: se l'utente non è admin reindirizza a `/`.
 - Carrello, checkout e conferma d'ordine sono rotte protette.
 - Il checkout richiede email verificata: se non lo è, la pagina mostra l'invito a verificarla invece del form.
@@ -88,8 +89,20 @@ export const paths = {
   cart: '/cart',
   checkout: '/checkout',
   checkoutSuccess: (orderId) => `/checkout/success/${orderId}`,
+  login: '/login',
+  loginTwoFactor: '/login/two-factor',
+  register: '/register',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
+  verifyEmail: '/verify-email',
+  confirmEmailChange: '/confirm-email-change',
+  cancelEmailChange: '/cancel-email-change',
+  account: '/account',
+  accountProfile: '/account/profile',
+  accountAddresses: '/account/addresses',
   accountOrders: '/account/orders',
   accountOrder: (orderId) => `/account/orders/${orderId}`,
+  accountSecurity: '/account/security',
 };
 ```
 
@@ -203,6 +216,46 @@ Dal mockup `02-acquisto.pdf`. Tutti i valori arrivano dalla `CartResource` (skil
 - Mostra "Grazie per il tuo ordine" con l'email dell'utente, numero, data, stato, "Carta che termina con {card_last_four}", indirizzo, prodotti e totali; pulsanti "Vedi il tuo ordine" (`paths.accountOrder(id)`) e "Continua lo shopping".
 - 404 (ordine non pagato o di un altro utente): stato d'errore con link agli ordini.
 
+## Accesso (`features/auth`)
+
+Dal mockup `03-account.pdf`; regole e flussi nella skill `account-security`.
+
+- **Login:** 422 con `error.code === 'invalid_credentials'` → solo l'`Alert` "Credenziali non valide", nessun errore mappato sui campi; 429 → `Alert` con «Troppi tentativi. Riprova tra N secondi» da `error.retryAfter`. Se la risposta contiene `two_factor_required`, si naviga a `paths.loginTwoFactor` passando `methods` nello `state` della navigazione (nessun segreto). "Accedi con una passkey" usa `startAuthentication` e si mostra solo se `browserSupportsWebAuthn()`. Dopo l'accesso si torna a `state.from` o alla home.
+- **Verifica in due passaggi al login:** modalità iniziale `totp`; i link passano a codice di recupero o passkey (solo se `methods` contiene `passkey`). Aperta senza `state` (ricaricando la pagina) riporta al login. Se `POST /login/two-factor` risponde 422 con `error.code === 'two_factor_challenge_expired'`, si torna al login con il messaggio «La verifica è scaduta: accedi di nuovo.»; un 422 senza quel `code` è un codice sbagliato e mostra l'errore sul campo, restando sulla pagina.
+- **Registrazione:** dopo `POST /register` si invalidano `me` e `cart` e si naviga a `paths.verifyEmail` senza parametri.
+- **Password dimenticata:** dopo l'invio la stessa pagina mostra "Controlla la tua email", qualunque sia l'indirizzo.
+
+## Pagine raggiunte dai link email
+
+Leggono i parametri dalla query string con `useSearchParams` e chiamano l'API al caricamento con una mutation lanciata una sola volta (protetta dal doppio montaggio di `StrictMode`). Ogni pagina ha gli stati: caricamento, esito positivo, link scaduto o non valido.
+
+| Pagina | Chiamata | Esiti |
+|---|---|---|
+| `/verify-email` senza parametri | nessuna | "Controlla la tua email" con l'indirizzo dell'utente, link valido 24 ore, "Invia di nuovo il link" (`POST /email/verification-notification`), "Torna al negozio"; da ospite porta al login |
+| `/verify-email?id&hash&expires&signature` | `POST /email/verify/{id}/{hash}`, che funziona anche da ospite | "Email confermata" con «Grazie: l'indirizzo {data.email} è confermato.», "Vai al negozio" e "Vai al tuo account", anche se l'email era già verificata; invalida `me`. L'indirizzo mostrato è quello della risposta, non quello dell'utente autenticato, che potrebbe essere un altro. 403 → "Il link è scaduto" con "Invia un nuovo link" (il reinvio richiede l'accesso: da ospite passa dal login) |
+| `/reset-password?token&email` | `POST /reset-password/check` | form "Scegli una nuova password" con la sezione "Verifica in due passaggi" se `requires_second_factor`; token non valido → "Il link è scaduto" con "Richiedi un nuovo link" e "Torna all'accesso"; dopo il reset si naviga al login con un messaggio di esito |
+| `/confirm-email-change?token` | `POST /email-change/confirm` | "Email aggiornata" con "Vai al tuo account", invalida `me`; errore → link scaduto |
+| `/cancel-email-change?token` | `POST /email-change/cancel` | "Richiesta annullata" con "Cambia la password" (`paths.accountSecurity`, da ospite passa dal login) e "Torna al negozio"; errore → link scaduto |
+
+## Area account (`features/account` e `features/security`)
+
+Dal mockup `03-account.pdf`.
+
+- **Menu account nell'header:** per l'ospite l'icona porta a `paths.login`; per l'utente autenticato apre un menu con nome ed email e le voci Profilo, Indirizzi, I miei ordini, Sicurezza ed Esci. Le stesse voci formano la navigazione di `AccountLayout` (lista laterale su desktop, tab su mobile), definite una sola volta in un array condiviso con etichetta, icona e percorso. La voce attiva si ricava dalla rotta corrente.
+- **Esci:** `logout()` di `useAuth`, poi navigazione alla home.
+- **Profilo:**
+  - "Dati personali": form del nome.
+  - Email con lo stato di verifica da `user.email_verified_at`.
+  - Cambio email: "Cambia email" chiama prima la conferma esplicita di `IdentityConfirmationProvider` (con la descrizione «Prima di cambiare l'email, conferma che sei tu.», valida sia con sola password sia con secondo fattore), poi apre il `Dialog` "Nuova email" che invia `POST /me/email`. Se la conferma scade nel frattempo, il 423 lo gestisce l'interceptor. Dopo l'invio si invalida `me`.
+  - Richiesta in sospeso: se `user.pending_email_change` non è null si mostra l'avviso con "Annulla la richiesta", mutation su `DELETE /me/email-change` che invalida `me`.
+- **Ordini:** elenco da `GET /orders`, dettaglio da `GET /orders/{id}`. Il pagamento mostra solo "Carta che termina con {card_last_four}": intestatario e scadenza non esistono nella risposta. "Annulla l'ordine" apre il dialog di conferma e chiama `POST /orders/{id}/cancel`, poi invalida `orders`.
+- **Sicurezza:**
+  - panoramica da `GET /me/security` (`queryKeys.security.overview`), con "Ultima modifica" da `password_changed_at`
+  - cambio password nel form della card, con il secondo fattore in linea quando `two_factor_enabled`; per la passkey le opzioni arrivano da `POST /me/password/passkey-options`; dopo il cambio si invalidano `me` e `security`
+  - attivazione TOTP con lo stato del passo in `useState` del componente; i codici di recupero vivono solo nello stato locale del passo 3 e si perdono chiudendolo
+  - passkey da `GET /me/passkeys`, con aggiunta, rinomina e rimozione; le rotte `identity.confirmed` passano la descrizione dell'operazione nella configurazione della richiesta
+  - attività recente con `useInfiniteQuery` su `GET /me/security-events` (`queryKeys.security.events`), `getNextPageParam` dai `meta` della paginazione e pulsante "Mostra altre attività" finché `hasNextPage`
+
 ## Dati dal server (TanStack Query)
 
 - Tutto lo stato che arriva dal server passa da TanStack Query. Vietato il pattern `useEffect` + `useState` per caricare dati.
@@ -252,8 +305,13 @@ export function useProducts(filters) {
 - Interceptor di risposta:
   - 401: rimuove l'utente dalla cache (`queryKeys.me`); il redirect lo gestiscono le rotte protette.
   - 419: richiede di nuovo il cookie CSRF e ripete la richiesta una sola volta.
-  - 423: il backend chiede di confermare l'identità. L'interceptor apre il `ConfirmIdentityDialog` tramite `IdentityConfirmationProvider`, attende l'esito e ripete la richiesta originale; se l'utente annulla, la richiesta fallisce con un errore gestito.
-- Errori normalizzati da `utils/normalizeApiError.js` nella forma `{ status, message, fieldErrors }`: il messaggio del server si usa solo per 422, 409 e 402; per gli altri status e per l'errore di rete si usano testi italiani locali.
+  - 423: il backend chiede di confermare l'identità. L'interceptor apre il `ConfirmIdentityDialog` tramite `IdentityConfirmationProvider`, attende l'esito e ripete la richiesta originale; se l'utente annulla, la richiesta fallisce con un errore gestito. La descrizione mostrata nel dialog arriva da una proprietà personalizzata della configurazione della richiesta (`identityPrompt`), con un testo generico come ripiego.
+- `IdentityConfirmationProvider` espone anche `confirmIdentity({ prompt })`, che apre il dialog senza una richiesta fallita e restituisce una Promise risolta alla conferma e rifiutata all'annullamento.
+- Errori normalizzati da `utils/normalizeApiError.js` nella forma `{ status, message, fieldErrors, retryAfter, code }`:
+  - `code` è il campo `code` della risposta del server, `null` se manca; serve a distinguere errori con lo stesso status (es. `two_factor_challenge_expired` rispetto a un codice sbagliato, entrambi 422)
+  - il messaggio del server si usa solo per 422, 409 e 402; per gli altri status e per l'errore di rete si usano testi italiani locali
+  - `retryAfter` è il numero di secondi letto dall'header `Retry-After` delle risposte 429, `null` se l'header manca o non è un numero
+  - per il 429 il messaggio è «Troppi tentativi. Riprova tra N secondi», con N da `retryAfter`, oppure «Troppi tentativi. Riprova tra poco» se manca
 
 ## Autenticazione
 
@@ -265,7 +323,9 @@ export function useProducts(filters) {
 
 ## Form
 
-- React Hook Form con `zodResolver`; schema Zod in `features/x/schemas.js`, con messaggi in italiano.
+- React Hook Form con `zodResolver`; schema Zod in `features/x/schemas.js`, con messaggi in italiano. Uno schema usato da più feature sta in `utils/` (es. `utils/passwordRules.js`).
+- Le regole della nuova password stanno in `utils/passwordRules.js`, perché le usano due feature (`auth` per registrazione e reset, `security` per il cambio password). Il file esporta l'elenco dei requisiti (etichetta e controllo) e lo schema Zod `newPasswordSchema` costruito da quell'elenco. Rispecchiano `Password::defaults()` del backend: almeno 10 caratteri, lettere maiuscole e minuscole, almeno un numero. Il controllo sulle password compromesse resta solo nel backend e arriva come errore 422 sul campo.
+- L'elenco dei requisiti sotto il campo è `components/form/PasswordRequirements.jsx` e legge gli stessi requisiti, così elenco e validazione non possono divergere.
 - Campi MUI collegati con `Controller`; `error` e `helperText` presi dallo stato del form.
 - Gli errori 422 del server vengono mappati sui campi con `setError`.
 - Il pulsante di invio è disabilitato e mostra un indicatore durante l'invio.
@@ -275,6 +335,7 @@ export function useProducts(filters) {
 - Dati del server: TanStack Query.
 - Stato di interfaccia locale: `useState`.
 - Stato globale: solo autenticazione, notifiche (`NotificationProvider` con Snackbar) e conferma dell'identità (`IdentityConfirmationProvider`).
+- Codici di recupero, chiave TOTP e QR code: solo nello stato locale del componente che li mostra, mai in cache di TanStack Query oltre la risposta della mutation, `localStorage`, URL o log.
 - Stato del checkout: locale alla pagina, mai globale né persistito (sezione "Checkout").
 - Niente Redux né Zustand.
 
@@ -290,7 +351,8 @@ Ogni vista con dati remoti gestisce esplicitamente quattro stati:
 ## Presentazione dei valori
 
 - Prezzi con `formatPrice(cents)` in `utils/format.js`: divide per 100 e usa `Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', useGrouping: 'always' })`. Senza `useGrouping: 'always'` gli importi da 1.000 a 9.999 escono senza punto delle migliaia.
-- Date con `formatDate` e `formatDateTime`, basati su `Intl.DateTimeFormat('it-IT')`.
+- Date con `formatDate` e `formatDateTime`, basati su `Intl.DateTimeFormat('it-IT')` (es. «29 settembre 2026», «29 settembre 2026, 09:14»).
+- Etichette di eventi di sicurezza e dispositivi (`label`, `device`): quelle ricevute dall'API, mai calcolate dallo user agent nel frontend.
 - Ogni valore numerico ha etichetta e unità, con lo spazio prima dell'unità (es. "Disponibilità: 12 pezzi", "Totale: 49,90 €", "65 W").
 - Etichette di stati d'ordine e disponibilità: quelle ricevute dall'API, mai riscritte nel frontend.
 
