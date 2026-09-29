@@ -15,25 +15,26 @@ Dove un mockup e una decisione approvata divergono vale la decisione; l'elenco d
 
 ## Entità del negozio
 
-Le tabelle dell'account e della sicurezza sono descritte nella skill `account-security`.
+Le tabelle dell'account e della sicurezza sono descritte nella skill `account-security`. Tipi, nullable, default, chiavi, indici e comportamento in cancellazione di tutte le tabelle sono in `docs/database/er-diagram.md`, insieme alle decisioni che hanno risolto le incoerenze tra le skill.
 
 | Tabella | Colonne principali | Note |
 |---|---|---|
 | users | name, email, password, role, email_verified_at | `role`: `customer` o `admin` |
-| addresses | user_id, full_name, street, city, postal_code, province, country, phone, is_default | un solo indirizzo predefinito per utente; `country` sempre `IT` |
+| addresses | user_id, full_name, street, city, postal_code, province, country, phone, is_default | un solo indirizzo predefinito per utente, garantito dall'Action nella stessa transazione (MySQL non ha indici unici parziali); `country` sempre `IT` |
 | categories | name, slug, description | gestite dall'admin, nessuna sottocategoria; `slug` unico, generato dal nome alla creazione e mai più modificabile |
-| products | category_id, name, slug, sku, short_description, description, specifications (JSON), price, stock, is_active, created_at, updated_at, deleted_at | una sola categoria per prodotto, `sku` unico, `price` in centesimi, soft delete |
-| product_images | product_id, path, alt, position | la prima per `position` è la copertina |
+| products | category_id, name, slug, sku, short_description, description, specifications (JSON), price, stock, is_active, created_at, updated_at, deleted_at | una sola categoria per prodotto, `slug` e `sku` unici (anche rispetto ai soft delete), `price` in centesimi, soft delete |
+| product_images | product_id, path, alt, position | la prima per `position` è la copertina; indice su (product_id, position) non unico, per non bloccare i riordini |
 | carts | user_id (unico) | un carrello per utente |
 | cart_items | cart_id, product_id, quantity | unico su (cart_id, product_id); nessun prezzo salvato |
-| orders | user_id, number, status, subtotal, shipping_cost, total, shipping_address (JSON), terms_accepted_at, paid_at, shipped_at, delivered_at, cancelled_at | importi in centesimi; le colonne `*_at` servono a filtri e statistiche |
-| order_items | order_id, product_id (nullable), product_name, product_sku, unit_price, quantity, line_total | snapshot al momento dell'acquisto |
+| orders | user_id, number, status, subtotal, shipping_cost, total, shipping_address (JSON), terms_accepted_at, paid_at, shipped_at, delivered_at, cancelled_at | importi in centesimi; le colonne `*_at` servono a filtri e statistiche; indice su (status, paid_at) |
+| order_items | order_id, product_id (nullable, `nullOnDelete`), product_name, product_sku, unit_price, quantity, line_total | snapshot al momento dell'acquisto |
 | order_status_changes | order_id, from_status (nullable), to_status, changed_by (nullable), reason (nullable), created_at | una riga per ogni cambio di stato; `changed_by` null = sistema; nessun `updated_at` |
-| payments | order_id, provider, provider_reference, amount, status, card_last_four | una riga per tentativo di addebito, riuscito o rifiutato; mai dati completi della carta |
+| payments | order_id, provider, provider_reference (nullable), amount, status, card_last_four | una riga per tentativo di addebito, riuscito o rifiutato; relazione 1:N con gli ordini, ma nel flusso attuale ogni ordine ha un solo addebito, perché ogni tentativo crea un ordine nuovo; mai dati completi della carta |
 
 ### Colonne dei prodotti
 
 - `category_id`: obbligatoria, `foreignId()->constrained()` con `restrictOnDelete()`, coerente con la regola che una categoria con prodotti non si elimina.
+- `slug`: generato dal nome alla creazione e unico anche rispetto ai prodotti eliminati con soft delete, perché è la chiave del catalogo pubblico (`{product:slug}`). In caso di collisione si aggiunge un suffisso numerico (`-2`, `-3`…), troncando prima la base quanto serve perché lo slug resti entro 255 caratteri. Il nome del prodotto non deve essere unico.
 - `sku`: obbligatorio, solo lettere maiuscole, numeri e trattini (`^[A-Z0-9-]+$`), unico anche rispetto ai prodotti eliminati con soft delete, perché lo snapshot degli ordini lo conserva e deve restare univoco.
 - `short_description`: obbligatoria, frase breve mostrata sotto il nome nella pagina del prodotto, massimo 160 caratteri.
 - `description`: testo lungo della sezione "Descrizione".
@@ -104,7 +105,7 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 
 ## Regole
 
-1. **Importi in centesimi** (`unsignedInteger`), mai float. I prezzi sono IVA inclusa: nessun calcolo delle imposte.
+1. **Importi in centesimi**, mai float: `unsignedInteger` per `products.price`, `order_items.unit_price` e `orders.shipping_cost`; `unsignedBigInteger` per le somme `order_items.line_total`, `orders.subtotal`, `orders.total` e `payments.amount`. Il prezzo di un prodotto va da 1 a 999999 centesimi (9.999,99 €). I prezzi sono IVA inclusa: nessun calcolo delle imposte.
 2. **Il server non si fida del client.** Prezzi, totali e disponibilità si ricalcolano sempre dal database; il client invia solo id e quantità.
 3. **Snapshot all'acquisto.** `order_items` copia nome, SKU e prezzo; `orders.shipping_address` copia l'indirizzo. Modificare o eliminare prodotti e indirizzi non altera gli ordini esistenti.
 4. **Stock.** Si verifica, si decrementa e si ripristina sempre in transazione con `lockForUpdate()` sui prodotti coinvolti. Se è insufficiente si lancia `InsufficientStockException` (409) con l'elenco dei prodotti problematici. Lo stock torna disponibile quando un ordine viene annullato, sia per pagamento rifiutato sia per annullamento dopo il pagamento.
@@ -112,7 +113,7 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 6. **Carrello:** solo per utenti autenticati, con le regole della sezione "Carrello".
 7. **Checkout solo con email verificata** (middleware `verified`).
 8. **Spedizione:** solo in Italia. Costo fisso `shipping_cost` (6,90 €), gratuita quando il subtotale raggiunge `free_shipping_threshold` (99,00 €).
-9. **Numero d'ordine** leggibile e univoco nel formato `ORD-{anno}-{id a 6 cifre}`, es. `ORD-2026-000042`.
+9. **Numero d'ordine** leggibile e univoco nel formato `ORD-{anno}-{id a 6 cifre}`, es. `ORD-2026-000042`. Dipende dall'id, quindi `orders.number` è nullable e unico, e `PlaceOrderAction` lo scrive subito dopo l'insert, nella stessa transazione.
 10. **Ruoli:** la registrazione crea solo `customer`; l'admin nasce dal seeder.
 11. **Categorie:** gestite dall'admin, senza sottocategorie. Ogni prodotto appartiene a una sola categoria. Lo slug si genera dal nome alla creazione e non si modifica più. Una categoria collegata a prodotti, **compresi quelli eliminati con soft delete**, non si elimina (409): la FK `restrictOnDelete` lo impedirebbe comunque, ma con un errore 500.
 12. **Scorte basse:** prodotti attivi e non eliminati con stock minore o uguale a `low_stock_threshold`, esauriti compresi.
@@ -252,7 +253,7 @@ Parametri, validati da `IndexProductRequest`:
 3. Transazione: lock dei prodotti, stesso controllo della disponibilità sotto lock, creazione dell'ordine `pending` con righe, snapshot dell'indirizzo e `terms_accepted_at`, riga di cronologia `null → pending`, decremento dello stock.
 4. Fuori dalla transazione: addebito tramite `PaymentGateway`.
 5. Pagamento riuscito, in `DB::transaction()` con `lockForUpdate()` sull'ordine: riga in `payments` con `status` `succeeded` e le sole ultime 4 cifre, transizione `pending → paid` (valorizza `paid_at`), svuotamento del carrello. Dopo il commit, evento `OrderPlaced` che invia l'email di conferma: è l'unica email del pagamento riuscito. Risposta 201 con la `OrderResource`.
-6. Pagamento rifiutato, in `DB::transaction()` con `lockForUpdate()` su ordine e prodotti: riga in `payments` con `status` `failed`, `card_last_four` e importo; transizione `pending → cancelled` senza autore e con `reason` uguale al motivo restituito dal gateway (es. «Carta rifiutata dalla banca»); ripristino dello stock. Poi: carrello intatto; `PaymentFailedException` (402) con messaggio chiaro. L'ordine resta nel database come tentativo fallito, con stato Annullato e senza `paid_at`: lo vede solo l'admin. Nessuna email.
+6. Pagamento rifiutato, in `DB::transaction()` con `lockForUpdate()` su ordine e prodotti: riga in `payments` con `status` `failed`, `card_last_four` e importo; transizione `pending → cancelled` senza autore e con `reason` uguale al motivo restituito dal gateway (es. «Carta rifiutata dalla banca»); ripristino dello stock di tutte le righe con `product_id` valorizzato, compresi i prodotti eliminati con soft delete nel frattempo (`withTrashed()`, anche nel lock). Poi: carrello intatto; `PaymentFailedException` (402) con messaggio chiaro. L'ordine resta nel database come tentativo fallito, con stato Annullato e senza `paid_at`: lo vede solo l'admin. Nessuna email.
 
 ### Dati della carta
 
@@ -328,7 +329,7 @@ Una sola Action, usata sia da `POST /orders/{order}/cancel` (cliente) sia da `PA
 1. Controlla che l'ordine sia `paid` e abbia un pagamento `succeeded`; altrimenti `InvalidOrderTransitionException` (422) prima di qualunque effetto, senza chiamare il gateway. Un ordine `pending`, `shipped`, `delivered` o già `cancelled` non si annulla da qui.
 2. Rimborso del pagamento `succeeded` tramite `PaymentGateway::refund()`, **fuori dalla transazione** perché è una chiamata a un servizio esterno. Il gateway riceve l'id del pagamento come chiave di idempotenza, così una seconda richiesta di rimborso dello stesso pagamento non rimborsa due volte.
 3. Se il rimborso fallisce: `RefundFailedException` (502) e **nessun cambiamento**. Stato dell'ordine, scorte e pagamento restano invariati e non si scrive nessuna riga di cronologia.
-4. Se il rimborso riesce, in una transazione con `lockForUpdate()` su ordine, pagamento e prodotti: si ricontrolla sotto lock che l'ordine sia ancora `paid` e il pagamento ancora `succeeded` (se nel frattempo un'altra richiesta l'ha annullato, si esce senza effetti e si restituisce l'ordine attuale); poi ripristino delle scorte delle righe il cui prodotto esiste ancora, pagamento a `refunded`, transizione `paid → cancelled` tramite `ChangeOrderStatusAction` con l'autore (cliente o admin). La notifica al cliente parte dopo il commit.
+4. Se il rimborso riesce, in una transazione con `lockForUpdate()` su ordine, pagamento e prodotti: si ricontrolla sotto lock che l'ordine sia ancora `paid` e il pagamento ancora `succeeded` (se nel frattempo un'altra richiesta l'ha annullato, si esce senza effetti e si restituisce l'ordine attuale); poi ripristino delle scorte di tutte le righe con `product_id` valorizzato, compresi i prodotti eliminati con soft delete (`withTrashed()`), pagamento a `refunded`, transizione `paid → cancelled` tramite `ChangeOrderStatusAction` con l'autore (cliente o admin). La notifica al cliente parte dopo il commit.
 
 Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il gateway prima del lock; la chiave di idempotenza evita il doppio rimborso, il ricontrollo sotto lock evita la doppia transizione.
 
@@ -356,10 +357,10 @@ Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il ga
 }
 ```
 
-- `items[].cover`: copertina attuale del prodotto se esiste ancora, altrimenti `null`; il frontend mostra un'immagine di ripiego. Nome, SKU e prezzi vengono sempre dallo snapshot.
+- `items[].cover`: copertina attuale del prodotto se non è eliminato (né con soft delete né fisicamente), altrimenti `null`; il frontend mostra un'immagine di ripiego. Nome, SKU e prezzi vengono sempre dallo snapshot.
 - `payment` compare solo se esiste un pagamento `succeeded` o `refunded`; mai altri dati della carta.
 - `status_history`: senza `changed_by` e senza `reason`.
-- `can_cancel`: calcolato dal backend (`status` `paid`), usato dal frontend per mostrare "Annulla l'ordine".
+- `can_cancel`: calcolato dal backend solo sullo stato (`status` `paid`), usato dal frontend per mostrare "Annulla l'ordine". Un ordine `paid` ha sempre un pagamento `succeeded`; `CancelOrderAction` lo ricontrolla comunque.
 
 `POST /orders/{order}/cancel` è autorizzato da `OrderPolicy::cancel` con lo stesso criterio di `view`: ordini di altri utenti e ordini senza `paid_at` → 404 con `denyAsNotFound()`; ordine proprio non annullabile → 422.
 
@@ -452,12 +453,12 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 | `short_description` | obbligatoria, massimo 160 caratteri |
 | `description` | facoltativa, massimo 5000 caratteri |
 | `specifications` | presente, array di al massimo 20 coppie `label` (massimo 64) e `value` (massimo 255), entrambe obbligatorie |
-| `price` | obbligatorio, intero in centesimi, da 1 a 99999999 (999.999,99 €, coerente con le 6 cifre intere del form); il frontend converte l'importo in euro scritto con la virgola |
+| `price` | obbligatorio, intero in centesimi, da 1 a 999999 (9.999,99 €, coerente con le 4 cifre intere del form); il frontend converte l'importo in euro scritto con la virgola |
 | `stock` | obbligatorio, intero, da 0 a 999999 |
 | `is_active` | obbligatorio, booleano |
 | `images` | solo nell'update, facoltativo: array con **tutte** le immagini del prodotto nell'ordine voluto, ognuna con `id` (immagine di questo prodotto) e `alt` (obbligatorio, massimo 255). Id mancanti, duplicati o di un altro prodotto → 422 |
 
-- Lo slug del prodotto si genera dal nome alla creazione.
+- Slug del prodotto: sezione "Colonne dei prodotti".
 - Eliminazione: soft delete. Il prodotto sparisce da catalogo e negozio; gli ordini che lo contengono restano invariati grazie allo snapshot.
 
 ### Immagini dei prodotti
@@ -494,7 +495,7 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 - `items_count`
 - `failed_payment`
 - `allowed_transitions`: array di stringhe con i valori verso cui l'admin può portare l'ordine adesso (`paid` → `["shipped", "cancelled"]`, `shipped` → `["delivered"]`, altrimenti `[]`)
-- `payment`: `card_last_four`, `status` (`{ value, label }`), `amount` e `created_at` dell'ultimo tentativo, anche se `failed`. Il motivo del rifiuto non è nel pagamento: sia l'`Alert` sia la riga "Motivo" della card Pagamento leggono il `reason` della riga di cronologia `cancelled`
+- `payment`: `card_last_four`, `status` (`{ value, label }`), `amount` e `created_at` del pagamento più recente dell'ordine (nel flusso attuale l'unico), anche se `failed`. Il motivo del rifiuto non è nel pagamento: sia l'`Alert` sia la riga "Motivo" della card Pagamento leggono il `reason` della riga di cronologia `cancelled`
 - `status_history`: con `changed_by` (`{ id, name }` oppure `null` per il sistema), `reason` e la descrizione nella variante admin
 
 `PATCH /admin/orders/{order}/status` con `{ "status": "shipped" }`: la Form Request accetta solo `shipped`, `delivered` e `cancelled` (`Rule::in`), quindi `paid` e `pending` → 422. `shipped` e `delivered` passano da `ChangeOrderStatusAction` con l'admin come autore, `cancelled` da `CancelOrderAction`. Un valore ammesso ma non consentito dallo stato attuale (es. `delivered` su un ordine `paid`, `cancelled` su un ordine `pending`) → 422 da `InvalidOrderTransitionException`. Risposta con `Admin\OrderResource`.

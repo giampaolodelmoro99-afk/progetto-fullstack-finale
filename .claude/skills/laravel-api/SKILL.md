@@ -124,7 +124,7 @@ final class StoreProductRequest extends FormRequest
             'specifications' => ['present', 'array', 'max:20'],
             'specifications.*.label' => ['required', 'string', 'max:64'],
             'specifications.*.value' => ['required', 'string', 'max:255'],
-            'price' => ['required', 'integer', 'min:1', 'max:99999999'],
+            'price' => ['required', 'integer', 'min:1', 'max:999999'],
             'stock' => ['required', 'integer', 'min:0', 'max:999999'],
             'is_active' => ['required', 'boolean'],
         ];
@@ -173,7 +173,9 @@ final class StoreProductRequest extends FormRequest
 - `Model::shouldBeStrict(! app()->isProduction())` in `AppServiceProvider`: in sviluppo il lazy loading e gli attributi mancanti generano un errore.
 - Eager loading esplicito dove si caricano le relazioni.
 - Slug generati in un Observer. `ProductObserver` e `CategoryObserver` lo impostano solo in `creating`: lo slug della categoria non cambia più, nemmeno se cambia il nome.
+- `ProductObserver` rende lo slug unico anche rispetto ai prodotti eliminati con soft delete: in caso di collisione aggiunge un suffisso numerico (`-2`, `-3`…), troncando prima la base perché slug e suffisso stiano in 255 caratteri. Per le categorie la collisione non arriva mai all'Observer, perché la Form Request la respinge con un 422 su `name`.
 - `OrderStatusChange` ha `const UPDATED_AT = null`, cast di `from_status` e `to_status` a `OrderStatus` e la relazione `changedBy()` verso `User`.
+- `SecurityEvent` ha `const UPDATED_AT = null` e cast di `type` a `SecurityEventType` e di `metadata` ad `array`.
 
 ## Middleware personalizzati
 
@@ -211,11 +213,16 @@ $exceptions->dontFlash([
 
 ## Migration
 
+- Lo schema completo (tipi, nullable, default, chiavi, indici, cancellazione) e le decisioni che lo hanno fissato sono in `docs/database/er-diagram.md`. Dalla Fase 2 (migration e modelli) le migration sono la fonte: ogni migration che cambia il database aggiorna quel documento nello stesso task.
 - `foreignId()->constrained()` con `cascadeOnDelete()`, `restrictOnDelete()` o `nullOnDelete()` scelti consapevolmente e motivati nel piano.
+- FK verso `users`: il progetto non elimina utenti, ma ogni FK dichiara il comportamento. `restrictOnDelete()` per `orders.user_id` e `order_status_changes.changed_by`; `cascadeOnDelete()` per `addresses`, `carts`, `security_events`, `email_change_requests` e la tabella delle passkey.
 - Indici sulle colonne usate nei filtri e negli ordinamenti.
-- `unsignedInteger` per importi e stock.
-- `order_status_changes`: `order_id` con `cascadeOnDelete()` (la cronologia non esiste senza l'ordine), `changed_by` nullable con `restrictOnDelete()` (null significa sistema: un utente eliminato non deve diventare "sistema"; il progetto non elimina utenti che hanno ordini o transizioni), `from_status` nullable, `to_status`, `reason` nullable, solo `timestamp('created_at')`, indice su (`order_id`, `created_at`).
-- `payments.status` con indice, perché l'admin distingue i tentativi rifiutati.
+- `unsignedInteger` per stock e prezzi unitari (`products.price`, `order_items.unit_price`, `orders.shipping_cost`); `unsignedBigInteger` per le somme (`order_items.line_total`, `orders.subtotal`, `orders.total`, `payments.amount`).
+- `orders.number` è nullable e unico: dipende dall'id, quindi `PlaceOrderAction` lo scrive subito dopo l'insert, nella stessa transazione.
+- `product_images`: indice su (`product_id`, `position`) **non** unico, così il riordino non viola il vincolo a metà aggiornamento.
+- `order_status_changes`: `order_id` con `cascadeOnDelete()` (la cronologia non esiste senza l'ordine), `changed_by` nullable con `restrictOnDelete()` (null significa sistema: un utente eliminato non deve diventare "sistema"; il progetto non elimina utenti che hanno ordini o transizioni), `from_status` nullable, `to_status`, `reason` nullable, solo `timestamp('created_at')->useCurrent()`, indice su (`order_id`, `created_at`).
+- `security_events`: solo `timestamp('created_at')->useCurrent()`, indice su (`user_id`, `created_at`).
+- `orders` con indice composto (`status`, `paid_at`): serve al filtro `status`, a `failed_payment` (`cancelled` e `paid_at` null) e a `orders_to_ship`. I tentativi rifiutati si riconoscono dall'ordine, non da `payments.status`, che non ha indice.
 - Il fuso dell'applicazione è `Europe/Rome` (`config/app.php`): il "mese corrente" della dashboard e le date delle Resource dipendono da questo.
 
 ## Factory

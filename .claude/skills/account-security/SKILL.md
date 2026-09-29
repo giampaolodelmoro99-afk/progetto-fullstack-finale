@@ -38,13 +38,16 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 | users.two_factor_recovery_codes | elenco degli hash dei codici di recupero, null senza TOTP | cast `encrypted:array`, `$hidden` |
 | users.two_factor_confirmed_at | data di attivazione della doppia autenticazione, null se non attiva | — |
 | users.two_factor_last_used_step | ultimo intervallo TOTP usato | impedisce il riutilizzo dello stesso codice |
-| passkeys (tabella della libreria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
+| passkeys (tabella della libreria, forma provvisoria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
 | password_reset_tokens | token di reset di Laravel | hash, scadenza 60 minuti |
-| email_change_requests | user_id, new_email, token_hash, cancel_token_hash, expires_at, confirmed_at, cancelled_at | hash, scadenza 60 minuti, monouso |
+| email_change_requests | user_id, new_email, token_hash, cancel_token_hash, expires_at, confirmed_at, cancelled_at | hash SHA-256 in esadecimale (`char(64)`, indice unico), scadenza 60 minuti, monouso |
 | security_events | user_id, type, ip_address, user_agent (grezzo), metadata (JSON), created_at | nessun segreto nei metadata |
 | sessions | sessioni del driver `database` | usate per chiudere le altre sessioni |
 
-- `password_changed_at` si aggiunge con una nuova migration e la `UserFactory` la valorizza.
+- `role`, `password_changed_at` e le quattro colonne `two_factor_*` si aggiungono a `users` con un'unica nuova migration, perché quella di Laravel è già committata. `password_changed_at` è nullable nel database (colonna aggiunta a una tabella esistente), ma registrazione, cambio e reset la valorizzano sempre, e così la `UserFactory`.
+- La tabella `passkeys` di `docs/database/er-diagram.md` è provvisoria, modellata su `spatie/laravel-passkeys` (nome e `last_used_at`); `laragear/webauthn` usa `webauthn_credentials` con `alias` e senza ultimo utilizzo. Lo schema si aggiorna alla scelta della libreria.
+- I token del cambio email si salvano come SHA-256 in esadecimale con indice unico, non con l'hash lento del password broker. Sono casuali ad alta entropia, quindi un hash veloce senza salt basta; e la richiesta va cercata per hash anche da ospite, perché il link di annullamento arriva al vecchio indirizzo e si apre senza login.
+- `security_events.user_id` non è nullable: gli eventi riguardano solo utenti esistenti. `login_failed` si registra solo quando l'email appartiene a un utente; per un'email inesistente non si scrive nessun evento, e la risposta HTTP resta identica nei due casi.
 - Negli eventi `passkey_added` e `passkey_removed`, e nel `login` fatto con una passkey, i `metadata` contengono `passkey_name`: il nome della passkey al momento dell'evento.
 
 Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano (es. `login` → "Accesso effettuato", `password_changed` → "Password cambiata", `passkey_added` → "Passkey aggiunta", `two_factor_enabled` → "Doppia autenticazione attivata").
@@ -258,6 +261,7 @@ Oltre ai casi standard della skill `testing`:
 - login con e senza doppia autenticazione, codice riutilizzato
 - challenge scaduta (`travelTo()` oltre 300 secondi) e challenge assente: 422 con `code` `two_factor_challenge_expired`; codice errato: 422 con errore sul campo `code` e senza `code` di primo livello
 - credenziali errate: 422 con `code` `invalid_credentials` e senza `errors`, stessa risposta per email inesistente e password sbagliata
+- eventi del login fallito: con email esistente e password sbagliata una riga `login_failed` per quell'utente; con email inesistente nessuna riga in `security_events`
 - utente con sole passkey e senza TOTP: `hasSecondFactor()` false, login con password senza challenge, accesso con passkey riuscito, nessun codice di recupero generato, 423 con `requires` senza `second_factor`
 - utente con TOTP e passkey: la passkey è accettata come secondo fattore al login, al reset, al cambio password e nella conferma dell'identità; `methods` contiene `passkey`
 - utente con TOTP senza passkey: `methods` non contiene `passkey`
@@ -274,7 +278,7 @@ Oltre ai casi standard della skill `testing`:
 - reset con secondo fattore richiesto e mancante → 422
 - cambio password con doppia autenticazione attiva e secondo fattore mancante → 422; con secondo fattore valido → 200
 - `password_changed_at` valorizzata alla registrazione, al cambio e al reset
-- cambio email: il vecchio indirizzo resta fino alla conferma, token scaduto, token riutilizzato, annullamento dal link
+- cambio email: il vecchio indirizzo resta fino alla conferma, token scaduto, token riutilizzato, annullamento dal link (anche da ospite); nel database solo l'hash dei token (64 caratteri esadecimali), mai il token in chiaro
 - `DELETE /me/email-change`: 204 con evento `email_change_cancelled`, avviso inviato all'indirizzo attuale ed email invariata, 404 senza richiesta in sospeso, 401 da ospite; `pending_email_change` in `GET /me` prima e dopo
 - chiusura delle altre sessioni dopo cambio e reset password
 - `UserAgentLabel` (unit), con user agent reali scritti a mano nel test: Chrome su macOS, Safari su iOS, Safari su iPadOS, Firefox su Windows, Firefox su Linux, Edge su Windows (non Chrome), Opera su Windows (non Chrome), Chrome su Android, stringa vuota e stringa sconosciuta → «Dispositivo sconosciuto»

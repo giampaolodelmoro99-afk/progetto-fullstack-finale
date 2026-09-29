@@ -299,7 +299,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 ### Form prodotto (nuovo e modifica)
 
 - Un solo componente di form per le due pagine, React Hook Form con lo schema Zod di `features/admin/products/schemas.js`, che replica le regole di `StoreProductRequest`: SKU `^[A-Z0-9-]+$` («Usa solo lettere maiuscole, numeri e trattini»), descrizione breve obbligatoria e massimo 160 caratteri, stock intero ≥ 0, categoria obbligatoria («Scegli una categoria»).
-- **Prezzo:** il campo contiene testo in euro con la virgola (es. «249,00»). Lo schema accetta `^\d{1,6}(,\d{1,2})?$`, con il messaggio «Inserisci un prezzo, ad esempio 249,00», e un valore di almeno 0,01. `utils/price.js` esporta `parseEuroToCents('249,5')` → 24950, che lavora sulle stringhe senza float, e `formatCentsForInput(34900)` → «349,00» senza simbolo né separatore delle migliaia. L'API riceve sempre centesimi.
+- **Prezzo:** il campo contiene testo in euro con la virgola (es. «249,00»). Lo schema accetta `^\d{1,4}(,\d{1,2})?$` (massimo 9.999,99 €, come il backend), con il messaggio «Inserisci un prezzo, ad esempio 249,00», e un valore di almeno 0,01. `utils/price.js` esporta `parseEuroToCents('249,5')` → 24950, che lavora sulle stringhe senza float, e `formatCentsForInput(34900)` → «349,00» senza simbolo né separatore delle migliaia. L'API riceve sempre centesimi.
 - **Scheda tecnica:** `useFieldArray` con `append`, `move` (su e giù, disabilitati in prima e ultima riga) e `remove`.
 - **Errori 422:** mappati sui campi con `setError` (i campi annidati come `specifications.0.value` compresi); l'`Alert` in cima «Il prodotto non è stato salvato» conta i campi con errore.
 - **Salvataggio:**

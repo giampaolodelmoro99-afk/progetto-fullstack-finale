@@ -59,6 +59,7 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 8. A fine task elenca le verifiche manuali che l'utente deve fare (Postman per le API, browser e Mailpit per il frontend) con passi precisi.
 9. A fine fase lancia il subagent `code-reviewer` e riporta i risultati prima del commit.
 10. Non fare commit né `git push` senza richiesta esplicita.
+11. Fino alla Fase 2 (migration e modelli) lo schema ER si allinea alle skill; dalla Fase 2 le migration sono la fonte e `docs/database/er-diagram.md` si aggiorna nello stesso task di ogni migration che cambia il database.
 
 ## Skill del progetto
 
