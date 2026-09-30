@@ -250,6 +250,8 @@ $exceptions->dontFlash([
 - I dati fissi (categorie, prodotti principali, utenti demo) sono deterministici; i dati di contorno possono essere casuali.
 - Le credenziali demo sono documentate nel README.
 - `make fresh` ricrea il database pronto per la demo; lo script di avvio esegue i seeder solo se il database è vuoto.
+- `DatabaseSeeder` esegue tutti i seeder in un'unica `DB::transaction()`: un seeding interrotto non lascia il database a metà, così `db:seed-if-empty` (che controlla solo `users`) al riavvio lo ripete da capo. I file copiati sul disco `public` non sono coperti dalla transazione: un seeding fallito può lasciare immagini orfane, che il `ProductSeeder` rimuove al tentativo successivo svuotando la cartella `products/` prima di copiare.
+- Il mese corrente ha sempre almeno un ordine pagato, anche seedando il primo giorno del mese: l'`OrderSeeder` crea un ordine fisso con `paid_at` a metà tra l'inizio del mese e `now()`.
 
 ## Test manuale con Postman
 

@@ -133,14 +133,39 @@ Per controllare il risultato apri `design/illustrations/preview.html` nel browse
 
 ## Credenziali demo
 
-Da completare quando verranno creati i seeder degli utenti.
+Tutti gli account demo hanno la stessa password: **`Silicio2026`**.
 
-| Ruolo | Email | Password | Note |
+| Ruolo | Nome | Email | Note |
 |---|---|---|---|
-| Admin | — | — | — |
-| Cliente demo | — | — | — |
-| Cliente con doppia autenticazione | — | — | — |
-| Cliente con email non verificata | — | — | — |
+| Admin | Marta Lenzi | `marta.lenzi@esempio.it` | senza doppia autenticazione; autrice delle spedizioni e delle consegne degli ordini demo |
+| Cliente demo | Giulia Ferri | `giulia.ferri@esempio.it` | email verificata, due indirizzi (Pisa predefinito, Firenze), ordini in tutti gli stati, carrello con una riga esaurita |
+| Cliente con doppia autenticazione | Davide Conti | `davide.conti@esempio.it` | TOTP attivo con segreto fisso (vedi sotto) |
+| Cliente con email non verificata | Paolo Greco | `paolo.greco@esempio.it` | naviga e usa il carrello, ma il checkout è bloccato |
+
+Oltre a questi, il seeder crea 20 clienti casuali (`nome.cognome@esempio.it`, stessa password) con un indirizzo e ordini degli ultimi sei mesi.
+
+### Cosa mostrano i dati demo
+
+- **Carrello di Giulia**: Cuffie Aria, Caricatore Brezza 65 W ×2, Cavo Seta USB-C 1 m e la Radio Onda Portatile esaurita: 5 articoli e checkout bloccato finché non si rimuove la riga esaurita.
+- **Ordini di Giulia**: consegnati, annullato con rimborso, spedito, pagato (da spedire) e un tentativo di pagamento rifiutato, visibile solo all'admin.
+- **Catalogo**: 50 prodotti su cinque categorie, "Viaggio" senza prodotti (si può eliminare dall'admin), alcuni esauriti, negli ultimi pezzi o disattivati, e sei novità degli ultimi 30 giorni, tra cui le Cuffie Aria dell'hero della home.
+- **Dashboard admin**: ordini pagati anche nel mese corrente, ordini da spedire, scorte basse e un ordine "In attesa" con il pagamento in corso.
+
+### Doppia autenticazione di Davide Conti
+
+Il segreto è fisso e pubblicato qui **solo per la demo**, così durante la presentazione si può aggiungere l'account all'app di autenticazione (Google Authenticator, 1Password, Aegis…). Il login con il secondo fattore è disponibile dalla Fase 3.
+
+| Dato | Valore |
+|---|---|
+| Segreto TOTP (base32) | `CASADELSILICIODEMOTOTPSEGRETO234` |
+| URI per il QR code | `otpauth://totp/Casa%20del%20Silicio:davide.conti%40esempio.it?secret=CASADELSILICIODEMOTOTPSEGRETO234&issuer=Casa%20del%20Silicio` |
+| Codici di recupero (monouso) | `K7PM-2XQA`, `R4TD-9WNE`, `B8HV-3LCJ`, `M2QF-7YRS`, `T6ZN-4GKP`, `W9CX-5DHB`, `E3JL-8VMT`, `P5RY-6NAF` |
+
+### Riproducibilità
+
+`make fresh` ricrea sempre gli stessi dati: prodotti, account e indirizzi fissi sono scritti a mano (`backend/database/seeders/data/products.php` e i seeder), mentre clienti casuali e ordini storici usano Faker con un seed fisso. Le date sono relative al giorno del seeding: novità e ordini del mese corrente restano sempre attuali. Prima di copiare le immagini dei prodotti il seeder svuota `storage/app/public/products`, quindi non restano file orfani.
+
+I seeder usano Faker, che è una dipendenza di sviluppo: il database demo si crea nell'ambiente Docker di sviluppo, non in produzione.
 
 ## Carte di test
 
