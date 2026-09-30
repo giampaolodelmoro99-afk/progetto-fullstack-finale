@@ -177,3 +177,7 @@ Il pagamento è simulato: nessun addebito reale. Scadenza qualsiasi non passata 
 | 4000 0000 0000 0002 | pagamento rifiutato (errore "Pagamento non riuscito") |
 
 Un ordine con pagamento rifiutato resta nel database come tentativo fallito: lo vede solo l'admin, non compare negli ordini del cliente.
+
+## Sviluppi futuri
+
+- **Cancellazione automatica dopo 10 anni.** Quando un cliente elimina l'account, i suoi dati personali si cancellano e l'utente viene anonimizzato, ma ordini e pagamenti restano per l'obbligo di conservazione della documentazione contabile. Un comando pianificato potrebbe cancellarli allo scadere dei 10 anni; oggi resta fuori dal progetto.

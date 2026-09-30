@@ -46,7 +46,7 @@ tests/
 - Fake a seconda del caso: `Notification::fake()`, `Mail::fake()`, `Event::fake()`, `Storage::fake('public')`.
 - Nell'ambiente di test `uncompromised()` è disattivato.
 - Il TOTP si testa generando codici validi con la stessa libreria usata dal codice.
-- Il verificatore delle passkey e il `PaymentGateway` si sostituiscono con implementazioni finte tramite il container.
+- Il verificatore delle passkey, il `PaymentGateway` e l'`AiAssistant` si sostituiscono con implementazioni finte tramite il container. Nessun test chiama Ollama.
 
 ### Cosa testare per ogni endpoint
 
@@ -110,6 +110,47 @@ tests/
 
 - `GET /shop/settings` da ospite: 200 con `shipping_cost` 690 e `free_shipping_threshold` 9900, valori scritti nel test; nessun'altra chiave.
 - `GET /admin/settings`: 200 per l'admin con in più `low_stock_threshold` 5; 401 da ospite, 403 per il cliente.
+
+### Testi dell'assistenza
+
+- `GET /shop/support` da ospite: 200 con le sezioni `spedizioni`, `resi`, `garanzia` e `contatti` in quest'ordine, con `title` scritti nel test.
+- Gli importi nei testi seguono la configurazione: con `shop.shipping_cost` a 500 e `shop.free_shipping_threshold` a 12000 impostati nel test, i paragrafi contengono «5,00 €» e «120,00 €».
+
+### Eliminazione dell'account
+
+- `DELETE /me`: 401 da ospite; 423 per un cliente senza conferma dell'identità; 403 per l'admin **senza** conferma dell'identità (il permesso si controlla prima della conferma) e con la conferma.
+- 409 con `code` `account_has_open_orders`, senza nessun effetto, con un dataset: un ordine `paid`, uno `shipped`, uno `pending` creato 14 minuti prima (con `travelTo()`). 204 con un ordine `pending` creato 16 minuti prima, con ordini solo consegnati, annullati o tentativi falliti, e senza ordini.
+- Indirizzi `.invalid`: `POST /register` e `POST /me/email` → 422 sul campo `email` con un dataset di indirizzi qualsiasi con dominio di primo livello `.invalid` (es. `mario@esempio.invalid`, `deleted-7@anonymized.invalid`, `Mario@Posta.INVALID`); un indirizzo `.it` resta valido.
+- Dopo il 204:
+  - cancellati indirizzi, carrello e righe, eventi di sicurezza, richieste di cambio email, token di reset e sessioni dell'utente; le stesse righe di un altro utente restano intatte
+  - colonne `two_factor_*` a null per un utente con doppia autenticazione (`withTwoFactor()`)
+  - `name` «Utente eliminato», `email` `deleted-{id}@anonymized.invalid` con l'id dell'utente, `email_verified_at` e `remember_token` null, `anonymized_at` valorizzata, password diversa da quella di prima (`Hash::check` falso): valori attesi scritti nel test
+  - ordini, righe, snapshot dell'indirizzo, cronologia e pagamenti invariati
+  - sessione corrente chiusa: `GET /me` successivo → 401. L'utente si autentica con `actingAs($user, 'web')` o con un vero login, non con `Sanctum::actingAs`, che lo terrebbe in memoria e darebbe un falso esito
+- Notifica con `Notification::fake()`: `assertSentOnDemand` all'indirizzo originale; nessuna notifica se la transazione fallisce e nessuna con il 409. Il fallimento si provoca registrando nel test `User::saved(fn () => throw new RuntimeException())`, che scatta al salvataggio dell'anonimizzazione dentro la transazione; oltre alla notifica assente si verifica che nulla sia cambiato (indirizzi presenti, `anonymized_at` null, email originale).
+- Nessuna nuova riga in `security_events`.
+- Login con l'email originale e la vecchia password → 422 `invalid_credentials`; un utente con `anonymized_at` valorizzata e una password nota → 422 `invalid_credentials` senza evento `login_failed`.
+- Nuova registrazione con l'indirizzo originale → 201 con un utente nuovo, senza gli ordini precedenti.
+- Dalla Fase 5, con gli endpoint di ordini e dashboard admin (`docs/roadmap.md`): `GET /admin/orders`, `GET /admin/orders/{order}` e `latest_orders` della dashboard mostrano `customer.name` «Cliente eliminato» ed `email` null; la cronologia dell'annullamento fatto dal cliente dice «da Cliente eliminato»; la ricerca con l'email originale non trova l'ordine.
+- Dalla Fase 3c: passkey cancellate.
+- Dati demo (Fase 3b): dopo il seeding esiste un utente con `anonymized_at` valorizzata, `name` «Utente eliminato», email con dominio `.invalid` e almeno un ordine `delivered`; nessun indirizzo, carrello o evento di sicurezza collegato.
+
+### Assistente AI
+
+Regole nella skill `ai-assistant`. `AiAssistant` sostituito con `FakeAiAssistant` dal container; `Http::preventStrayRequests()` in tutti i test dell'assistente.
+
+- `GET /assistant/status`: `available` true e false secondo il finto.
+- `POST /assistant/messages`, validazione con un dataset di 422: `messages` mancante, non array o vuoto, 11 messaggi, un messaggio `user` di 501 caratteri (500 valido), un messaggio `assistant` di 4001 caratteri (4000 valido), `content` mancante e non stringa, ruolo `system`, ruolo `tool`, ruolo sconosciuto, ultimo messaggio di ruolo `assistant`.
+- Il corpo di una risposta in streaming si legge con `streamedContent()` (senza, la callback dello `StreamedResponse` non viene eseguita e i controlli su eventi e lock non verificano niente); le righe NDJSON si decodificano una per una.
+- Risposta: `Content-Type` `application/x-ndjson`, eventi `text` con i frammenti del finto nell'ordine, poi `products` e `done`.
+- Giro completo del tool calling con il finto programmato: una tool call `search_products`, il risultato restituito al finto con i soli prodotti attivi, poi il testo finale e l'evento `products`.
+- Slug citati: uno slug inesistente, uno disattivato, uno eliminato con soft delete e uno esaurito sono scartati; i duplicati compaiono una volta; non più di `max_products`, con il valore scritto nel test; ordine delle card uguale all'ordine di citazione.
+- Finto non disponibile → 503 `assistant_unavailable`; errore o timeout a metà → evento `error` con messaggio in italiano dopo gli eventi `text` già inviati.
+- Concorrenza: con lo slot occupato nel test (`Cache::lock('assistant:slot:1')` preso prima della richiesta e `max_concurrent` 1) → 503 `assistant_busy` senza chiamare il finto; lo slot risulta libero (`Cache::lock('assistant:slot:1')->get()` riesce) dopo una risposta completa, dopo una generazione terminata con errore e dopo un 503 `assistant_unavailable`; in ognuno dei tre casi la richiesta successiva risponde 200.
+- Limiter `assistant`: undicesima richiesta nel minuto → 429 con `Retry-After`, per utente e per IP da ospite.
+- Tool: `search_products` con un dataset di filtri restituisce solo prodotti attivi e non eliminati; prezzi in euro convertiti in centesimi; argomenti non validi scartati.
+- `OllamaAssistant` con `Http::fake()`, sull'endpoint con il driver `ollama` e un utente autenticato con nome ed email riconoscibili: il corpo inviato a `/api/chat` contiene il modello configurato, nessun messaggio di ruolo `system`, i messaggi con i soli ruoli ammessi, le sezioni dell'assistenza e le categorie come dati; non contiene nome, email, indirizzi, carrello o ordini di quell'utente.
+- Il contenuto dei messaggi non compare nei log (`Log::spy()`).
 
 ### Cronologia e annullamento
 
@@ -194,7 +235,7 @@ src/
 │   ├── factories.js             # buildUser, buildProduct, buildCart, buildOrder, buildCategory, buildAdminProduct, buildAdminOrder, buildDashboard
 │   └── mocks/
 │       ├── server.js
-│       └── handlers.js          # risposte di successo predefinite, comprese /shop/settings, /admin/settings e /categories
+│       └── handlers.js          # risposte di successo predefinite, comprese /shop/settings, /shop/support, /admin/settings, /categories e /assistant/status
 └── features/cart/components/CartItemRow.test.jsx
 ```
 
@@ -223,13 +264,14 @@ src/
 | Form | validazione Zod, errori 422 del server mostrati sui campi, pulsante disabilitato durante l'invio |
 | Viste con dati | stati di caricamento, errore con "Riprova", vuoto, contenuto |
 | Catalogo | filtri e ordinamento (Novità, Prezzo crescente, Prezzo decrescente) che aggiornano la query string e i risultati, ritorno a pagina 1, limiti dello slider da `meta.price_range`, chip "Novità" ed etichetta di disponibilità ricevuti dall'API, correlati nascosti se vuoti |
-| Home e pagine statiche | hero con i dati del prodotto e con errore o 404, immagine di ripiego per una categoria senza immagine (es. "Viaggio"), menu, `Drawer` e footer con le categorie ricevute da `GET /categories` (compresa una sesta categoria) e con solo "Novità" se la richiesta fallisce, link del footer verso le ancore di `/assistenza` e `/note-legali` |
+| Home e pagine statiche | hero con i dati del prodotto e con errore o 404, immagine di ripiego per una categoria senza immagine (es. "Viaggio"), menu, `Drawer` e footer con le categorie ricevute da `GET /categories` (compresa una sesta categoria) e con solo "Novità" se la richiesta fallisce, link del footer verso le ancore di `/assistenza` e `/note-legali`, `/assistenza` con sezioni e testi ricevuti da `GET /shop/support` (testi diversi da quelli reali nel test) e i quattro stati della vista |
+| Assistente AI | pulsante «Assistente non disponibile» disabilitato con `available: false` e con errore di `/assistant/status`; suggerimenti con la conversazione vuota; nota sulle risposte generate da un'AI; limite di 500 caratteri nel campo; streaming NDJSON simulato con MSW che mostra il testo man mano, senza i marcatori `[[slug]]` (anche incompleti); card con prezzo e disponibilità dall'evento `products`; messaggi di 503 `assistant_busy`, 503 `assistant_unavailable`, 429 ed evento `error` nel pannello senza perdere la conversazione; al massimo 10 messaggi nel corpo inviato; header `X-XSRF-TOKEN` decodificato dal cookie; 419 seguito da una nuova richiesta del cookie CSRF e da un solo nuovo tentativo (un secondo 419 mostra l'errore); richiesta interrotta alla chiusura del pannello (`AbortController`, nessun errore mostrato); conversazione conservata navigando tra le pagine del negozio e assente da `localStorage` e `sessionStorage` |
 | Impostazioni del negozio | testi della spedizione gratuita con l'importo ricevuto da `/shop/settings` (un valore diverso da quello reale nel test, es. 12000 → «120,00 €», per dimostrare che non è scritto nel codice), Skeleton durante il caricamento, elemento omesso in caso di errore |
 | Carrello | "N articoli" da `items_count` con le righe esaurite, totali formattati, selettore da 1 a `max_quantity`, riga esaurita con "—" e "Rimuovi dal carrello", "Procedi al checkout" disabilitato con `can_checkout` false, barra della spedizione gratuita, carrello vuoto con "Potrebbero piacerti", Snackbar dopo l'aggiunta |
 | Checkout | avanzamento dei tre passi, email non verificata, campo "Paese" non modificabile, validazione Zod di indirizzo e carta, "Paga" disabilitato senza accettazione delle condizioni o con `can_checkout` false, 402 che torna al passo 2 con i dati della carta conservati, 409 con "Disponibilità cambiata", 201 con navigazione alla conferma |
 | Dati della carta | dopo l'invio, riuscito e fallito, la MutationCache non contiene i dati della carta (`queryClient.getMutationCache()`), l'errore della mutation non contiene `config.data`, `localStorage` e `sessionStorage` sono vuoti, l'URL non contiene parametri della carta; rimontando la pagina il checkout riparte dal passo 1 con i campi vuoti |
 | Conferma d'ordine | dati letti da `GET /orders/{id}` (numero, stato, "Carta che termina con 4242", totali), immagine di ripiego per un prodotto eliminato, 404 con link agli ordini |
-| Sicurezza | login con secondo fattore (app, codice di recupero, passkey solo se in `methods`), credenziali errate (422 con `code` `invalid_credentials`) con un solo avviso e nessun errore sui campi, challenge scaduta (422 con `code` `two_factor_challenge_expired`) che riporta al login e codice sbagliato che resta sulla pagina con l'errore sul campo, messaggio 429 al login, verifica email da ospite con esito positivo e l'indirizzo preso dalla risposta, banner di email non verificata assente nelle pagine di accesso, `PasswordRequirements` che si aggiorna mentre si scrive e `newPasswordSchema` (9 caratteri, senza maiuscola, senza minuscola, senza numero), pagine dai link email (successo e link scaduto), reset con la sezione di verifica solo se richiesta, cambio password con secondo fattore in linea solo con la doppia autenticazione attiva, attivazione TOTP con codici di recupero, conferma dell'identità (esplicita e dopo 423, con la descrizione dell'operazione), cambio email con il `Dialog` "Nuova email" dopo la conferma, avviso di cambio in sospeso con "Annulla la richiesta", attività recente con "Mostra altre attività" che sparisce all'ultima pagina |
+| Sicurezza | login con secondo fattore (app, codice di recupero, passkey solo se in `methods`), credenziali errate (422 con `code` `invalid_credentials`) con un solo avviso e nessun errore sui campi, challenge scaduta (422 con `code` `two_factor_challenge_expired`) che riporta al login e codice sbagliato che resta sulla pagina con l'errore sul campo, messaggio 429 al login, verifica email da ospite con esito positivo e l'indirizzo preso dalla risposta, banner di email non verificata assente nelle pagine di accesso, `PasswordRequirements` che si aggiorna mentre si scrive e `newPasswordSchema` (9 caratteri, senza maiuscola, senza minuscola, senza numero), pagine dai link email (successo e link scaduto), reset con la sezione di verifica solo se richiesta, cambio password con secondo fattore in linea solo con la doppia autenticazione attiva, attivazione TOTP con codici di recupero, conferma dell'identità (esplicita e dopo 423, con la descrizione dell'operazione), cambio email con il `Dialog` "Nuova email" dopo la conferma, avviso di cambio in sospeso con "Annulla la richiesta", attività recente con "Mostra altre attività" che sparisce all'ultima pagina, eliminazione dell'account (conferma disabilitata finché non si spunta la checkbox, conferma dell'identità dopo 423 con la descrizione dell'operazione, 204 con navigazione alla home e Snackbar, 409 `account_has_open_orders` con il dialog aperto e il messaggio) |
 | Area account | menu account per ospite e utente autenticato, navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, timeline da `status_history`, "Annulla l'ordine" solo con `can_cancel`, dialog di annullamento con "Mantieni l'ordine" e "Annulla l'ordine", 502 `refund_failed` con il dialog aperto e il messaggio |
 | Admin | layout con la voce attiva e il titolo della pagina, nome ed email nell'`AppBar`; dashboard con indicatori, «N pezzi o meno» dalle impostazioni admin e link filtrati (ogni stato con `status` e `paid_month`); elenco ordini con `paid_month` nella query string mostrato come `Chip` «Pagati a Settembre 2026» e rimosso con la sua X, con ritorno a pagina 1; elenco prodotti e ordini con filtri nella query string, ritorno a pagina 1, ricerca con attesa (timer finti di Vitest), stato vuoto con "Azzera filtri", «N ordini» e «1 ordine»; form prodotto: validazione Zod (SKU, descrizione breve di 161 caratteri, prezzo `1.249` e `10000,00` rifiutati, `9999,99` valido), prezzo inviato in centesimi, errori 422 sui campi e conteggio nell'`Alert`, su/giù della scheda tecnica, dopo la creazione navigazione alla modifica senza dialog, dialog delle modifiche non salvate con "Resta sulla pagina" ed "Esci senza salvare", "Annulla" che ripristina i valori, messaggio sulle immagini nel nuovo prodotto; immagini: file non validi scartati con il messaggio, caricamento che non perde gli `alt` non salvati, ← → che cambiano l'ordine inviato; categorie: slug in sola lettura, elimina disabilitato con tooltip, 409 mostrato, invalidazione di `categories`; dettaglio ordine: azioni da `allowed_transitions`, dialog di annullamento con rimborso e scorte, 502 `refund_failed` con il dialog aperto, pagamento rifiutato con `Chip` "Annullato", `Alert` con il motivo e nessuna azione |
 

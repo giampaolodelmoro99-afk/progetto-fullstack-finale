@@ -67,7 +67,10 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 - `react-architecture` — struttura, routing, dati e form in `frontend/`
 - `mui-design-system` — tema, componenti visivi, layout e stile
 - `ecommerce-domain` — regole di business, dati demo, mappa delle API del negozio
-- `account-security` — registrazione, login, verifica email, recupero password, doppia autenticazione, passkey, modifica di dati sensibili
+- `account-security` — registrazione, login, verifica email, recupero password, doppia autenticazione, passkey, modifica di dati sensibili, eliminazione dell'account
 - `testing` — Pest nel backend, Vitest con React Testing Library e MSW nel frontend
+- `ai-assistant` — assistente AI per i clienti con un modello locale Ollama: backend, servizio Docker, Modelfile e widget
+
+L'elenco delle fasi è in `docs/roadmap.md`.
 
 Consulta le skill pertinenti prima di scrivere codice nel loro ambito.
