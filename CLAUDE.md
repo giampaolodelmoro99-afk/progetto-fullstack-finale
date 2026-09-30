@@ -49,7 +49,7 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 
 ## Modo di lavorare
 
-1. Analisi prima dell'azione: per ogni task leggi il codice coinvolto, proponi un piano e attendi conferma prima di modificare file.
+1. Analisi prima dell'azione: per ogni task leggi il codice coinvolto, proponi un piano e attendi conferma prima di modificare file. Fanno eccezione i suggerimenti della revisione di fine fase coerenti con le decisioni già prese, che si applicano direttamente (regola 9).
 2. Scrivi sempre file completi e funzionanti, mai frammenti con "resto invariato".
 3. Non aggiungere dipendenze non concordate: se una serve, proponila motivandola.
 4. Una migration già committata non si modifica: se ne crea una nuova.
@@ -57,7 +57,7 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 6. Nei test i valori attesi si scrivono a mano, non si ricavano dal codice o dalla configurazione che il test verifica.
 7. Le regole di design, dominio e contenuti si prendono dalle fonti nella repository (skill, `design/`, `docs/`) o si chiedono all'utente, mai ricostruite. Se un mockup e una decisione approvata divergono, vale la decisione.
 8. A fine task elenca le verifiche manuali che l'utente deve fare (Postman per le API, browser e Mailpit per il frontend) con passi precisi.
-9. A fine fase lancia il subagent `code-reviewer` e riporta i risultati prima del commit.
+9. A fine fase lancia il subagent `code-reviewer` e riporta i risultati prima del commit. Bloccanti e problemi importanti si riportano all'utente con una proposta di correzione e si correggono dopo la sua conferma; i suggerimenti coerenti con le decisioni già prese si applicano direttamente. Dopo le correzioni non si rilancia un'altra revisione completa.
 10. Non fare commit né `git push` senza richiesta esplicita.
 11. Fino alla Fase 2 (migration e modelli) lo schema ER si allinea alle skill; dalla Fase 2 le migration sono la fonte e `docs/database/er-diagram.md` si aggiorna nello stesso task di ogni migration che cambia il database.
 

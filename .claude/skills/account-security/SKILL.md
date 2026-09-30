@@ -35,7 +35,7 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 | users.email_verified_at | data di verifica | — |
 | users.password_changed_at | data dell'ultima impostazione della password: registrazione, cambio, reset | — |
 | users.two_factor_secret | segreto TOTP | cast `encrypted`, `$hidden` |
-| users.two_factor_recovery_codes | elenco degli hash dei codici di recupero, null senza TOTP | cast `encrypted:array`, `$hidden` |
+| users.two_factor_recovery_codes | elenco degli hash bcrypt (`Hash::make`) dei codici di recupero, null senza TOTP | cast `encrypted:array`, `$hidden` |
 | users.two_factor_confirmed_at | data di attivazione della doppia autenticazione, null se non attiva | — |
 | users.two_factor_last_used_step | ultimo intervallo TOTP usato | impedisce il riutilizzo dello stesso codice |
 | passkeys (tabella della libreria, forma provvisoria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
@@ -47,10 +47,33 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 - `role`, `password_changed_at` e le quattro colonne `two_factor_*` si aggiungono a `users` con un'unica nuova migration, perché quella di Laravel è già committata. `password_changed_at` è nullable nel database (colonna aggiunta a una tabella esistente), ma registrazione, cambio e reset la valorizzano sempre, e così la `UserFactory`.
 - La tabella `passkeys` di `docs/database/er-diagram.md` è provvisoria, modellata su `spatie/laravel-passkeys` (nome e `last_used_at`); `laragear/webauthn` usa `webauthn_credentials` con `alias` e senza ultimo utilizzo. Lo schema si aggiorna alla scelta della libreria.
 - I token del cambio email si salvano come SHA-256 in esadecimale con indice unico, non con l'hash lento del password broker. Sono casuali ad alta entropia, quindi un hash veloce senza salt basta; e la richiesta va cercata per hash anche da ospite, perché il link di annullamento arriva al vecchio indirizzo e si apre senza login.
+- I codici di recupero, invece, si salvano con `Hash::make` (bcrypt). I codici `XXXX-XXXX` hanno bassa entropia: in caso di furto del database un hash veloce come SHA-256 sarebbe forzabile, mentre bcrypt è lento e con salt. Non serve cercarli con un indice: la verifica confronta il codice con gli hash dell'utente, al massimo 8.
 - `security_events.user_id` non è nullable: gli eventi riguardano solo utenti esistenti. `login_failed` si registra solo quando l'email appartiene a un utente; per un'email inesistente non si scrive nessun evento, e la risposta HTTP resta identica nei due casi.
 - Negli eventi `passkey_added` e `passkey_removed`, e nel `login` fatto con una passkey, i `metadata` contengono `passkey_name`: il nome della passkey al momento dell'evento.
 
-Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano (es. `login` → "Accesso effettuato", `password_changed` → "Password cambiata", `passkey_added` → "Passkey aggiunta", `two_factor_enabled` → "Doppia autenticazione attivata").
+Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano, con queste parole fisse:
+
+| Valore | Etichetta |
+|---|---|
+| `login` | Accesso effettuato |
+| `login_failed` | Accesso non riuscito |
+| `two_factor_challenge_failed` | Verifica in due passaggi non riuscita |
+| `logout` | Disconnessione |
+| `email_verified` | Email confermata |
+| `password_changed` | Password cambiata |
+| `password_reset` | Password reimpostata |
+| `email_change_requested` | Cambio email richiesto |
+| `email_changed` | Email aggiornata |
+| `email_change_cancelled` | Cambio email annullato |
+| `two_factor_enabled` | Doppia autenticazione attivata |
+| `two_factor_disabled` | Doppia autenticazione disattivata |
+| `recovery_codes_regenerated` | Codici di recupero rigenerati |
+| `recovery_code_used` | Codice di recupero usato |
+| `passkey_added` | Passkey aggiunta |
+| `passkey_removed` | Passkey rimossa |
+| `other_sessions_closed` | Altre sessioni chiuse |
+
+Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un'etichetta che non dipende dal genere della persona).
 
 ## Configurazione
 

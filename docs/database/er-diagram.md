@@ -27,7 +27,7 @@ erDiagram
         string role "customer | admin"
         timestamp password_changed_at "nullable"
         text two_factor_secret "nullable, encrypted"
-        text two_factor_recovery_codes "nullable, encrypted:array"
+        text two_factor_recovery_codes "nullable, encrypted:array, bcrypt"
         timestamp two_factor_confirmed_at "nullable"
         bigint two_factor_last_used_step "nullable"
         string remember_token "nullable"
@@ -286,7 +286,7 @@ Account di clienti e amministratori, con i dati della doppia autenticazione. Le 
 | role | `string(20)` | no | `customer` | | cast a `UserRole` (`customer`, `admin`); la registrazione crea solo `customer` |
 | password_changed_at | `timestamp` | sì | null | | nullable solo nel database (colonna aggiunta a una tabella esistente); registrazione, cambio e reset la valorizzano sempre, e così `UserFactory` |
 | two_factor_secret | `text` | sì | null | | cast `encrypted`, in `$hidden`; esiste già prima della conferma del TOTP |
-| two_factor_recovery_codes | `text` | sì | null | | hash dei codici, cast `encrypted:array`, in `$hidden`; null senza TOTP |
+| two_factor_recovery_codes | `text` | sì | null | | hash bcrypt dei codici (D12), cast `encrypted:array`, in `$hidden`; null senza TOTP |
 | two_factor_confirmed_at | `timestamp` | sì | null | | non null = doppia autenticazione attiva |
 | two_factor_last_used_step | `unsignedBigInteger` | sì | null | | ultimo intervallo TOTP usato, impedisce il riutilizzo del codice |
 | remember_token | `rememberToken` | sì | null | | di Laravel |
@@ -551,7 +551,7 @@ Cronologia degli stati dell'ordine: una riga per ogni transizione, compresa la c
 | to_status | `string(20)` | no | — | | cast a `OrderStatus` |
 | changed_by | `foreignId` | sì | null | FK → users.id | null = sistema |
 | reason | `string(255)` | sì | null | | oggi solo il motivo del pagamento rifiutato |
-| created_at | `timestamp` | no | `CURRENT_TIMESTAMP` | | `timestamp('created_at')->useCurrent()`; nessun `updated_at` (`const UPDATED_AT = null`) |
+| created_at | `timestamp` | no | — | | `timestamp('created_at')`, senza default (D11); nessun `updated_at` (`const UPDATED_AT = null`) |
 
 - FK: `order_id` `cascadeOnDelete` (la cronologia non esiste senza l'ordine); `changed_by` `restrictOnDelete` (un utente eliminato non deve diventare "sistema").
 - Indici: composto (`order_id`, `created_at`); quello della FK su `changed_by`.
@@ -608,7 +608,7 @@ Registro degli eventi di sicurezza dell'account, mostrato in "Attività recente"
 | ip_address | `string(45)` | sì | null | | IPv4 o IPv6 |
 | user_agent | `text` | sì | null | | grezzo; l'etichetta la calcola `UserAgentLabel` |
 | metadata | `json` | sì | null | | nessun segreto; `passkey_name` negli eventi delle passkey |
-| created_at | `timestamp` | no | `CURRENT_TIMESTAMP` | | `timestamp('created_at')->useCurrent()`; nessun `updated_at` (`const UPDATED_AT = null`) |
+| created_at | `timestamp` | no | — | | `timestamp('created_at')`, senza default (D11); nessun `updated_at` (`const UPDATED_AT = null`) |
 
 - FK: `user_id` `cascadeOnDelete`.
 - Indici: composto (`user_id`, `created_at`) per l'elenco paginato dal più recente.
@@ -691,7 +691,7 @@ Contraddizioni e lacune trovate tra le skill durante la stesura dello schema, co
 
 **D5 — Unicità dello slug dei prodotti**
 - Problema: lo slug è la chiave pubblica del catalogo (`{product:slug}`), ma nessuna skill ne fissava l'unicità.
-- Decisione: indice unico su `products.slug`, che comprende i prodotti in soft delete; `ProductObserver` aggiunge `-2`, `-3`… in caso di collisione, troncando prima la base dello slug quanto serve perché slug e suffisso stiano nei 255 caratteri della colonna. Il nome del prodotto non deve essere unico.
+- Decisione: indice unico su `products.slug`, che comprende i prodotti in soft delete; `ProductObserver` aggiunge `-2`, `-3`… in caso di collisione, troncando prima la base dello slug quanto serve perché slug e suffisso stiano nei 255 caratteri della colonna. Il nome del prodotto non deve essere unico. Se il nome non produce uno slug (per esempio «!!!»), la base diventa `prodotto`; per le categorie `categoria`.
 
 **D6 — Eventi di sicurezza senza utente**
 - Problema: `login_failed` per un'email inesistente non ha un utente, e registrarlo in altro modo contrasterebbe con il principio di non rivelare quali email sono registrate.
@@ -712,6 +712,16 @@ Contraddizioni e lacune trovate tra le skill durante la stesura dello schema, co
 **D10 — Tabelle di Laravel**
 - Problema: l'elenco delle tabelle di Laravel del progetto ne citava sei, ma le migration committate creano anche `cache_locks` e `job_batches`.
 - Decisione: entrambe sono documentate; `cache_locks` è usata dai lock del driver cache `database`, `job_batches` esiste ma non si usa. `personal_access_tokens` resta assente per scelta.
+
+**D11 — Colonne `created_at` senza default** (decisa in Fase 2)
+- Problema: lo schema prevedeva `timestamp('created_at')->useCurrent()` per `order_status_changes` e `security_events`. Laravel scrive le date nel fuso dell'applicazione (`Europe/Rome`), mentre `CURRENT_TIMESTAMP` di MySQL usa il fuso della sessione (UTC): un insert senza data salverebbe un'ora UTC in mezzo a date in ora italiana.
+- Decisione: `created_at` non nullable e **senza default**. Eloquent la valorizza sempre (anche con `const UPDATED_AT = null`); un insert fuori da Eloquent senza data fallisce invece di salvare un'ora sbagliata. La sessione MySQL è fissata in UTC (`'timezone' => '+00:00'` nella connessione `mysql` di `config/database.php`), così non dipende dal fuso del server: le date si scrivono e si rileggono come testo nel fuso dell'applicazione, e il giro è coerente.
+- Limite accettato: nell'ora ripetuta del passaggio all'ora solare (l'ultima domenica di ottobre, dalle 02:00 alle 03:00) le ore italiane sono ambigue, quindi l'ordinamento per data in quell'ora non è garantito. La cronologia degli ordini usa comunque `id` come secondo criterio.
+- Eccezione: `failed_jobs.failed_at` conserva `useCurrent()` perché viene dalla migration di Laravel già committata, che non si modifica; la tabella serve solo ai job falliti e non entra nelle date mostrate all'utente.
+
+**D12 — Hash dei codici di recupero** (decisa in Fase 2)
+- Problema: `account-security` diceva solo «salvati come hash».
+- Decisione: `Hash::make` (bcrypt). I codici `XXXX-XXXX` hanno bassa entropia: in caso di furto del database un hash veloce come SHA-256 sarebbe forzabile. A differenza dei token del cambio email (N7) non serve cercarli con un indice: la verifica confronta al massimo 8 hash dell'utente.
 
 ### Punti non specificati
 

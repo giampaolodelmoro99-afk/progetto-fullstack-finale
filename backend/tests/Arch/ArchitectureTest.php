@@ -37,9 +37,23 @@ arch('resources extend json resource')
     ->toExtend(JsonResource::class)
     ->toHaveSuffix('Resource');
 
-arch('enums live in the enums namespace')
+arch('enums live in the enums namespace and expose an italian label')
     ->expect('App\Enums')
-    ->toBeEnums();
+    ->toBeEnums()
+    ->toHaveMethod('label');
+
+arch('observers are final and suffixed')
+    ->expect('App\Observers')
+    ->toBeFinal()
+    ->toHaveSuffix('Observer');
+
+arch('models extend eloquent')
+    ->expect('App\Models')
+    ->toExtend('Illuminate\Database\Eloquent\Model');
+
+arch('support classes are final')
+    ->expect('App\Support')
+    ->toBeFinal();
 
 arch('contracts are interfaces')
     ->expect('App\Contracts')
