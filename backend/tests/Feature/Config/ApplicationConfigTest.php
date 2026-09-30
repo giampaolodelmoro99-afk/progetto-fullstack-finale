@@ -25,3 +25,22 @@ it('defines the account security settings', function () {
         'security_events_per_page' => 10,
     ]);
 });
+
+it('defines the assistant settings', function () {
+    expect(config('assistant'))->toBe([
+        'driver' => 'fake',
+        'base_url' => 'http://ollama:11434',
+        'model' => 'casa-del-silicio',
+        'think' => false,
+        'connect_timeout' => 3,
+        'timeout' => 120,
+        'lock_margin' => 30,
+        'max_messages' => 10,
+        'max_message_length' => 500,
+        'max_assistant_message_length' => 4000,
+        'max_tool_results' => 8,
+        'max_tool_rounds' => 3,
+        'max_products' => 4,
+        'max_concurrent' => 1,
+    ]);
+});

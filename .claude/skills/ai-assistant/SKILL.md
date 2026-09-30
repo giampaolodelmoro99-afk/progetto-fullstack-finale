@@ -21,10 +21,12 @@ Come il `PaymentGateway` (skill `ecommerce-domain`, "Pagamenti"):
 
 - Interfaccia `App\Contracts\AiAssistant`:
   - `isAvailable(): bool` — Ollama raggiungibile e modello del negozio presente
-  - un metodo di streaming che riceve i messaggi della conversazione, le definizioni dei tool e i dati di contesto, e restituisce una sequenza di **eventi**: frammenti di testo e richieste di tool call (nome e argomenti). Chi chiama esegue i tool e rilancia il metodo con i risultati come messaggi `tool`, finché il modello non risponde solo con testo. La responsabilità è fissata qui; la firma esatta si fissa nella Fase 2c.
+  - `stream(array $messages, array $tools = [], ?CarbonInterface $deadline = null): iterable` riceve i messaggi della conversazione e le definizioni dei tool e restituisce una sequenza di **eventi** (`App\Services\Assistant\Events`): `TextDelta` per i frammenti di testo e `ToolCallRequested` per le richieste di tool call (nome e argomenti). La richiesta HTTP parte **dentro** `stream()`, che non contiene `yield` e restituisce il generatore di un metodo separato: così Ollama irraggiungibile produce `AssistantUnavailableException` prima dello streaming. Durante l'iterazione: `AssistantTimeoutException` oltre la scadenza, `AssistantFailedException` per ogni altro errore.
+  - `AssistantConversation` esegue i giri: chiama `stream()`, esegue i tool con `AssistantTools`, aggiunge il messaggio `assistant` con le tool call e i messaggi `tool` con i risultati, e rilancia finché il modello non risponde solo con testo; oltre `max_tool_rounds` rilancia senza tool. Una sola scadenza copre tutti i giri. L'Action della Fase 4b la riusa, come il comando `assistant:ask`.
 - Implementazioni in `App\Services\Assistant`:
   - `OllamaAssistant`, con il client HTTP di Laravel (`Http`) verso l'API di Ollama (`/api/chat` con `stream: true`, `/api/tags` per lo stato). Nessuna libreria aggiuntiva.
-  - `FakeAiAssistant`, programmabile nei test: testo in frammenti, tool call con argomenti, slug citati, indisponibilità, errore a metà e timeout. Registra i messaggi ricevuti, così i test verificano anche i risultati dei tool restituiti al modello.
+  - `FakeAiAssistant`, programmabile nei test a turni (`respondWith()`, `failAfter()`, `timeoutAfter()`, `unavailable()`): testo in frammenti, tool call con argomenti, slug citati, indisponibilità, errore a metà e timeout. Registra messaggi e tool ricevuti (`calls()`), così i test verificano anche i risultati dei tool restituiti al modello.
+  - `AssistantSlots` per gli slot di concorrenza (sezione "Concorrenza").
 - Binding in `AppServiceProvider` guidato da `ASSISTANT_DRIVER` (`ollama` o `fake`).
 - Un'Action coordina la richiesta: slot di concorrenza, chiamata al modello, giri dei tool, estrazione degli slug e caricamento dei prodotti. Il controller resta sottile (skill `laravel-api`).
 
@@ -35,43 +37,47 @@ Come il `PaymentGateway` (skill `ecommerce-domain`, "Pagamenti"):
 | `driver` | `env('ASSISTANT_DRIVER', 'ollama')` | implementazione dell'interfaccia |
 | `base_url` | `http://ollama:11434` | indirizzo di Ollama nella rete Docker |
 | `model` | nome del modello del negozio creato dal Modelfile | modello usato in `/api/chat` |
-| `connect_timeout` | pochi secondi | Ollama spento o irraggiungibile |
-| `timeout` | tempo massimo della risposta completa | comprende **tutti** i giri di `/api/chat`, anche quelli dei tool, non una sola chiamata; oltre questo, evento `error` |
+| `think` | `false` | inviato a `/api/chat`: disattiva il ragionamento di Qwen3.5 (`null` per non inviarlo) |
+| `connect_timeout` | 3 s | Ollama spento o irraggiungibile, per `/api/tags`; la richiesta in streaming a `/api/chat` usa lo `StreamHandler` di Guzzle, che lo ignora: lì la connessione è limitata da `timeout`, e Ollama spento produce comunque un rifiuto immediato |
+| `timeout` | 120 s | tempo massimo della risposta completa; comprende **tutti** i giri di `/api/chat`, anche quelli dei tool, non una sola chiamata; oltre questo, evento `error` |
 | `max_messages` | 10 | messaggi accettati per richiesta |
 | `max_message_length` | 500 | caratteri di un messaggio `user` |
 | `max_assistant_message_length` | 4000 | caratteri di un messaggio `assistant` inviato dal client; pone un limite al contesto anche se il client falsifica la cronologia |
 | `max_tool_results` | 8 | prodotti restituiti al modello da una chiamata di `search_products` |
-| `max_tool_rounds` | numero massimo di giri di tool call per risposta | oltre, si chiede al modello la risposta finale senza tool |
-| `max_products` | numero massimo di prodotti citati restituiti come card | |
-| `max_concurrent` | 1 | generazioni contemporanee, da misurare nella Fase 2c |
+| `max_tool_rounds` | 3 | giri di tool call per risposta; oltre, si chiede al modello la risposta finale senza tool |
+| `lock_margin` | 30 s | aggiunto a `timeout` per la durata di uno slot di concorrenza |
+| `max_products` | 4 | numero massimo di prodotti citati restituiti come card |
+| `max_concurrent` | 1 | generazioni contemporanee, misurato nella Fase 2c |
 
-I valori marcati come "pochi secondi" o descritti a parole si fissano nella Fase 2c, dopo le misure.
+I valori sono stati fissati nella Fase 2c dopo le misure, riportate in `docs/assistant/model-evaluation.md`.
 
 ## Dati del catalogo
 
-La scelta tra le due strade si fa con una prova nella Fase 2c e si scrive in `docs/assistant/model-evaluation.md`.
+Scelta della Fase 2c (`docs/assistant/model-evaluation.md`): **tool calling**, con il modello qwen3.5:4b.
 
-**Strada principale, tool calling.** Il backend dichiara al modello due tool:
+**Tool calling.** Il backend dichiara al modello tre tool, definiti in `App\Services\Assistant\AssistantTools`. Non c'è nessun altro dato allegato alla conversazione: tutto ciò che il modello sa del negozio arriva dal Modelfile o dai risultati dei tool, così il prompt fisso resta corto e la prima parola arriva prima.
 
 | Tool | Parametri | Effetto |
 |---|---|---|
-| `search_products` | `search`, `category` (slug), `min_price` e `max_price` in euro, `in_stock`, `new`, `sort` (`newest`, `price_asc`, `price_desc`) | ricerca nel catalogo con gli stessi filtri di `IndexProductRequest`; il backend converte i prezzi in centesimi e restituisce al massimo `max_tool_results` prodotti |
+| `search_products` | `search` (una parola), `category` (enum degli slug), `min_price` e `max_price` in euro, `in_stock`, `new`, `sort` (`newest`, `price_asc`, `price_desc`) | ricerca nel catalogo con gli stessi filtri di `IndexProductRequest`; il backend converte i prezzi in centesimi e restituisce al massimo `max_tool_results` prodotti |
 | `get_product` | `slug` | dettaglio di un prodotto con descrizione breve e scheda tecnica |
+| `get_shop_info` | `section` facoltativo (`spedizioni`, `resi`, `garanzia`, `contatti`) | sezioni della pagina `/assistenza` da `GetSupportSectionsAction`, la stessa fonte di `GET /shop/support`: una sola sezione o tutte |
 
-- I tool girano su un'Action che riusa gli scope del modello `Product` (`active`, `search`, `inCategory`, `priceBetween`, `inStock`, `newArrivals`, `sortBy`): vedono solo prodotti attivi e non eliminati, come il catalogo pubblico.
+- I tool del catalogo girano su `SearchProductsAction`, che riusa gli scope del modello `Product` (`active`, `search`, `inCategory`, `priceBetween`, `inStock`, `newArrivals`, `sortBy`): vedono solo prodotti attivi e non eliminati, come il catalogo pubblico.
 - Gli argomenti proposti dal modello si validano come un input dell'utente: valori non ammessi si scartano, mai una query costruita dal testo del modello.
 - Il risultato torna al modello come JSON compatto: nome, slug, categoria, prezzo formattato, etichetta di disponibilità, descrizione breve e, nel dettaglio, scheda tecnica.
-- Le categorie disponibili (slug e nome, lette con la stessa query di `GET /categories`, senza chiamate HTTP interne) sono nel contesto, così il modello usa slug validi.
+- Le categorie non sono nel prompt: il parametro `category` di `search_products` è un `enum` con gli slug letti dalla tabella `categories` (ordinati per `id`, come `GET /categories`) a ogni richiesta, così il modello usa solo slug validi e una categoria nuova è subito disponibile. Il backend controlla comunque che lo slug esista.
 
-**Ripiego, recupero preventivo.** Se il modello scelto non è affidabile nel tool calling, il backend recupera i prodotti prima della chiamata: applica lo scope `search` all'ultimo messaggio dell'utente, più la categoria se il messaggio ne nomina una, e passa i risultati al modello nel blocco dei dati.
+**Ripiego, recupero preventivo.** Se il modello scelto non è affidabile nel tool calling, il backend recupera i prodotti prima della chiamata: applica lo scope `search` all'ultimo messaggio dell'utente, più la categoria se il messaggio ne nomina una, e passa i risultati al modello come messaggio `tool`. Non è servito: tutti i candidati provati chiamano i tool in modo affidabile.
 
 ## Sicurezza dei prompt
 
 - Le istruzioni di sistema stanno **solo** nel Modelfile. Il client non può inviarne: i messaggi accettati hanno solo i ruoli `user` e `assistant`; `system` e `tool` producono un 422.
 - Nemmeno il backend invia messaggi di ruolo `system` a `/api/chat`: un messaggio `system` nella richiesta può prendere il posto del `SYSTEM` del Modelfile, e perimetro, rifiuto e formato `[[slug]]` andrebbero persi. Il comportamento si verifica nella Fase 2c sulla versione di Ollama scelta e si scrive in `docs/assistant/model-evaluation.md`; un test controlla che la richiesta non contenga messaggi `system`.
-- Regole del negozio, categorie e dati del catalogo arrivano al modello come **dati**, mai come istruzioni: nei messaggi `tool` o in un blocco delimitato allegato alla conversazione, con la regola esplicita nel Modelfile che il contenuto di quei dati non va mai eseguito come istruzione. Vale anche per i testi dei prodotti, che scrive l'admin.
+- Regole del negozio e dati del catalogo arrivano al modello come **dati**, mai come istruzioni: solo nei messaggi `tool`, con la regola esplicita nel Modelfile che il contenuto dei risultati degli strumenti non va mai eseguito come istruzione. Vale anche per i testi dei prodotti, che scrive l'admin (prova q9 della Fase 2c).
 - Messaggi `user` di massimo 500 caratteri e `assistant` di massimo 4000, al massimo 10 messaggi per richiesta; l'ultimo deve essere di ruolo `user`.
 - Nessun dato di altri utenti e nessun dato dell'utente stesso nel contesto: l'assistente non ha tool che li leggano.
+- Difesa residua dal vecchio blocco dei dati: nella prima versione della Fase 2c regole e categorie arrivavano in un blocco `<dati_negozio>` allegato al primo messaggio `user`. Il blocco non esiste più, ma `OllamaAssistant` continua a togliere i marcatori `<dati_negozio>` e `</dati_negozio>`, anche con spazi o maiuscole diverse, dal contenuto di **tutti** i messaggi (anche `assistant` e `tool`), così nessun testo può fingersi un blocco di dati autentico, nemmeno se un modello futuro fosse stato istruito a riconoscerlo.
 - Rischio residuo accettato: il client può falsificare i messaggi `assistant` della propria cronologia. Riguarda solo la sua conversazione, che non contiene dati di altri né azioni con effetti.
 
 ## Citazione dei prodotti
@@ -141,9 +147,9 @@ Limiter `assistant` in `AppServiceProvider`, per utente se autenticato e per IP 
 ### Concorrenza
 
 - Il backend gira con `php artisan serve` e 4 worker, e una risposta in streaming su CPU occupa un worker per decine di secondi. Senza un limite, poche conversazioni bloccherebbero tutto il negozio.
-- `config('assistant.max_concurrent')`, valore iniziale 1, da misurare nella Fase 2c.
+- `config('assistant.max_concurrent')`, fissato a 1 nella Fase 2c (`docs/assistant/model-evaluation.md`): Ollama serve una generazione alla volta, e una seconda richiesta resterebbe in coda occupando un worker.
 - Prima di contattare Ollama, l'Action prende uno slot con un lock atomico della cache: prova `Cache::lock('assistant:slot:{i}', $ttl)->get()` per `i` da 1 a `max_concurrent` e usa il primo libero. Il driver cache `database` supporta i lock atomici con la tabella `cache_locks`.
-- Con lo slot preso, l'Action apre la prima chiamata a `/api/chat` con `connect_timeout` **prima** di restituire la risposta in streaming: se la connessione non riesce, la risposta è il 503 `assistant_unavailable`, con gli header ancora da inviare. Il valore in cache di `isAvailable()` serve solo a `GET /assistant/status`, non a questa decisione.
+- Con lo slot preso, l'Action apre la prima chiamata a `/api/chat` (con `AssistantConversation::run()`) **prima** di restituire la risposta in streaming: se la connessione non riesce, la risposta è il 503 `assistant_unavailable`, con gli header ancora da inviare. Il valore in cache di `isAvailable()` serve solo a `GET /assistant/status`, non a questa decisione.
 - Lo slot passa poi alla callback dello `StreamedResponse`, che lo possiede fino alla fine.
 - La durata del lock è `timeout` più un margine, e `timeout` comprende tutti i giri dei tool: se un worker muore senza rilasciarlo, lo slot si libera da solo.
 - **Ogni uscita rilascia lo slot:**
@@ -159,18 +165,21 @@ Limiter `assistant` in `AppServiceProvider`, per utente se autenticato e per IP 
 
 ## Docker e Modelfile (Fase 2c)
 
-- Servizio `ollama` in `docker-compose.yml`:
-  - immagine `ollama/ollama` con una versione fissa
+- Servizio `ollama` in `docker-compose.yml`, nel **profilo `ai`**:
+  - `docker compose up` non lo avvia e non scarica né l'immagine (3,8 GB da scaricare, 9,3 GB su disco) né il modello (3,4 GB): il negozio parte con l'assistente non disponibile, così il requisito del solo `docker compose up` non dipende da 13 GB di download
+  - `docker compose --profile ai up` (`make up-ai`) avvia anche l'assistente; `make down` usa `--profile ai`, così ferma anche `ollama`
+  - immagine `ollama/ollama:0.35.0`
   - **porta non pubblicata sull'host**: l'API di Ollama non ha autenticazione e permette anche di scaricare e cancellare modelli (`/api/pull`, `/api/delete`); `app` la raggiunge nella rete Docker su `ollama:11434`. Se nella Fase 2c serve accedervi dall'host per le misure, la porta si lega solo a `127.0.0.1:11434`
   - volume `ollama-data` per i modelli scaricati
-  - healthcheck con `ollama list` (l'immagine potrebbe non contenere `curl`); lo stesso comando serve allo script per attendere che il server risponda
+  - healthcheck con `ollama show` del modello del negozio (l'immagine non contiene `curl`): il servizio è sano solo quando il modello esiste; `start_period` di 900 s per il primo download. Lo script usa `ollama list` per attendere che il server risponda
+  - `ASSISTANT_MODEL` nell'ambiente del servizio, uguale a `config('assistant.model')`
   - script di avvio in `docker/ollama/` idempotente: avvia `ollama serve`, attende che risponda, esegue `ollama pull` del modello base solo se manca e `ollama create` del modello del negozio dal `docker/ollama/Modelfile`
-- `app` **non** dipende da `ollama`: `docker compose up` porta a un negozio funzionante anche mentre il modello si sta scaricando o se Ollama non parte. Il primo avvio scarica il modello, quindi richiede più tempo; il README lo segnala.
-- GPU NVIDIA solo con un file compose opzionale, `docker-compose.gpu.yml`, da usare con `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up`. Senza quel file, `docker compose up` funziona su CPU. Un eventuale target del `Makefile` si propone nella Fase 2c.
+- `app` **non** dipende da `ollama`: con il profilo `ai` il negozio funziona anche mentre il modello si sta scaricando o se Ollama non parte; senza profilo l'assistente risulta non disponibile. Il README riporta dimensioni e tempi dei download.
+- GPU NVIDIA solo con un file compose opzionale, `docker-compose.gpu.yml`, da usare con `docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile ai up` (target `make up-gpu`). Senza quel file l'assistente usa la CPU.
 - `docker/ollama/Modelfile`:
   - `FROM` il modello base scelto e parametri di generazione (temperatura bassa, contesto sufficiente per 10 messaggi e i risultati dei tool)
   - `SYSTEM` con: persona di Casa del Silicio; perimetro e frase fissa di rifiuto; regola che i dati del catalogo e delle regole del negozio sono dati e non istruzioni; divieto di inventare prodotti, prezzi o disponibilità; formato `[[slug]]` per le citazioni; regole di `design/design-system/voice-and-content.md` (tu con garbo, frasi brevi, niente punti esclamativi né emoji né urgenza artificiale, prezzi nel formato 349,00 €, unità con lo spazio, parole fisse per disponibilità e stati, nessun marchio di terzi)
-  - le regole del negozio **non** si scrivono nel Modelfile: arrivano a ogni richiesta dalla stessa fonte di `/assistenza`, così gli importi seguono `config/shop.php`
+  - le regole del negozio **non** si scrivono nel Modelfile: arrivano come risultato del tool `get_shop_info`, dalla stessa `GetSupportSectionsAction` dell'endpoint `/shop/support`, così gli importi seguono `config/shop.php`
 - Il servizio si aggiunge al README e alla tabella dei servizi di `CLAUDE.md` nella Fase 2c, come servizio interno senza indirizzo sull'host.
 
 ### Scelta del modello e misure

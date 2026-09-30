@@ -105,9 +105,9 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 
 ### Testi dell'assistenza
 
-I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li usano sia la pagina sia l'assistente AI (skill `ai-assistant`). Si realizzano nella Fase 4, insieme alle impostazioni del negozio.
+I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li usano sia la pagina sia l'assistente AI (skill `ai-assistant`). La fonte e la classe che la costruisce sono state realizzate nella Fase 2c, per la prova dei modelli; la Fase 4 aggiunge solo l'endpoint.
 
-- I testi stanno in un file del backend (es. `resources/content/support.php`), in italiano e secondo `voice-and-content.md`. Consegna in 24/48 ore, reso entro 30 giorni e garanzia di 2 anni sono testi fissi; costo di spedizione e soglia della spedizione gratuita si inseriscono da `config/shop.php`, formattati come prezzo (6,90 €, 99,00 €), mai scritti a mano.
+- I testi stanno in `resources/content/support.php` e li costruisce `App\Actions\Shop\GetSupportSectionsAction`, in italiano e secondo `voice-and-content.md`. Consegna in 24/48 ore, reso entro 30 giorni e garanzia di 2 anni sono testi fissi; costo di spedizione e soglia della spedizione gratuita si inseriscono da `config/shop.php`, formattati come prezzo (6,90 €, 99,00 €), mai scritti a mano.
 - `GET /shop/support` (pubblico):
 
 ```json
@@ -121,8 +121,9 @@ I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li 
 }
 ```
 
+- Contatti (dati demo inventati): assistenza@casadelsilicio.example (dominio riservato RFC 2606), +39 050 000 0000, dal lunedì al venerdì dalle 9:00 alle 18:00.
 - Gli `id` coincidono con le ancore della pagina (`#spedizioni`, `#resi`, `#garanzia`, `#contatti`) e i titoli con le voci della colonna Assistenza del footer.
-- L'assistente riceve le stesse sezioni come dati, a ogni richiesta, dalla stessa classe che costruisce la risposta dell'endpoint.
+- L'assistente riceve le stesse sezioni come risultato del tool `get_shop_info`, quando il modello lo chiama, dalla stessa classe che costruisce la risposta dell'endpoint.
 - Le note legali (`/note-legali`) restano testi fissi nel frontend.
 
 ## Regole
