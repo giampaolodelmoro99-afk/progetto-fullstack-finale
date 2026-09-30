@@ -15,6 +15,7 @@ Fonti:
 | `design/mockups/02-acquisto.pdf` | mockup dell'acquisto: carrello (pieno, vuoto, con righe esaurite, caricamento), checkout in tre passi con errori, email da verificare, conferma d'ordine, desktop e mobile |
 | `design/mockups/03-account.pdf` | mockup dell'account: accesso (errore, troppi tentativi, verifica in due passaggi), registrazione, pagine raggiunte dai link email, menu account, profilo con cambio email, indirizzi, ordini e dettaglio, sicurezza (doppia autenticazione, passkey, attività recente), dialog di conferma, desktop e mobile |
 | `design/mockups/04-admin.pdf` | mockup del pannello admin: layout con Drawer, dashboard (desktop e mobile), elenco prodotti (caricamento, vuoto, eliminazione), nuovo e modifica prodotto (errori, modifiche non salvate), categorie con dialog di modifica ed eliminazione, elenco ordini (filtri, pagamenti non riusciti, vuoto, mobile), dettaglio ordine (pagato, spedito, annullamento, pagamento rifiutato) |
+| Design E (da produrre) | chat dell'assistente AI e sezione "Elimina account", in Claude Design prima della Fase 7 (`docs/roadmap.md`). Fino ad allora non ci sono pattern visivi per queste due parti: regole di comportamento nelle skill `ai-assistant` e `account-security` |
 
 ## Tema
 

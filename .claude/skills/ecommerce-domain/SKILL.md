@@ -1,6 +1,6 @@
 ---
 name: ecommerce-domain
-description: Regole di business dell'e-commerce — entità e colonne, importi in centesimi, snapshot degli ordini, gestione dello stock con lock, carrello, checkout, dati della carta, indirizzi solo in Italia, stati dell'ordine, cronologia degli stati e visibilità per il cliente, pagamenti simulati e rimborsi, annullamento, novità e disponibilità calcolate, impostazioni del negozio esposte al frontend, area admin (dashboard, prodotti, immagini, categorie, ordini), dati demo dei seeder e mappa delle API. Usala per modelli, migration, factory, seeder, carrello, checkout, ordini, pagamenti, admin e ogni schermata che mostra questi dati.
+description: Regole di business dell'e-commerce — entità e colonne, importi in centesimi, snapshot degli ordini, gestione dello stock con lock, carrello, checkout, dati della carta, indirizzi solo in Italia, stati dell'ordine, cronologia degli stati e visibilità per il cliente, pagamenti simulati e rimborsi, annullamento, novità e disponibilità calcolate, impostazioni del negozio esposte al frontend, testi dell'assistenza, conservazione degli ordini degli account eliminati, area admin (dashboard, prodotti, immagini, categorie, ordini), dati demo dei seeder e mappa delle API. Usala per modelli, migration, factory, seeder, carrello, checkout, ordini, pagamenti, admin e ogni schermata che mostra questi dati.
 ---
 
 # Dominio e-commerce — regole di business
@@ -19,7 +19,7 @@ Le tabelle dell'account e della sicurezza sono descritte nella skill `account-se
 
 | Tabella | Colonne principali | Note |
 |---|---|---|
-| users | name, email, password, role, email_verified_at | `role`: `customer` o `admin` |
+| users | name, email, password, role, email_verified_at, anonymized_at | `role`: `customer` o `admin`; `anonymized_at` valorizzata quando il cliente elimina l'account (skill `account-security`) |
 | addresses | user_id, full_name, street, city, postal_code, province, country, phone, is_default | un solo indirizzo predefinito per utente, garantito dall'Action nella stessa transazione (MySQL non ha indici unici parziali); `country` sempre `IT` |
 | categories | name, slug, description | gestite dall'admin, nessuna sottocategoria; `slug` unico, generato dal nome alla creazione e mai più modificabile |
 | products | category_id, name, slug, sku, short_description, description, specifications (JSON), price, stock, is_active, created_at, updated_at, deleted_at | una sola categoria per prodotto, `slug` e `sku` unici (anche rispetto ai soft delete), `price` in centesimi, soft delete |
@@ -103,6 +103,28 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 { "data": { "shipping_cost": 690, "free_shipping_threshold": 9900, "low_stock_threshold": 5 } }
 ```
 
+### Testi dell'assistenza
+
+I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li usano sia la pagina sia l'assistente AI (skill `ai-assistant`). Si realizzano nella Fase 4, insieme alle impostazioni del negozio.
+
+- I testi stanno in un file del backend (es. `resources/content/support.php`), in italiano e secondo `voice-and-content.md`. Consegna in 24/48 ore, reso entro 30 giorni e garanzia di 2 anni sono testi fissi; costo di spedizione e soglia della spedizione gratuita si inseriscono da `config/shop.php`, formattati come prezzo (6,90 €, 99,00 €), mai scritti a mano.
+- `GET /shop/support` (pubblico):
+
+```json
+{
+  "data": [
+    { "id": "spedizioni", "title": "Spedizioni e consegne", "paragraphs": ["…"] },
+    { "id": "resi", "title": "Resi e rimborsi", "paragraphs": ["…"] },
+    { "id": "garanzia", "title": "Garanzia", "paragraphs": ["…"] },
+    { "id": "contatti", "title": "Contatti", "paragraphs": ["…"] }
+  ]
+}
+```
+
+- Gli `id` coincidono con le ancore della pagina (`#spedizioni`, `#resi`, `#garanzia`, `#contatti`) e i titoli con le voci della colonna Assistenza del footer.
+- L'assistente riceve le stesse sezioni come dati, a ogni richiesta, dalla stessa classe che costruisce la risposta dell'endpoint.
+- Le note legali (`/note-legali`) restano testi fissi nel frontend.
+
 ## Regole
 
 1. **Importi in centesimi**, mai float: `unsignedInteger` per `products.price`, `order_items.unit_price` e `orders.shipping_cost`; `unsignedBigInteger` per le somme `order_items.line_total`, `orders.subtotal`, `orders.total` e `payments.amount`. Il prezzo di un prodotto va da 1 a 999999 centesimi (9.999,99 €). I prezzi sono IVA inclusa: nessun calcolo delle imposte.
@@ -122,6 +144,7 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 15. **Visibilità degli ordini:** il cliente vede solo i propri ordini con `paid_at` valorizzato; l'admin li vede tutti (sezione "Ordini").
 16. **Cronologia:** ogni cambio di stato, compresa la creazione dell'ordine, scrive una riga in `order_status_changes` (sezione "Cronologia degli stati").
 17. **Periodo "mese corrente":** si calcola nel fuso dell'applicazione (`Europe/Rome`), dal primo giorno del mese alle 00:00 all'ultimo alle 23:59:59.
+18. **Conservazione:** ordini, righe, cronologia e pagamenti non si cancellano mai, nemmeno quando il cliente elimina l'account: l'utente viene anonimizzato e i suoi ordini restano per l'obbligo di conservazione di 10 anni (motivazione nella skill `account-security`, "Eliminazione dell'account").
 
 ## Catalogo
 
@@ -391,6 +414,16 @@ Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il ga
 
 Riferimento visivo: `design/mockups/04-admin.pdf`. Tutte le rotte hanno prefisso `/admin` e richiedono il ruolo `admin`.
 
+### Clienti eliminati
+
+Gli ordini di un cliente che ha eliminato l'account (`users.anonymized_at` valorizzata) restano nell'area admin con tutti i loro dati, compreso lo snapshot dell'indirizzo:
+
+- `customer` vale `{ "name": "Cliente eliminato", "email": null }` nell'elenco ordini, nel dettaglio e in `latest_orders` della dashboard. Il valore si calcola in un solo punto (un metodo del modello `User` o una Resource dedicata del cliente), non in ogni Resource.
+- Nella cronologia admin, una transizione fatta da quel cliente (annullamento) mostra «da Cliente eliminato».
+- La ricerca per email dell'elenco ordini non trova gli account anonimizzati: la loro email è fittizia.
+- Il frontend mostra `email` null senza la riga dell'email.
+- I due testi sono voluti: «Utente eliminato» è il valore salvato in `users.name`, neutro rispetto al ruolo; «Cliente eliminato» è l'etichetta che l'area admin mostra al posto del cliente. Le Resource admin usano sempre l'etichetta, mai il nome salvato.
+
 ### Dashboard (`GET /admin/dashboard`)
 
 Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid_at` valorizzato): i tentativi falliti e gli ordini `pending` non entrano mai.
@@ -491,7 +524,7 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 - Riga dell'elenco: `id`, `number`, `customer` (`name`, `email`), `created_at`, `items_count` (somma delle quantità, caricata con `withSum('items', 'quantity')`), `total`, `status`, `failed_payment` (booleano, stesso nome del filtro).
 
 `GET /admin/orders/{order}` restituisce `Admin\OrderResource`: i campi della `OrderResource` del cliente, più:
-- `customer`: `name` ed `email` dell'utente; il telefono è quello dello snapshot dell'indirizzo
+- `customer`: `name` ed `email` dell'utente, oppure «Cliente eliminato» ed `email` null per un account anonimizzato (sezione "Clienti eliminati"); il telefono è quello dello snapshot dell'indirizzo
 - `items_count`
 - `failed_payment`
 - `allowed_transitions`: array di stringhe con i valori verso cui l'admin può portare l'ordine adesso (`paid` → `["shipped", "cancelled"]`, `shipped` → `["delivered"]`, altrimenti `[]`)
@@ -534,6 +567,7 @@ Il negozio è **Casa del Silicio**: elettronica e accessori tech della propria l
   - un cliente demo con email verificata, indirizzi italiani validi e ordini in tutti gli stati
   - un cliente demo con doppia autenticazione attiva e segreto TOTP fisso, riportato nel README solo per la demo, così si può aggiungere all'app di autenticazione durante la presentazione
   - un cliente con email non verificata
+  - dalla Fase 3b, quando esiste `anonymized_at`: un cliente anonimizzato con un ordine consegnato, per mostrare «Cliente eliminato» nell'area admin
 - Da 15 a 30 clienti casuali.
 - Ordini distribuiti sugli ultimi 6 mesi, con ordini pagati anche nel mese corrente, così fatturato e dashboard hanno valori sensati, compresi alcuni tentativi di pagamento falliti visibili solo all'admin.
 - Ogni ordine ha la cronologia coerente con il suo stato e i suoi timestamp, con Marta Lenzi come autrice delle transizioni dell'admin, e la riga in `payments` (`succeeded`, `failed` o `refunded`).
@@ -541,7 +575,7 @@ Il negozio è **Casa del Silicio**: elettronica e accessori tech della propria l
 
 ## Mappa delle API del negozio
 
-Prefisso comune: `/api/v1`. Autenticazione, account e sicurezza sono nella skill `account-security`.
+Prefisso comune: `/api/v1`. Autenticazione, account, sicurezza ed eliminazione dell'account (`DELETE /me`) sono nella skill `account-security`; le rotte dell'assistente AI nella skill `ai-assistant`.
 
 **Pubbliche**
 
@@ -549,6 +583,9 @@ Prefisso comune: `/api/v1`. Autenticazione, account e sicurezza sono nella skill
 |---|---|---|
 | GET | /health | stato del servizio |
 | GET | /shop/settings | `shipping_cost` e `free_shipping_threshold` per i testi del negozio |
+| GET | /shop/support | sezioni della pagina Assistenza, usate anche dall'assistente AI |
+| GET | /assistant/status | disponibilità dell'assistente AI (skill `ai-assistant`) |
+| POST | /assistant/messages | risposta dell'assistente AI in streaming, limiter `assistant` (skill `ai-assistant`) |
 | GET | /categories | elenco delle categorie con descrizione, ordinate per `id` |
 | GET | /categories/{category:slug} | dettaglio categoria |
 | GET | /products | elenco con `search`, `category`, `min_price`, `max_price`, `in_stock`, `new`, `sort`, `page`, `per_page`; `meta.price_range` per lo slider |

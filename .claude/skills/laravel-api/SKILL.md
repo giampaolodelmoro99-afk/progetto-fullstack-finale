@@ -16,7 +16,7 @@ Ogni livello ha una sola responsabilità. Il controller coordina: non contiene l
 ```
 app/
 ├── Actions/{Area}/            # un caso d'uso = una classe
-├── Contracts/                 # interfacce (PaymentGateway, Security/...)
+├── Contracts/                 # interfacce (PaymentGateway, AiAssistant, Security/...)
 ├── Enums/                     # OrderStatus, PaymentStatus, UserRole, SecurityEventType
 ├── Events/  Listeners/
 ├── Exceptions/                # eccezioni di dominio con render()
@@ -30,12 +30,13 @@ app/
 ├── Observers/
 ├── Policies/
 ├── Providers/
-├── Services/{Area}/           # implementazioni delle interfacce
+├── Services/{Area}/           # implementazioni delle interfacce (Assistant/ per l'assistente AI)
 └── Support/                   # piccole classi di utilità senza stato (UserAgentLabel)
 config/
 ├── cors.php                   # origine del frontend, credenziali, exposed_headers con Retry-After
 ├── shop.php                   # spedizione, soglie ultimi pezzi e scorte basse, giorni delle novità
-└── security.php               # tempi di conferma, scadenze, eventi per pagina
+├── security.php               # tempi di conferma, scadenze, eventi per pagina
+└── assistant.php              # driver, Ollama, timeout, limiti e concorrenza dell'assistente AI (skill ai-assistant)
 database/
 ├── factories/
 └── seeders/
@@ -48,13 +49,13 @@ routes/
 ## Rotte
 
 - `routes/api.php` include i file di `routes/api/v1/` con prefisso `v1` e nome `v1.`.
-- `public.php`: catalogo, impostazioni del negozio (`GET /shop/settings`), health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
+- `public.php`: catalogo, impostazioni e testi dell'assistenza del negozio (`GET /shop/settings`, `GET /shop/support`), assistente AI (`GET /assistant/status`, `POST /assistant/messages`), health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
 - `customer.php`: middleware `auth:sanctum`.
 - `admin.php`: middleware `auth:sanctum` e `role:admin`, prefisso `admin`, nome `admin.`.
 - Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`).
 - Prodotti e categorie pubblici usano il route model binding sullo slug: `{product:slug}`. Le rotte admin usano l'id: `{product}`, `{category}`, `{order}`.
 - Impostazioni: `Shop\SettingsController` (`GET /shop/settings`) e `Admin\SettingsController` (`GET /admin/settings`), invocabili, restituiscono rispettivamente `SettingsResource` e `Admin\SettingsResource`, costruite sui valori di `config/shop.php` (skill `ecommerce-domain`, "Impostazioni esposte al frontend").
-- Rate limiter nominati definiti in `AppServiceProvider` (vedi anche la skill `account-security`).
+- Rate limiter nominati definiti in `AppServiceProvider` (vedi anche la skill `account-security`), compreso `assistant` della skill `ai-assistant`.
 
 ## Controller
 
@@ -156,7 +157,7 @@ final class StoreProductRequest extends FormRequest
 - Dipendenze iniettate nel costruttore.
 - Più scritture correlate stanno in `DB::transaction()`.
 - In caso di problema lanciano eccezioni di dominio, non restituiscono codici d'errore.
-- Chiamate a servizi esterni (pagamenti e rimborsi) mai dentro una transazione.
+- Chiamate a servizi esterni (pagamenti, rimborsi, assistente AI) mai dentro una transazione.
 - Cambi di stato dell'ordine:
   - `ChangeOrderStatusAction::execute(Order $order, OrderStatus $to, ?User $by = null, ?string $reason = null)` è l'unico punto che cambia `orders.status`: apre sempre `DB::transaction()` (annidata con savepoint quando il chiamante ne ha già una), rilegge l'ordine con `lockForUpdate()`, controlla `canTransitionTo()` (altrimenti `InvalidOrderTransitionException`), valorizza il timestamp corrispondente, scrive la riga in `order_status_changes` e invia la notifica al cliente solo per le transizioni dell'elenco chiuso della skill `ecommerce-domain` (`paid → shipped`, `shipped → delivered`, `paid → cancelled`). La notifica usa `afterCommit()`, così parte solo se la transazione va a buon fine. Così anche spedito e consegnato, chiamati dal controller, sono transazionali senza che il controller usi `DB`.
   - La creazione dell'ordine in `PlaceOrderAction` scrive la riga iniziale (`from_status` null, `to_status` `pending`) nella stessa transazione.
@@ -215,7 +216,7 @@ $exceptions->dontFlash([
 
 - Lo schema completo (tipi, nullable, default, chiavi, indici, cancellazione) e le decisioni che lo hanno fissato sono in `docs/database/er-diagram.md`. Dalla Fase 2 (migration e modelli) le migration sono la fonte: ogni migration che cambia il database aggiorna quel documento nello stesso task.
 - `foreignId()->constrained()` con `cascadeOnDelete()`, `restrictOnDelete()` o `nullOnDelete()` scelti consapevolmente e motivati nel piano.
-- FK verso `users`: il progetto non elimina utenti, ma ogni FK dichiara il comportamento. `restrictOnDelete()` per `orders.user_id` e `order_status_changes.changed_by`; `cascadeOnDelete()` per `addresses`, `carts`, `security_events`, `email_change_requests` e la tabella delle passkey.
+- FK verso `users`: il progetto non elimina utenti, li anonimizza (skill `account-security`, "Eliminazione dell'account"); ogni FK dichiara comunque il comportamento. `restrictOnDelete()` per `orders.user_id` e `order_status_changes.changed_by`; `cascadeOnDelete()` per `addresses`, `carts`, `security_events`, `email_change_requests` e la tabella delle passkey.
 - Indici sulle colonne usate nei filtri e negli ordinamenti.
 - `unsignedInteger` per stock e prezzi unitari (`products.price`, `order_items.unit_price`, `orders.shipping_cost`); `unsignedBigInteger` per le somme (`order_items.line_total`, `orders.subtotal`, `orders.total`, `payments.amount`).
 - `orders.number` è nullable e unico: dipende dall'id, quindi `PlaceOrderAction` lo scrive subito dopo l'insert, nella stessa transazione.

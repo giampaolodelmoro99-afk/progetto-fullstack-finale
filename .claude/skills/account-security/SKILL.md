@@ -1,6 +1,6 @@
 ---
 name: account-security
-description: Autenticazione e sicurezza dell'account — registrazione con verifica email, login con doppia autenticazione opzionale, TOTP con codici di recupero, passkey WebAuthn per l'accesso senza password e come secondo fattore, conferma dell'identità per le operazioni sensibili, recupero e cambio password, cambio email, sessioni, notifiche e registro degli eventi di sicurezza. Usala per qualsiasi lavoro su login, account, profilo e sicurezza, sia nel backend sia nel frontend.
+description: Autenticazione e sicurezza dell'account — registrazione con verifica email, login con doppia autenticazione opzionale, TOTP con codici di recupero, passkey WebAuthn per l'accesso senza password e come secondo fattore, conferma dell'identità per le operazioni sensibili, recupero e cambio password, cambio email, sessioni, notifiche, registro degli eventi di sicurezza ed eliminazione dell'account con anonimizzazione. Usala per qualsiasi lavoro su login, account, profilo e sicurezza, sia nel backend sia nel frontend.
 ---
 
 # Sicurezza dell'account
@@ -14,9 +14,10 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 3. Le **passkey** (WebAuthn) permettono sempre l'accesso senza password. Quando la doppia autenticazione è attiva valgono anche come secondo fattore al posto del codice: al login, al recupero password, al cambio password e nella conferma dell'identità. Senza doppia autenticazione non si chiedono mai come secondo fattore.
 4. I **codici di recupero** esistono solo con il TOTP: si generano alla sua conferma e si cancellano alla sua disattivazione. Registrare una passkey non genera codici.
 5. Con la doppia autenticazione attiva il secondo fattore (codice TOTP, codice di recupero o passkey) è richiesto al login con password, al recupero password, al cambio password e in ogni operazione sensibile.
-6. Ogni operazione sensibile invia una notifica email e scrive un evento di sicurezza.
+6. Ogni operazione sensibile invia una notifica email e scrive un evento di sicurezza. Unica eccezione: l'eliminazione dell'account invia la notifica ma non scrive l'evento, perché il registro dell'utente viene cancellato (sezione "Eliminazione dell'account").
 7. I segreti non si salvano mai in chiaro e non compaiono mai nelle risposte, tranne nel momento in cui l'utente deve vederli una sola volta.
 8. Le risposte non rivelano se un indirizzo email è registrato.
+9. L'eliminazione dell'account **anonimizza** l'utente invece di cancellarlo: gli ordini si conservano per gli obblighi fiscali, tutto il resto si cancella. Un account anonimizzato non può più accedere.
 
 ## Librerie
 
@@ -38,6 +39,7 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 | users.two_factor_recovery_codes | elenco degli hash bcrypt (`Hash::make`) dei codici di recupero, null senza TOTP | cast `encrypted:array`, `$hidden` |
 | users.two_factor_confirmed_at | data di attivazione della doppia autenticazione, null se non attiva | — |
 | users.two_factor_last_used_step | ultimo intervallo TOTP usato | impedisce il riutilizzo dello stesso codice |
+| users.anonymized_at | data dell'eliminazione dell'account, null per un account attivo | nuova migration nella Fase 3b; cast `datetime`, non fillable: la valorizza solo `DeleteAccountAction` |
 | passkeys (tabella della libreria, forma provvisoria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
 | password_reset_tokens | token di reset di Laravel | hash, scadenza 60 minuti |
 | email_change_requests | user_id, new_email, token_hash, cancel_token_hash, expires_at, confirmed_at, cancelled_at | hash SHA-256 in esadecimale (`char(64)`, indice unico), scadenza 60 minuti, monouso |
@@ -88,6 +90,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 - `login_challenge_ttl`: 300 secondi
 - `email_change_ttl`: 60 minuti
 - `recovery_codes_count`: 8
+- `account_deletion_pending_window`: 15 minuti (un ordine `pending` più recente blocca l'eliminazione dell'account)
 - `security_events_per_page`: 10
 
 ## Architettura del secondo fattore
@@ -113,7 +116,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 ### Registrazione e verifica email
 
-1. `POST /register`: crea un `customer` con `password_changed_at` valorizzata, invia l'email di verifica, avvia la sessione. Il frontend porta a `/verify-email` senza parametri: "Controlla la tua email", con il link valido 24 ore e "Invia di nuovo il link".
+1. `POST /register`: l'email non può avere il dominio di primo livello `.invalid` (sezione "Indirizzi `.invalid`"). Crea un `customer` con `password_changed_at` valorizzata, invia l'email di verifica, avvia la sessione. Il frontend porta a `/verify-email` senza parametri: "Controlla la tua email", con il link valido 24 ore e "Invia di nuovo il link".
 2. Il link nell'email punta al frontend (`/verify-email?...`) e contiene i parametri firmati dell'API: si configura con `VerifyEmail::createUrlUsing()`, che firma con `URL::temporarySignedRoute()` la rotta `v1.verification.verify` (le rotte hanno il prefisso di nome `v1.`). La callback personalizzata legge da sé la scadenza da `config('auth.verification.expire')`: 24 ore.
 3. La pagina del frontend chiama `POST /email/verify/{id}/{hash}` inoltrando `expires` e `signature`. La rotta è in `public.php` con il middleware `signed` e **non richiede l'autenticazione**: la protegge solo la firma del link, che copre id dell'utente, hash dell'email e scadenza.
    - **Motivo:** chi si registra dal computer e apre l'email dal telefono non deve fare login solo per confermare l'indirizzo. La firma basta perché lega il link a quell'utente e a quell'indirizzo, e scade.
@@ -137,6 +140,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
    - Non si usa il 419, che appartiene al CSRF e viene ripetuto dall'interceptor.
 5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login`. La passkey da sola basta, non si chiede altro.
 6. Credenziali errate: `InvalidCredentialsException` (422) con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi (non si usa `ValidationException`, che porta sempre `errors`), così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
+7. Account anonimizzato (`anonymized_at` valorizzata): la stessa `InvalidCredentialsException`, senza evento `login_failed`. Con email fittizia e password casuale l'accesso non riuscirebbe comunque; il controllo esplicito rende la regola indipendente da questo. Per difesa in profondità lo stesso controllo vale per `forgot-password` (nessuna email, stessa risposta generica) e per l'accesso con passkey.
 
 ### Recupero password
 
@@ -155,7 +159,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 ### Cambio email
 
-1. `POST /me/email` con il nuovo indirizzo, protetto da `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). Il nuovo indirizzo deve essere diverso dall'attuale e non già registrato.
+1. `POST /me/email` con il nuovo indirizzo, protetto da `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). Il nuovo indirizzo deve essere diverso dall'attuale, non già registrato e senza dominio di primo livello `.invalid` (sezione "Indirizzi `.invalid`").
 2. Crea una `email_change_requests` (annulla eventuali richieste precedenti in sospeso) e invia:
    - al **nuovo** indirizzo il link di conferma: `/confirm-email-change?token=...`
    - al **vecchio** indirizzo un avviso con il link di annullamento: `/cancel-email-change?token=...`
@@ -181,6 +185,40 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 4. `DELETE /me/passkeys/{passkey}` (`identity.confirmed`): rimozione, notifica, evento `passkey_removed` con `passkey_name`.
 5. L'interfaccia consiglia di registrare almeno due passkey, su dispositivi diversi.
 6. Se il browser non supporta WebAuthn, le opzioni passkey non vengono mostrate.
+
+### Eliminazione dell'account
+
+Si realizza nella Fase 3b (`docs/roadmap.md`), con la colonna `users.anonymized_at` aggiunta da una nuova migration.
+
+1. `DELETE /me`, con i middleware in quest'ordine: `can:delete,…` sull'utente autenticato (Policy), poi `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). La logica sta in `DeleteAccountAction`.
+2. **Chi può farlo:** solo un `customer`. Un admin riceve 403 dalla Policy, così il negozio non resta senza amministratori. Il permesso si controlla **prima** della conferma dell'identità: un admin riceve subito 403, senza che gli si chieda la password.
+3. **Ordini aperti:** sono aperti gli ordini `paid` e `shipped`, e gli ordini `pending` creati negli ultimi `account_deletion_pending_window` minuti (15), cioè un pagamento ancora in corso. Un ordine `pending` più vecchio è un orfano e non blocca per sempre l'eliminazione. Con ordini aperti: `AccountHasOpenOrdersException` (409) con `code` `account_has_open_orders` e il messaggio «Hai ordini ancora in corso: potrai eliminare l'account quando saranno consegnati o annullati.». Nessun effetto.
+4. **Prima della transazione** si legge l'indirizzo email originale e il nome, che servono alla notifica.
+5. **In `DB::transaction()`, con `lockForUpdate()` sull'utente** (il controllo degli ordini aperti si ripete sotto lock; un checkout che arriva dopo trova le sessioni chiuse e riceve 401):
+   - si cancellano indirizzi, carrello con le sue righe, eventi di sicurezza, richieste di cambio email, token di reset dell'indirizzo originale (`password_reset_tokens`) e tutte le sessioni dell'utente, compresa quella corrente
+   - si disattiva la doppia autenticazione: `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at` e `two_factor_last_used_step` a null
+   - si cancellano le passkey: la cancellazione si aggiunge a `DeleteAccountAction` nella Fase 3c, insieme alla tabella della libreria
+   - si anonimizza l'utente: `name` «Utente eliminato»; `email` fittizia e univoca `deleted-{id}@anonymized.invalid` (il dominio `.invalid` è riservato e non riceve posta); `password` con l'hash di una stringa casuale lunga; `email_verified_at` e `remember_token` a null; `anonymized_at` valorizzata
+   - ordini, righe, cronologia degli stati e pagamenti **non** si toccano
+6. **Dopo il commit:** notifica on-demand `AccountDeletedNotification` all'indirizzo originale (`Notification::route('mail', $originalEmail)`), con `afterCommit()`. Così parte solo se l'eliminazione è riuscita, e anche con un driver di coda asincrono non finisce all'indirizzo `.invalid`. Poi logout della guard `web`, invalidazione della sessione e risposta 204.
+7. Nessun evento di sicurezza: il registro dell'utente è appena stato cancellato.
+8. L'indirizzo originale torna libero: una nuova registrazione crea un account nuovo, senza gli ordini di quello eliminato.
+9. Nell'area admin gli ordini di un account anonimizzato mostrano «Cliente eliminato» (skill `ecommerce-domain`, "Area admin").
+
+**Motivazione (GDPR e obblighi fiscali).** Il diritto alla cancellazione (GDPR, art. 17) non si applica quando il trattamento serve ad adempiere un obbligo di legge (art. 17, par. 3, lett. b). Ordini, righe, snapshot dell'indirizzo di spedizione e pagamenti sono documentazione contabile che va conservata per 10 anni (art. 2220 del codice civile). Per questo:
+
+- si conservano solo quei dati, che restano staccati da un account riconoscibile: nome ed email dell'account sono sostituiti, mentre lo snapshot dell'indirizzo resta com'era al momento dell'acquisto, perché fa parte del documento contabile
+- si cancella tutto ciò che non serve a quell'obbligo: indirizzi salvati, carrello, sessioni, eventi di sicurezza, richieste di cambio email, passkey e doppia autenticazione
+- l'utente non viene cancellato fisicamente: `orders.user_id` e `order_status_changes.changed_by` hanno `restrictOnDelete` (`docs/database/er-diagram.md`, N1 e D13)
+
+La cancellazione automatica degli ordini dopo 10 anni è fuori dal progetto: è elencata nel README tra gli sviluppi futuri.
+
+### Indirizzi `.invalid`
+
+- Il dominio di primo livello `.invalid` è riservato (RFC 2606) e non riceve posta: il progetto lo usa per le email fittizie degli account anonimizzati.
+- Registrazione (`POST /register`) e cambio email (`POST /me/email`) rifiutano **qualunque** indirizzo che termina con `.invalid`, senza distinzione di maiuscole: 422 sul campo `email` con il messaggio «Inserisci un indirizzo email valido.».
+- Motivo: l'email fittizia `deleted-{id}@anonymized.invalid` è prevedibile. Se qualcuno potesse registrarla prima, l'indice unico su `users.email` farebbe fallire l'eliminazione dell'account `{id}`.
+- La regola sta in un solo punto (una Rule dedicata, es. `App\Rules\NotReservedEmailDomain`), usata da entrambe le Form Request.
 
 ### Panoramica, sessioni ed eventi
 
@@ -235,10 +273,11 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 | Attivare il TOTP, aggiungere o rimuovere una passkey | conferma dell'identità con password | conferma dell'identità con password + secondo fattore |
 | Disattivare il TOTP, rigenerare i codici | — | conferma dell'identità con password + secondo fattore |
 | Annullare un cambio email in sospeso | sessione autenticata o link dell'email | sessione autenticata o link dell'email |
+| Eliminare l'account (solo cliente, senza ordini aperti) | conferma dell'identità con password + dialog di conferma esplicito | conferma dell'identità con password + secondo fattore + dialog di conferma esplicito |
 
 ## Notifiche email (in italiano)
 
-Verifica email, reset password, password cambiata, conferma cambio email (nuovo indirizzo), avviso cambio email (vecchio indirizzo), cambio email annullato dal profilo, email cambiata, doppia autenticazione attivata o disattivata, codici di recupero rigenerati, codice di recupero usato, passkey aggiunta o rimossa. Ogni avviso indica data, ora e dispositivo (etichetta di `UserAgentLabel`), e invita a cambiare la password se l'operazione non è stata fatta dall'utente. L'email di verifica dice che il link vale 24 ore; quelle di reset e di cambio email dicono 60 minuti.
+Verifica email, reset password, password cambiata, conferma cambio email (nuovo indirizzo), avviso cambio email (vecchio indirizzo), cambio email annullato dal profilo, email cambiata, doppia autenticazione attivata o disattivata, codici di recupero rigenerati, codice di recupero usato, passkey aggiunta o rimossa, account eliminato. Ogni avviso indica data, ora e dispositivo (etichetta di `UserAgentLabel`), e invita a cambiare la password se l'operazione non è stata fatta dall'utente. Fa eccezione l'avviso di account eliminato: va all'indirizzo originale, indica data e ora, dice che gli ordini restano conservati per gli obblighi fiscali e, invece di invitare a cambiare la password (non c'è più un account), invita a contattare l'assistenza (sezione `contatti` di `GET /shop/support`) se l'operazione non è stata fatta dall'utente. L'email di verifica dice che il link vale 24 ore; quelle di reset e di cambio email dicono 60 minuti.
 
 ## Password
 
@@ -256,6 +295,7 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 | `verification` | 6 al minuto per utente, per IP se ospite |
 | `email-change` | 3 all'ora per utente |
 | `identity-confirmation` | 5 al minuto per utente |
+| `assistant` | 10 al minuto per utente, per IP se ospite (skill `ai-assistant`) |
 
 - `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
 - `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`.
@@ -276,6 +316,12 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 - Sotto i campi della nuova password, l'elenco dei requisiti si aggiorna mentre l'utente scrive, con le stesse regole dello schema Zod.
 - I codici di recupero si mostrano una volta sola, con copia e download in un file `.txt`.
 - L'attività recente mostra la prima pagina e il pulsante "Mostra altre attività" finché ci sono pagine successive.
+- Eliminazione dell'account (Fase 9, posizione e testi dal Design E):
+  - sezione "Elimina account" con il pulsante «Elimina l'account» in colore errore
+  - il pulsante apre un `Dialog` di conferma esplicito, che elenca cosa si cancella e dice che gli ordini restano conservati per gli obblighi fiscali; il pulsante di conferma resta disabilitato finché l'utente non spunta «Ho capito che l'operazione non si può annullare»
+  - la richiesta `DELETE /me` porta la descrizione `identityPrompt` («Prima di eliminare l'account, conferma che sei tu.»); il 423 lo gestisce l'interceptor
+  - dopo il 204: cache di TanStack Query svuotata, navigazione alla home e Snackbar «Il tuo account è stato eliminato.»
+  - un 409 `account_has_open_orders` lascia il dialog aperto con l'`Alert` del messaggio ricevuto
 
 ## Test obbligatori
 
@@ -311,3 +357,4 @@ Oltre ai casi standard della skill `testing`:
 - notifiche inviate (`Notification::fake()`) ed eventi di sicurezza registrati
 - segreti mai presenti nelle risposte JSON
 - rate limiting sulle rotte di autenticazione, su `PUT /me/password` (sesto tentativo nel minuto) e su `DELETE /me/email-change`: 429 con header `Retry-After`
+- eliminazione dell'account: casi della skill `testing`, sezione "Eliminazione dell'account"

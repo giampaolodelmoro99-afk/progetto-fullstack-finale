@@ -1,6 +1,6 @@
 ---
 name: react-architecture
-description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore, categorie e impostazioni del negozio lette dall'API, carrello, checkout con i dati della carta solo in memoria e conferma d'ordine, pagine raggiunte dai link email, area account con profilo, ordini e sicurezza, area admin (dashboard, prodotti con immagini, categorie, ordini, modifiche non salvate), TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419, 423 e 429, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
+description: Architettura del frontend React del progetto — struttura per feature, React Router con layout e rotte protette, pagine statiche con ancore e testi dell'assistenza letti dall'API, categorie e impostazioni del negozio lette dall'API, widget dell'assistente AI, carrello, checkout con i dati della carta solo in memoria e conferma d'ordine, pagine raggiunte dai link email, area account con profilo, ordini e sicurezza, area admin (dashboard, prodotti con immagini, categorie, ordini, modifiche non salvate), TanStack Query per i dati del server, client axios con cookie Sanctum e CSRF, gestione degli errori 401, 419, 423 e 429, autenticazione, form con React Hook Form e Zod, stati di una vista e convenzioni di codice. Usala per qualsiasi modifica in frontend/ che non sia puramente visiva.
 ---
 
 # React — architettura del frontend
@@ -32,7 +32,8 @@ src/
 │   ├── cart/
 │   ├── checkout/
 │   ├── account/
-│   ├── settings/             # api/ hooks/: useShopSettings, useAdminSettings
+│   ├── settings/             # api/ hooks/: useShopSettings, useAdminSettings, useSupportContent
+│   ├── assistant/            # widget dell'assistente AI (skill ai-assistant)
 │   └── admin/                # navigation.js; dashboard/ products/ categories/ orders/, ognuna con api/ hooks/ components/ pages/
 ├── components/               # condivisi: feedback/, form/, data-display/, navigation/
 ├── layouts/                  # StoreLayout, AuthLayout, AccountLayout, AdminLayout
@@ -116,7 +117,7 @@ export const paths = {
 
 ## Pagine statiche (`features/info`)
 
-Due pagine in `StoreLayout`, con testi fissi nel frontend e un'ancora (`id`) su ogni sezione:
+Due pagine in `StoreLayout`, con un'ancora (`id`) su ogni sezione. Le note legali hanno testi fissi nel frontend; i testi dell'assistenza arrivano dal backend, perché li usa anche l'assistente AI:
 
 | Pagina | Percorso | Sezioni e ancore |
 |---|---|---|
@@ -125,7 +126,8 @@ Due pagine in `StoreLayout`, con testi fissi nel frontend e un'ancora (`id`) su 
 
 - Gli identificativi delle sezioni sono costanti esportate dalla feature e usate sia dalla pagina sia dai link, mai stringhe ripetute.
 - React Router non scorre fino all'ancora: la pagina legge `location.hash` e porta in vista la sezione corrispondente, anche quando cambia solo l'hash.
-- Costo di spedizione e soglia della spedizione gratuita arrivano da `useShopSettings()` (sezione "Impostazioni del negozio"); consegna in 24/48 ore, reso entro 30 giorni e garanzia di 2 anni sono testi fissi.
+- `/assistenza` legge le sezioni con `useSupportContent()` da `GET /shop/support` (`queryKeys.settings.support`, `staleTime: Infinity`): titoli, paragrafi e importi della spedizione arrivano già pronti dal backend (skill `ecommerce-domain`, "Testi dell'assistenza"). La pagina gestisce i quattro stati di una vista. Gli `id` delle sezioni ricevuti coincidono con le costanti delle ancore usate dai link del footer.
+- `/note-legali` ha testi fissi nel frontend.
 
 ## Navigazione e footer del negozio
 
@@ -270,6 +272,7 @@ Dal mockup `03-account.pdf`.
   - attivazione TOTP con lo stato del passo in `useState` del componente; i codici di recupero vivono solo nello stato locale del passo 3 e si perdono chiudendolo
   - passkey da `GET /me/passkeys`, con aggiunta, rinomina e rimozione; le rotte `identity.confirmed` passano la descrizione dell'operazione nella configurazione della richiesta
   - attività recente con `useInfiniteQuery` su `GET /me/security-events` (`queryKeys.security.events`), `getNextPageParam` dai `meta` della paginazione e pulsante "Mostra altre attività" finché `hasNextPage`
+- **Elimina account** (Fase 9, posizione dal Design E): mutation su `DELETE /me` con `identityPrompt`; dopo il 204 `queryClient.clear()`, navigazione alla home e Snackbar. Flusso, dialog e testi nella skill `account-security`, "Eliminazione dell'account" e "Frontend".
 
 ## Area admin (`features/admin`)
 
@@ -331,7 +334,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 ## Dati dal server (TanStack Query)
 
 - Tutto lo stato che arriva dal server passa da TanStack Query. Vietato il pattern `useEffect` + `useState` per caricare dati.
-- `features/x/api/*.js`: funzioni pure che usano `httpClient` e restituiscono `response.data`.
+- `features/x/api/*.js`: funzioni pure che usano `httpClient` e restituiscono `response.data`. Unica eccezione: la funzione di streaming dell'assistente AI usa `fetch`, perché axios nel browser non legge una risposta a frammenti, e replica a mano CSRF, 419 e normalizzazione degli errori (skill `ai-assistant`, "Frontend").
 - `features/x/hooks/*.js`: `useQuery` e `useMutation` che usano quelle funzioni.
 - Query key centralizzate in `api/queryKeys.js` come factory.
 - Dopo una mutation si invalidano le query toccate (aggiunta al carrello → `cart`; annullamento di un ordine dal cliente → `orders`, `products` e le query admin di ordini, prodotti e dashboard; cambio di stato dall'admin → `admin.orders` e `admin.dashboard`; prodotti e categorie dall'admin → le query admin e quelle pubbliche di `products` e `categories`; modifiche di sicurezza → `me` e `security`).
@@ -360,6 +363,10 @@ export const queryKeys = {
   settings: {
     shop: ['settings', 'shop'],
     admin: ['settings', 'admin'],
+    support: ['settings', 'support'],
+  },
+  assistant: {
+    status: ['assistant', 'status'],
   },
   admin: {
     dashboard: ['admin', 'dashboard'],
@@ -425,7 +432,7 @@ export function useProducts(filters) {
 - Dati del server: TanStack Query.
 - Stato di interfaccia locale: `useState`.
 - Stato del form prodotto e delle immagini non ancora salvate: React Hook Form della pagina.
-- Stato globale: solo autenticazione, notifiche (`NotificationProvider` con Snackbar) e conferma dell'identità (`IdentityConfirmationProvider`).
+- Stato globale: solo autenticazione, notifiche (`NotificationProvider` con Snackbar) e conferma dell'identità (`IdentityConfirmationProvider`). Unica eccezione di feature: la conversazione dell'assistente AI in `AssistantProvider` sotto `StoreLayout`, solo in memoria (skill `ai-assistant`).
 - Codici di recupero, chiave TOTP e QR code: solo nello stato locale del componente che li mostra, mai in cache di TanStack Query oltre la risposta della mutation, `localStorage`, URL o log.
 - Stato del checkout: locale alla pagina, mai globale né persistito (sezione "Checkout").
 - Niente Redux né Zustand.
