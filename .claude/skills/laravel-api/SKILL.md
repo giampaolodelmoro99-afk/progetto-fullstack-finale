@@ -147,7 +147,7 @@ final class StoreProductRequest extends FormRequest
 - Enum esposti come oggetto: `{ "value": "paid", "label": "Pagato" }`.
 - Elenchi paginati con `ProductResource::collection($paginator)`, che produce `data`, `links` e `meta`.
 - Resource distinte quando la forma cambia: `ProductResource` (pubblica) e `Admin\ProductResource` (con SKU, stock reale, `stock_status`, stato attivo), `OrderResource` e `Admin\OrderResource` (cliente, `allowed_transitions`, pagamento anche fallito), `OrderStatusChangeResource` (senza autore né `reason`) e `Admin\OrderStatusChangeResource` (con `changed_by`, `reason` e descrizione con l'autore), `CategoryResource` e `Admin\CategoryResource` (con `products_count` e `can_delete`). Le forme sono nella skill `ecommerce-domain`.
-- La descrizione di una riga di cronologia si compone in un solo punto, un metodo del modello `OrderStatusChange` (es. `description(bool $withAuthor)`), che le due Resource chiamano.
+- La descrizione di una riga di cronologia si compone in un solo punto, il metodo `OrderStatusChange::description(bool $withAuthor)`, che le due Resource chiamano. La variante admin legge `changedBy`: il controller carica `statusChanges.changedBy` con l'eager loading, altrimenti `shouldBeStrict` segnala il lazy loading.
 - Nessun dato sensibile nelle Resource: mai password, segreti TOTP, codici di recupero o token.
 
 ## Action
@@ -166,14 +166,14 @@ final class StoreProductRequest extends FormRequest
 
 ## Modelli
 
-- `$fillable` esplicito; `$hidden` per ogni attributo sensibile; cast nel metodo `casts()` (enum, boolean, datetime, integer, encrypted).
+- Attributi assegnabili espliciti con `#[Fillable]`; ogni attributo sensibile in `#[Hidden]`; cast nel metodo `casts()` (enum, boolean, datetime, integer, encrypted).
 - Relazioni con tipo di ritorno dichiarato.
-- Filtri come scope locali: `search`, `inCategory`, `priceBetween`, `inStock`, `active`, `newArrivals`; per gli ordini `paidInMonth(string $month)`, con i limiti del mese nel fuso dell'applicazione, usato sia dalla dashboard sia dal filtro `paid_month` dell'elenco admin; ordinamenti con uno scope `sortBy` che accetta solo `newest`, `price_asc` e `price_desc` e aggiunge `id` come secondo criterio.
+- Scope locali con l'attributo `#[Scope]`, come gli altri attributi di Laravel già usati nei modelli (`#[Fillable]`, `#[Hidden]`, `#[ObservedBy]`). Prodotti: `search` (nome e descrizione breve, catalogo pubblico), `searchByNameOrSku` (elenco admin), `inCategory`, `priceBetween`, `inStock`, `active`, `newArrivals`, `lowStock`. Ordini: `visibleToCustomer`, `failedPayments` (al plurale, perché `failed_payment` è l'accessor), `search` (numero o email del cliente) e `paidInMonth(string $month)`, con i limiti del mese nel fuso dell'applicazione, usato sia dalla dashboard sia dal filtro `paid_month` dell'elenco admin; ordinamenti con uno scope `sortBy` che accetta solo `newest`, `price_asc` e `price_desc` e aggiunge `id` come secondo criterio.
 - Valori calcolati (`is_new`, `availability` del prodotto) in un solo punto, un accessor o una piccola classe dedicata, letti dalle soglie di `config/shop.php`: la Resource li espone, i controller non li calcolano.
 - `Model::shouldBeStrict(! app()->isProduction())` in `AppServiceProvider`: in sviluppo il lazy loading e gli attributi mancanti generano un errore.
 - Eager loading esplicito dove si caricano le relazioni.
 - Slug generati in un Observer. `ProductObserver` e `CategoryObserver` lo impostano solo in `creating`: lo slug della categoria non cambia più, nemmeno se cambia il nome.
-- `ProductObserver` rende lo slug unico anche rispetto ai prodotti eliminati con soft delete: in caso di collisione aggiunge un suffisso numerico (`-2`, `-3`…), troncando prima la base perché slug e suffisso stiano in 255 caratteri. Per le categorie la collisione non arriva mai all'Observer, perché la Form Request la respinge con un 422 su `name`.
+- `ProductObserver` rende lo slug unico anche rispetto ai prodotti eliminati con soft delete: in caso di collisione aggiunge un suffisso numerico (`-2`, `-3`…), troncando prima la base perché slug e suffisso stiano in 255 caratteri. Se il nome non produce uno slug (es. «!!!»), la base è `prodotto` (`categoria` per le categorie). Lo slug non è fillable e l'Observer lo genera sempre dal nome, anche se viene passato. Per le categorie la collisione non arriva mai all'Observer, perché la Form Request la respinge con un 422 su `name`.
 - `OrderStatusChange` ha `const UPDATED_AT = null`, cast di `from_status` e `to_status` a `OrderStatus` e la relazione `changedBy()` verso `User`.
 - `SecurityEvent` ha `const UPDATED_AT = null` e cast di `type` a `SecurityEventType` e di `metadata` ad `array`.
 
@@ -220,8 +220,9 @@ $exceptions->dontFlash([
 - `unsignedInteger` per stock e prezzi unitari (`products.price`, `order_items.unit_price`, `orders.shipping_cost`); `unsignedBigInteger` per le somme (`order_items.line_total`, `orders.subtotal`, `orders.total`, `payments.amount`).
 - `orders.number` è nullable e unico: dipende dall'id, quindi `PlaceOrderAction` lo scrive subito dopo l'insert, nella stessa transazione.
 - `product_images`: indice su (`product_id`, `position`) **non** unico, così il riordino non viola il vincolo a metà aggiornamento.
-- `order_status_changes`: `order_id` con `cascadeOnDelete()` (la cronologia non esiste senza l'ordine), `changed_by` nullable con `restrictOnDelete()` (null significa sistema: un utente eliminato non deve diventare "sistema"; il progetto non elimina utenti che hanno ordini o transizioni), `from_status` nullable, `to_status`, `reason` nullable, solo `timestamp('created_at')->useCurrent()`, indice su (`order_id`, `created_at`).
-- `security_events`: solo `timestamp('created_at')->useCurrent()`, indice su (`user_id`, `created_at`).
+- `order_status_changes`: `order_id` con `cascadeOnDelete()` (la cronologia non esiste senza l'ordine), `changed_by` nullable con `restrictOnDelete()` (null significa sistema: un utente eliminato non deve diventare "sistema"; il progetto non elimina utenti che hanno ordini o transizioni), `from_status` nullable, `to_status`, `reason` nullable, solo `timestamp('created_at')` non nullable e **senza default**, indice su (`order_id`, `created_at`).
+- `security_events`: solo `timestamp('created_at')` non nullable e **senza default**, indice su (`user_id`, `created_at`).
+- Niente `useCurrent()` sulle colonne data: Laravel scrive le date nel fuso dell'applicazione (`Europe/Rome`), mentre `CURRENT_TIMESTAMP` di MySQL userebbe il fuso della sessione (UTC). Un insert fuori da Eloquent senza data deve fallire, non salvare un'ora UTC in un database in ora italiana. Eloquent valorizza sempre `created_at` anche con `const UPDATED_AT = null`.
 - `orders` con indice composto (`status`, `paid_at`): serve al filtro `status`, a `failed_payment` (`cancelled` e `paid_at` null) e a `orders_to_ship`. I tentativi rifiutati si riconoscono dall'ordine, non da `payments.status`, che non ha indice.
 - Il fuso dell'applicazione è `Europe/Rome` (`config/app.php`): il "mese corrente" della dashboard e le date delle Resource dipendono da questo.
 
