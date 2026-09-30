@@ -2,13 +2,19 @@ COMPOSE = docker compose
 APP = $(COMPOSE) exec app
 NODE = $(COMPOSE) exec node
 
-.PHONY: up down build shell logs migrate fresh test test-backend test-frontend coverage-backend coverage-frontend lint artisan composer npm
+.PHONY: up up-ai up-gpu down build shell logs migrate fresh test test-backend test-frontend coverage-backend coverage-frontend lint artisan composer npm ask
 
 up:
 	$(COMPOSE) up -d
 
+up-ai:
+	$(COMPOSE) --profile ai up -d
+
+up-gpu:
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.gpu.yml --profile ai up -d
+
 down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile ai down
 
 build:
 	$(COMPOSE) build
@@ -51,3 +57,6 @@ composer:
 
 npm:
 	$(NODE) npm $(cmd)
+
+ask:
+	$(APP) php artisan assistant:ask --timing "$(q)"

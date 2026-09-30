@@ -1,0 +1,14 @@
+# Optional NVIDIA GPU for the assistant model. Requires the NVIDIA driver and
+# the NVIDIA Container Toolkit on the host (see README). Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile ai up -d
+# or: make up-gpu
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

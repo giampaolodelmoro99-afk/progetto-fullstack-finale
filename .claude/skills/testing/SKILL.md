@@ -149,7 +149,7 @@ Regole nella skill `ai-assistant`. `AiAssistant` sostituito con `FakeAiAssistant
 - Concorrenza: con lo slot occupato nel test (`Cache::lock('assistant:slot:1')` preso prima della richiesta e `max_concurrent` 1) → 503 `assistant_busy` senza chiamare il finto; lo slot risulta libero (`Cache::lock('assistant:slot:1')->get()` riesce) dopo una risposta completa, dopo una generazione terminata con errore e dopo un 503 `assistant_unavailable`; in ognuno dei tre casi la richiesta successiva risponde 200.
 - Limiter `assistant`: undicesima richiesta nel minuto → 429 con `Retry-After`, per utente e per IP da ospite.
 - Tool: `search_products` con un dataset di filtri restituisce solo prodotti attivi e non eliminati; prezzi in euro convertiti in centesimi; argomenti non validi scartati.
-- `OllamaAssistant` con `Http::fake()`, sull'endpoint con il driver `ollama` e un utente autenticato con nome ed email riconoscibili: il corpo inviato a `/api/chat` contiene il modello configurato, nessun messaggio di ruolo `system`, i messaggi con i soli ruoli ammessi, le sezioni dell'assistenza e le categorie come dati; non contiene nome, email, indirizzi, carrello o ordini di quell'utente.
+- `OllamaAssistant` con `Http::fake()`, sull'endpoint con il driver `ollama` e un utente autenticato con nome ed email riconoscibili: il corpo inviato a `/api/chat` contiene il modello configurato, nessun messaggio di ruolo `system`, i messaggi con i soli ruoli ammessi, gli slug delle categorie nell'enum di `search_products` e nessun marcatore `<dati_negozio>` proveniente dai messaggi; non contiene nome, email, indirizzi, carrello o ordini di quell'utente.
 - Il contenuto dei messaggi non compare nei log (`Log::spy()`).
 
 ### Cronologia e annullamento

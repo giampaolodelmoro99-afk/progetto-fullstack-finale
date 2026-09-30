@@ -67,3 +67,16 @@ arch('console commands are final and suffixed')
     ->expect('App\Console\Commands')
     ->toBeFinal()
     ->toHaveSuffix('Command');
+
+arch('services are final')
+    ->expect('App\Services')
+    ->toBeFinal();
+
+arch('exceptions are final and suffixed')
+    ->expect('App\Exceptions')
+    ->toBeFinal()
+    ->toHaveSuffix('Exception');
+
+arch('the assistant services implement the contract')
+    ->expect(['App\Services\Assistant\OllamaAssistant', 'App\Services\Assistant\FakeAiAssistant'])
+    ->toImplement('App\Contracts\AiAssistant');

@@ -31,14 +31,16 @@ Il container `node` fa lo stesso per il frontend: crea `.env` se manca e install
 | node | Vite dev server | http://localhost:5173 |
 | mailpit | cattura delle email (SMTP 1025) | http://localhost:8025 |
 | phpmyadmin | ispezione del database | http://localhost:8081 |
+| ollama | modello dell'assistente AI (qwen3.5:4b), avviato da `docker/ollama/entrypoint.sh`; solo con il profilo `ai` | solo interno, `ollama:11434` nella rete Docker; porta non pubblicata |
 
 Scelte vincolanti:
 - Nessun Nginx, nessun Redis, nessun worker delle code.
 - `QUEUE_CONNECTION=sync`: i listener e le notifiche implementano comunque `ShouldQueue`, così in produzione basta cambiare driver e avviare un worker.
 - Cache e sessioni usano il driver `database`.
+- L'assistente AI è nel profilo Compose `ai`: `docker compose up` non scarica nulla di Ollama e il negozio funziona con l'assistente "non disponibile"; `docker compose --profile ai up` (`make up-ai`) lo avvia. `app` non dipende da `ollama`. La GPU NVIDIA è facoltativa, con `docker-compose.gpu.yml` (`make up-gpu`).
 - Frontend e backend sono su porte diverse: CORS è configurato con credenziali e Sanctum riconosce `localhost:5173` come frontend stateful.
 
-Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fresh`, `test`, `test-backend`, `test-frontend`, `coverage-backend`, `coverage-frontend`, `lint`, `artisan cmd="..."`, `composer cmd="..."`, `npm cmd="..."`.
+Comandi del `Makefile`: `up`, `up-ai` (profilo `ai`), `up-gpu` (profilo `ai` con `docker-compose.gpu.yml`), `down` (ferma anche il profilo `ai`), `build`, `shell`, `logs`, `migrate`, `fresh`, `test`, `test-backend`, `test-frontend`, `coverage-backend`, `coverage-frontend`, `lint`, `artisan cmd="..."`, `composer cmd="..."`, `npm cmd="..."`, `ask q="..."` (`php artisan assistant:ask --timing`).
 
 ## Lingua e convenzioni
 

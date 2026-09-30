@@ -32,3 +32,16 @@ function frontendOrigin(): string
 {
     return 'http://localhost:5173';
 }
+
+/**
+ * Iterates the events of an assistant answer. The events received before an
+ * exception stay in $received.
+ */
+function drainAssistantEvents(iterable $events, array &$received = []): array
+{
+    foreach ($events as $event) {
+        $received[] = $event;
+    }
+
+    return $received;
+}
