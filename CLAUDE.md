@@ -45,7 +45,7 @@ Comandi del `Makefile`: `up`, `down`, `build`, `shell`, `logs`, `migrate`, `fres
 - Rispondi, spiega e scrivi i piani in italiano.
 - Tutto il codice è in inglese: classi, variabili, funzioni, tabelle, colonne, chiavi JSON, nomi di rotte, descrizioni dei test.
 - I testi mostrati all'utente finale (interfaccia, messaggi di validazione, email) sono in italiano.
-- Messaggi di commit in inglese, formato Conventional Commits.
+- Messaggi di commit in italiano, con i prefissi dei Conventional Commits (`feat`, `fix`, `docs`, `test`, `refactor`, `chore`), per esempio "feat: aggiunge seeder e dati demo".
 
 ## Modo di lavorare
 
