@@ -88,6 +88,7 @@ it('records a failed attempt with context and method but never the code', functi
     'login' => [SecondFactorContext::Login, 'login'],
     'password reset' => [SecondFactorContext::PasswordReset, 'password_reset'],
     'identity confirmation' => [SecondFactorContext::IdentityConfirmation, 'identity_confirmation'],
+    'password change' => [SecondFactorContext::PasswordChange, 'password_change'],
 ]);
 
 it('requires method and code without recording an attempt', function (?SecondFactorMethod $method, array $payload, array $fields) {

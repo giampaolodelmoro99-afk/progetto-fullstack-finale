@@ -68,6 +68,28 @@ class OrderSeeder extends Seeder
         $this->seedGiuliaOrders();
         $this->seedCurrentMonthOrder();
         $this->seedHistory();
+        $this->seedAnonymizedCustomerOrder();
+    }
+
+    /**
+     * The delivered order of the customer who deleted the account: the
+     * address snapshot stays as it was at the purchase, because it is part of
+     * the accounting record. Seeded last, so the draws of the other orders do
+     * not change.
+     */
+    private function seedAnonymizedCustomerOrder(): void
+    {
+        $customer = User::whereNotNull('anonymized_at')->firstOrFail();
+
+        $this->createOrder($customer, today()->subDays(60)->setTime(17, 25), 'delivered', ['CDS-AUD-010' => 1], [
+            'full_name' => 'Sara Moretti',
+            'street' => 'Via dei Mille 18',
+            'postal_code' => '40121',
+            'city' => 'Bologna',
+            'province' => 'BO',
+            'country' => 'IT',
+            'phone' => '+39 347 555 0192',
+        ]);
     }
 
     /**
@@ -196,8 +218,9 @@ class OrderSeeder extends Seeder
 
     /**
      * @param  array<string, int>  $lines  quantities by SKU
+     * @param  array<string, string>|null  $shippingAddress  snapshot, the default address of the customer when null
      */
-    private function createOrder(User $customer, CarbonInterface $createdAt, string $state, array $lines): Order
+    private function createOrder(User $customer, CarbonInterface $createdAt, string $state, array $lines, ?array $shippingAddress = null): Order
     {
         $items = OrderItem::factory()
             ->count(count($lines))
@@ -213,7 +236,7 @@ class OrderSeeder extends Seeder
             ->create([
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
-                'shipping_address' => $this->addressSnapshot($customer),
+                'shipping_address' => $shippingAddress ?? $this->addressSnapshot($customer),
             ]);
     }
 

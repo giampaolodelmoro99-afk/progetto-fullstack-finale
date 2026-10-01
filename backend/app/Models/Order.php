@@ -121,6 +121,22 @@ class Order extends Model
     }
 
     /**
+     * Orders that block the account deletion: paid or shipped, and pending
+     * orders younger than account_deletion_pending_window minutes, whose
+     * payment may still be in progress. An older pending order is an orphan.
+     */
+    #[Scope]
+    protected function openForAccountDeletion(Builder $query): void
+    {
+        $query->where(function (Builder $query) {
+            $query->whereIn('status', [OrderStatus::Paid, OrderStatus::Shipped])
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('status', OrderStatus::Pending)
+                    ->where('created_at', '>=', now()->subMinutes(config('security.account_deletion_pending_window'))));
+        });
+    }
+
+    /**
      * Orders paid in the given month (Y-m), with the bounds in the application timezone.
      */
     #[Scope]

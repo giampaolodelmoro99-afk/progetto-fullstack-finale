@@ -11,6 +11,7 @@ enum SecondFactorContext: string
     case Login = 'login';
     case PasswordReset = 'password_reset';
     case IdentityConfirmation = 'identity_confirmation';
+    case PasswordChange = 'password_change';
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum SecondFactorContext: string
             self::Login => 'Accesso',
             self::PasswordReset => 'Recupero password',
             self::IdentityConfirmation => 'Conferma dell\'identità',
+            self::PasswordChange => 'Cambio password',
         };
     }
 }

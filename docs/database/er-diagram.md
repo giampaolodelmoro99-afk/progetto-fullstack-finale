@@ -11,7 +11,7 @@ Convenzioni del documento:
 - I tipi sono i metodi di `Blueprint` usati nelle migration (`unsignedInteger`, `string(64)`, `json`…). `id` è `bigIncrements`, `foreignId` è `unsignedBigInteger`.
 - "Nullable" vale **no** se non indicato diversamente; "—" nella colonna Default significa nessun default.
 - `created_at` e `updated_at` creati da `timestamps()` sono nullable in tutte le tabelle, anche dove il diagramma non lo indica.
-- Lo schema descrive lo stato finale. Le colonne annotate con una fase (es. `anonymized_at "nullable, Fase 3b"`) sono previste e non ancora migrate.
+- Lo schema descrive lo stato finale. Le tabelle annotate come provvisorie o con una fase (es. `passkeys`, Fase 3c) sono previste e non ancora migrate.
 - Le tabelle e le colonne che non esistono ancora nascono da **nuove** migration: quelle già committate non si modificano (CLAUDE.md, "Modo di lavorare").
 - Fino alla Fase 2 (migration e modelli) questo documento si allinea alle skill; dalla Fase 2 la fonte sono le migration, e il documento si aggiorna nello stesso task di ogni migration che cambia il database.
 
@@ -31,7 +31,7 @@ erDiagram
         text two_factor_recovery_codes "nullable, encrypted:array, bcrypt"
         timestamp two_factor_confirmed_at "nullable"
         bigint two_factor_last_used_step "nullable"
-        timestamp anonymized_at "nullable, Fase 3b"
+        timestamp anonymized_at "nullable"
         string remember_token "nullable"
         timestamp created_at
         timestamp updated_at
@@ -276,7 +276,7 @@ La tabella `passkeys` è **provvisoria**: la sua forma dipende dalla libreria We
 
 ### users
 
-Account di clienti e amministratori, con i dati della doppia autenticazione. Le colonne `id`…`updated_at` di Laravel sono nella migration committata; `role`, `password_changed_at` e le quattro colonne `two_factor_*` arrivano da una **nuova** migration unica (D8); `anonymized_at` arriverà da un'altra nuova migration nella Fase 3b (D13).
+Account di clienti e amministratori, con i dati della doppia autenticazione. Le colonne `id`…`updated_at` di Laravel sono nella migration committata; `role`, `password_changed_at` e le quattro colonne `two_factor_*` arrivano da una **nuova** migration unica (D8); `anonymized_at` da un'altra nuova migration della Fase 3b, `2026_10_01_000001_add_anonymized_at_to_users_table` (D13).
 
 | Colonna | Tipo | Nullable | Default | Chiave | Note |
 |---|---|---|---|---|---|
@@ -291,7 +291,7 @@ Account di clienti e amministratori, con i dati della doppia autenticazione. Le 
 | two_factor_recovery_codes | `text` | sì | null | | hash bcrypt dei codici (D12), cast `encrypted:array`, in `$hidden`; null senza TOTP |
 | two_factor_confirmed_at | `timestamp` | sì | null | | non null = doppia autenticazione attiva |
 | two_factor_last_used_step | `unsignedBigInteger` | sì | null | | ultimo intervallo TOTP usato, impedisce il riutilizzo del codice |
-| anonymized_at | `timestamp` | sì | null | | **colonna prevista per la Fase 3b**, da una nuova migration; non null = account eliminato e anonimizzato (D13) |
+| anonymized_at | `timestamp` | sì | null | | non null = account eliminato e anonimizzato (D13); cast `datetime`, non fillable: la valorizza solo `DeleteAccountAction`; senza indice, perché nessun filtro la usa |
 | remember_token | `rememberToken` | sì | null | | di Laravel |
 | created_at, updated_at | `timestamps` | sì | null | | |
 
@@ -728,7 +728,7 @@ Contraddizioni e lacune trovate tra le skill durante la stesura dello schema, co
 
 **D13 — Eliminazione dell'account** (decisa prima della Fase 3b)
 - Problema: il cliente deve poter eliminare il proprio account, ma `orders.user_id` e `order_status_changes.changed_by` hanno `restrictOnDelete`, e ordini e pagamenti vanno conservati per 10 anni come documentazione contabile.
-- Decisione: nessuna cancellazione fisica. `DeleteAccountAction` cancella indirizzi, carrello, sessioni, eventi di sicurezza, richieste di cambio email, token di reset, passkey e doppia autenticazione, poi anonimizza l'utente: `name` «Utente eliminato», `email` fittizia e univoca `deleted-{id}@anonymized.invalid`, password casuale, `anonymized_at` valorizzata. Ordini, righe, cronologia, snapshot e pagamenti restano invariati. La nuova colonna `users.anonymized_at` arriva con una nuova migration nella Fase 3b. Motivazione (GDPR art. 17, par. 3, lett. b e obbligo di conservazione) nella skill `account-security`.
+- Decisione: nessuna cancellazione fisica. `DeleteAccountAction` cancella indirizzi, carrello, sessioni, eventi di sicurezza, richieste di cambio email, token di reset, passkey e doppia autenticazione, poi anonimizza l'utente: `name` «Utente eliminato», `email` fittizia e univoca `deleted-{id}@anonymized.invalid`, password casuale, `anonymized_at` valorizzata. Ordini, righe, cronologia, snapshot e pagamenti restano invariati. La colonna `users.anonymized_at` arriva con la migration `2026_10_01_000001_add_anonymized_at_to_users_table` (Fase 3b-2). Un account anonimizzato non accede (login con `invalid_credentials` senza evento) e non riceve link di reset. Motivazione (GDPR art. 17, par. 3, lett. b e obbligo di conservazione) nella skill `account-security`.
 
 ### Punti non specificati
 

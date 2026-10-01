@@ -22,4 +22,9 @@ it('labels the second factor contexts in italian', function (SecondFactorContext
     [SecondFactorContext::Login, 'login', 'Accesso'],
     [SecondFactorContext::PasswordReset, 'password_reset', 'Recupero password'],
     [SecondFactorContext::IdentityConfirmation, 'identity_confirmation', 'Conferma dell\'identità'],
+    [SecondFactorContext::PasswordChange, 'password_change', 'Cambio password'],
 ]);
+
+it('defines only the contexts of this phase', function () {
+    expect(SecondFactorContext::cases())->toHaveCount(4);
+});

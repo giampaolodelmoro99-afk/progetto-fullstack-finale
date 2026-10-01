@@ -24,6 +24,10 @@ use Illuminate\Support\Timebox;
  * SessionGuard of Laravel: an unknown email answers at once while a known
  * one first runs bcrypt, so without the timebox the response time would
  * reveal whether an address is registered.
+ *
+ * An anonymized account gets the same answer, without a login_failed event:
+ * its fictitious email and random password would fail anyway, the explicit
+ * check keeps the rule independent of that.
  */
 final class LoginAction
 {
@@ -44,7 +48,7 @@ final class LoginAction
         return $this->timebox->call(function (Timebox $timebox) use ($email, $password): LoginResult {
             $user = User::query()->where('email', $email)->first();
 
-            if ($user === null) {
+            if ($user === null || $user->isAnonymized()) {
                 throw new InvalidCredentialsException;
             }
 

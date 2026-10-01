@@ -48,4 +48,16 @@ return [
 
     'security_events_per_page' => 10,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Account deletion
+    |--------------------------------------------------------------------------
+    |
+    | Minutes for which a pending order counts as a payment in progress and
+    | blocks the account deletion. An older pending order is an orphan.
+    |
+    */
+
+    'account_deletion_pending_window' => 15,
+
 ];

@@ -217,7 +217,7 @@ Per controllare il risultato apri `design/illustrations/preview.html` nel browse
 
 ## Credenziali demo
 
-Tutti gli account demo hanno la stessa password: **`Silicio2026`**.
+Tutti gli account demo con cui si può accedere hanno la stessa password: **`Silicio2026`**.
 
 | Ruolo | Nome | Email | Note |
 |---|---|---|---|
@@ -225,6 +225,7 @@ Tutti gli account demo hanno la stessa password: **`Silicio2026`**.
 | Cliente demo | Giulia Ferri | `giulia.ferri@esempio.it` | email verificata, due indirizzi (Pisa predefinito, Firenze), ordini in tutti gli stati, carrello con una riga esaurita |
 | Cliente con doppia autenticazione | Davide Conti | `davide.conti@esempio.it` | TOTP attivo con segreto fisso (vedi sotto) |
 | Cliente con email non verificata | Paolo Greco | `paolo.greco@esempio.it` | naviga e usa il carrello, ma il checkout è bloccato |
+| Cliente eliminato | Utente eliminato | `deleted-{id}@anonymized.invalid` | account anonimizzato con password casuale: non può accedere; un ordine consegnato che resta per gli obblighi fiscali e che nell'area admin (dalla Fase 5) mostra «Cliente eliminato» |
 
 Oltre a questi, il seeder crea 20 clienti casuali (`nome.cognome@esempio.it`, stessa password) con un indirizzo e ordini degli ultimi sei mesi.
 
@@ -233,6 +234,7 @@ Oltre a questi, il seeder crea 20 clienti casuali (`nome.cognome@esempio.it`, st
 - **Carrello di Giulia**: Cuffie Aria, Caricatore Brezza 65 W ×2, Cavo Seta USB-C 1 m e la Radio Onda Portatile esaurita: 5 articoli e checkout bloccato finché non si rimuove la riga esaurita.
 - **Ordini di Giulia**: consegnati, annullato con rimborso, spedito, pagato (da spedire) e un tentativo di pagamento rifiutato, visibile solo all'admin.
 - **Catalogo**: 50 prodotti su cinque categorie, "Viaggio" senza prodotti (si può eliminare dall'admin), alcuni esauriti, negli ultimi pezzi o disattivati, e sei novità degli ultimi 30 giorni, tra cui le Cuffie Aria dell'hero della home.
+- **Account eliminato**: un cliente che ha eliminato l'account, anonimizzato come fa `DELETE /api/v1/me` (nome, email fittizia, nessun indirizzo, carrello o attività), con il suo ordine consegnato conservato.
 - **Dashboard admin**: ordini pagati anche nel mese corrente, ordini da spedire, scorte basse e un ordine "In attesa" con il pagamento in corso.
 
 ### Doppia autenticazione di Davide Conti

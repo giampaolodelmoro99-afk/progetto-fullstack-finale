@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Auth\CancelEmailChangeController;
 use App\Http\Controllers\Api\V1\Auth\CheckPasswordResetTokenController;
+use App\Http\Controllers\Api\V1\Auth\ConfirmEmailChangeController;
 use App\Http\Controllers\Api\V1\Auth\ForgotPasswordController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
@@ -41,3 +43,11 @@ Route::post('forgot-password', ForgotPasswordController::class)
 Route::post('reset-password/check', CheckPasswordResetTokenController::class)->name('password.check');
 
 Route::post('reset-password', ResetPasswordController::class)->name('password.reset');
+
+/*
+| Links of the email change: they work for a guest too, protected by the
+| token (high entropy, 60 minutes, single use) and the api limiter.
+*/
+Route::post('email-change/confirm', ConfirmEmailChangeController::class)->name('email-change.confirm');
+
+Route::post('email-change/cancel', CancelEmailChangeController::class)->name('email-change.cancel');

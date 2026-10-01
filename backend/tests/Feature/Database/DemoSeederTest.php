@@ -34,6 +34,15 @@ function seedDemoShop(): void
 }
 
 /**
+ * The address of the anonymized account contains its id, which the
+ * auto-increment does not reset.
+ */
+function withoutUserId(string $email): string
+{
+    return preg_replace('/^deleted-\d+@/', 'deleted-{id}@', $email);
+}
+
+/**
  * Main demo data without ids, which the auto-increment does not reset.
  *
  * @return array<string, mixed>
@@ -61,8 +70,9 @@ function demoShopSnapshot(): array
         'users' => User::orderBy('id')->get()
             ->map(fn (User $user) => [
                 $user->name,
-                $user->email,
+                withoutUserId($user->email),
                 $user->role->value,
+                $user->anonymized_at?->toDateTimeString(),
                 $user->email_verified_at?->toDateTimeString(),
                 $user->two_factor_confirmed_at?->toDateTimeString(),
                 $user->created_at->toDateTimeString(),
@@ -79,7 +89,7 @@ function demoShopSnapshot(): array
             ->all(),
         'orders' => Order::with(['user', 'items', 'statusChanges.changedBy', 'payments'])->orderBy('id')->get()
             ->map(fn (Order $order) => [
-                $order->user->email,
+                withoutUserId($order->user->email),
                 $order->status->value,
                 $order->subtotal,
                 $order->shipping_cost,
@@ -278,12 +288,37 @@ it('seeds the fixed demo accounts and the random customers', function () {
         ])->every(fn (string $code) => collect($davide->two_factor_recovery_codes)->contains(fn (string $hash) => Hash::check($code, $hash))))->toBeTrue()
         ->and($paolo->email_verified_at)->toBeNull()
         ->and($paolo->addresses)->toBeEmpty()
-        ->and(User::count())->toBe(24)
-        ->and(User::where('role', 'customer')->count())->toBe(23);
+        ->and(User::count())->toBe(25)
+        ->and(User::where('role', 'customer')->count())->toBe(24);
 
     foreach ([$marta, $giulia, $davide, $paolo] as $user) {
         expect(password_verify('Silicio2026', $user->password))->toBeTrue();
     }
+});
+
+it('seeds a customer who deleted the account, with a delivered order and no personal data', function () {
+    seedDemoShop();
+
+    $user = User::whereNotNull('anonymized_at')->sole();
+    $order = Order::whereBelongsTo($user)->sole();
+
+    expect($user->name)->toBe('Utente eliminato')
+        ->and($user->email)->toBe("deleted-{$user->id}@anonymized.invalid")
+        ->and($user->email)->toEndWith('.invalid')
+        ->and($user->email_verified_at)->toBeNull()
+        ->and($user->remember_token)->toBeNull()
+        ->and($user->hasSecondFactor())->toBeFalse()
+        ->and($user->isAdmin())->toBeFalse()
+        ->and(password_verify('Silicio2026', $user->password))->toBeFalse()
+        ->and($user->anonymized_at->toDateTimeString())->toBe('2026-08-16 20:10:00')
+        ->and($order->status->value)->toBe('delivered')
+        ->and($order->shipping_address['full_name'])->toBe('Sara Moretti')
+        ->and($order->shipping_address['city'])->toBe('Bologna');
+
+    $this->assertDatabaseMissing('addresses', ['user_id' => $user->id]);
+    $this->assertDatabaseMissing('carts', ['user_id' => $user->id]);
+    $this->assertDatabaseMissing('security_events', ['user_id' => $user->id]);
+    $this->assertDatabaseMissing('email_change_requests', ['user_id' => $user->id]);
 });
 
 it('puts an out of stock row in the cart of Giulia', function () {

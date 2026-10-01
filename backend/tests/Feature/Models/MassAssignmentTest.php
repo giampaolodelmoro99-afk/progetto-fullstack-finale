@@ -63,6 +63,14 @@ it('does not let mass assignment set the two-factor columns', function () {
         ->and($user->two_factor_last_used_step)->toBeNull();
 });
 
+it('does not let mass assignment anonymize a user', function () {
+    $user = User::factory()->create();
+
+    discardingAttributesSilently(fn () => $user->update(['anonymized_at' => now()]));
+
+    expect($user->fresh()->anonymized_at)->toBeNull();
+});
+
 it('always saves addresses in italy', function () {
     $data = Address::factory()->make()->only(['full_name', 'street', 'city', 'postal_code', 'province', 'phone']);
     $user = User::factory()->create();

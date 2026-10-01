@@ -38,6 +38,20 @@ it('sends the link to the frontend page only to a registered address', function 
     expect(DB::table('password_reset_tokens')->where('email', 'giulia.ferri@esempio.it')->count())->toBe(1);
 });
 
+it('sends nothing to an anonymized account and answers the same way', function () {
+    $user = User::factory()->create(['email' => 'deleted-7@anonymized.invalid']);
+    $user->forceFill(['anonymized_at' => '2026-09-01 10:00:00'])->save();
+
+    fromFrontend()->postJson('/api/v1/forgot-password', ['email' => 'deleted-7@anonymized.invalid'])
+        ->assertOk()
+        ->assertExactJson([
+            'message' => 'Se l\'indirizzo è registrato, riceverai un\'email con il link per reimpostare la password.',
+        ]);
+
+    Notification::assertNothingSent();
+    expect(DB::table('password_reset_tokens')->count())->toBe(0);
+});
+
 it('validates the email', function (array $data) {
     fromFrontend()->postJson('/api/v1/forgot-password', $data)
         ->assertUnprocessable()

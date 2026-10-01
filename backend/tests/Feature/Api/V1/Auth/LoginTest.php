@@ -120,6 +120,18 @@ it('records nothing for an unknown email', function () {
     expect(SecurityEvent::count())->toBe(0);
 });
 
+it('refuses an anonymized account without recording a failed login', function () {
+    $user = User::factory()->create(['email' => 'deleted-7@anonymized.invalid']);
+    $user->forceFill(['anonymized_at' => '2026-09-01 10:00:00'])->save();
+
+    fromFrontend()->postJson('/api/v1/login', ['email' => 'deleted-7@anonymized.invalid', 'password' => 'password'])
+        ->assertUnprocessable()
+        ->assertExactJson(['message' => 'Credenziali non valide', 'code' => 'invalid_credentials']);
+
+    $this->assertGuest('web');
+    expect(SecurityEvent::count())->toBe(0);
+});
+
 it('asks for the second factor without authenticating', function () {
     $this->travelTo('2026-10-01 10:30:00');
     $user = User::factory()->withTwoFactor()->create(['email' => 'davide.conti@esempio.it']);

@@ -31,6 +31,16 @@ class EmailChangeRequest extends Model
     }
 
     /**
+     * SHA-256 in hexadecimal: the tokens are random with high entropy, so a
+     * fast hash without salt is enough, and the request can be looked up by
+     * its unique index even by a guest (N7).
+     */
+    public static function hashToken(#[\SensitiveParameter] string $token): string
+    {
+        return hash('sha256', $token);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo

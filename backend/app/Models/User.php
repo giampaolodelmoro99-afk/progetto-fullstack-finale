@@ -25,6 +25,11 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasFactory, Notifiable;
 
     /**
+     * Name stored by the account deletion, neutral with respect to the role.
+     */
+    public const ANONYMIZED_NAME = 'Utente eliminato';
+
+    /**
      * @var array<string, mixed>
      */
     protected $attributes = [
@@ -47,6 +52,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
             'two_factor_last_used_step' => 'integer',
+            'anonymized_at' => 'datetime',
         ];
     }
 
@@ -106,6 +112,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
+    }
+
+    /**
+     * The customer deleted the account: the user stays, anonymized, only
+     * for the orders kept by the retention obligation, and cannot log in.
+     */
+    public function isAnonymized(): bool
+    {
+        return $this->anonymized_at !== null;
+    }
+
+    /**
+     * Fictitious and unique address of the anonymized account: the reserved
+     * .invalid domain never receives mail, and registration and email change
+     * refuse it, so nobody can take it first.
+     */
+    public function anonymizedEmail(): string
+    {
+        return "deleted-{$this->id}@anonymized.invalid";
     }
 
     /**

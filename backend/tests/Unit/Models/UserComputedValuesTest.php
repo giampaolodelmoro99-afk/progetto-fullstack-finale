@@ -48,3 +48,19 @@ it('offers the totp and the recovery codes as second factor methods', function (
 it('offers no second factor method without two-factor authentication', function () {
     expect((new User)->secondFactorMethods())->toBe([]);
 });
+
+it('is anonymized only with a deletion date', function (?string $anonymizedAt, bool $expected) {
+    $user = (new User)->forceFill(['anonymized_at' => $anonymizedAt]);
+
+    expect($user->isAnonymized())->toBe($expected);
+})->with([
+    'deleted' => ['2026-09-01 10:00', true],
+    'active' => [null, false],
+]);
+
+it('builds the fictitious address of an anonymized account from its id', function () {
+    $user = (new User)->forceFill(['id' => 42]);
+
+    expect($user->anonymizedEmail())->toBe('deleted-42@anonymized.invalid')
+        ->and(User::ANONYMIZED_NAME)->toBe('Utente eliminato');
+});

@@ -24,6 +24,7 @@ it('defines the account security settings', function () {
         'recovery_codes_count' => 8,
         'totp_issuer' => 'Casa del Silicio',
         'security_events_per_page' => 10,
+        'account_deletion_pending_window' => 15,
     ]);
 });
 

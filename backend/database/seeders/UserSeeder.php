@@ -11,9 +11,10 @@ use Random\Randomizer;
 
 /**
  * Fixed demo accounts documented in the README (admin, demo customer,
- * customer with two-factor authentication, unverified customer) and random
- * customers: names from Faker with a fixed seed, dates from a Randomizer
- * with its own seed. Everyone shares the demo password.
+ * customer with two-factor authentication, unverified customer), random
+ * customers and a customer who deleted the account: names from Faker with a
+ * fixed seed, dates from a Randomizer with its own seed. Everyone except the
+ * deleted account shares the demo password.
  */
 class UserSeeder extends Seeder
 {
@@ -95,6 +96,36 @@ class UserSeeder extends Seeder
         ]);
 
         $this->seedRandomCustomers($password);
+        $this->seedAnonymizedCustomer();
+    }
+
+    /**
+     * A customer who deleted the account, as DeleteAccountAction leaves it:
+     * fictitious .invalid address, random password, no personal data. Its
+     * delivered order (OrderSeeder) shows «Cliente eliminato» in the admin
+     * area. Seeded last, so the Faker draws of the factory do not change the
+     * names of the random customers.
+     */
+    private function seedAnonymizedCustomer(): void
+    {
+        $createdAt = today()->subMonths(5)->setTime(10, 15);
+        $deletedAt = today()->subDays(30)->setTime(20, 10);
+
+        $user = User::factory()->customer()->create([
+            'name' => User::ANONYMIZED_NAME,
+            'email' => 'anonymized-placeholder@'.self::EMAIL_DOMAIN,
+            'password' => Str::random(64),
+            'password_changed_at' => $createdAt,
+            'remember_token' => null,
+            'created_at' => $createdAt,
+            'updated_at' => $deletedAt,
+        ]);
+
+        $user->forceFill([
+            'email' => $user->anonymizedEmail(),
+            'email_verified_at' => null,
+            'anonymized_at' => $deletedAt,
+        ])->save();
     }
 
     private function seedRandomCustomers(string $password): void

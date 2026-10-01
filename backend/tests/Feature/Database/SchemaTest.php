@@ -50,6 +50,7 @@ it('creates the tables with the columns of the er schema', function (string $tab
         'two_factor_recovery_codes' => ['text', true, null],
         'two_factor_confirmed_at' => ['timestamp', true, null],
         'two_factor_last_used_step' => ['bigint unsigned', true, null],
+        'anonymized_at' => ['timestamp', true, null],
         'remember_token' => ['varchar(100)', true, null],
         'created_at' => ['timestamp', true, null],
         'updated_at' => ['timestamp', true, null],

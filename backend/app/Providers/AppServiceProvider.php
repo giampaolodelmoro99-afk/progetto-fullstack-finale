@@ -119,6 +119,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('identity-confirmation', fn (Request $request): Limit => Limit::perMinute(5)
             ->by($request->user()->getAuthIdentifier()));
+
+        RateLimiter::for('email-change', fn (Request $request): Limit => Limit::perHour(3)
+            ->by($request->user()->getAuthIdentifier()));
     }
 
     /**
