@@ -80,3 +80,14 @@ arch('exceptions are final and suffixed')
 arch('the assistant services implement the contract')
     ->expect(['App\Services\Assistant\OllamaAssistant', 'App\Services\Assistant\FakeAiAssistant'])
     ->toImplement('App\Contracts\AiAssistant');
+
+arch('notifications are final and queued')
+    ->expect('App\Notifications')
+    ->toBeFinal()
+    ->toHaveSuffix('Notification')
+    ->toImplement('Illuminate\Contracts\Queue\ShouldQueue');
+
+arch('validation rules are final')
+    ->expect('App\Rules')
+    ->toBeFinal()
+    ->toImplement('Illuminate\Contracts\Validation\ValidationRule');

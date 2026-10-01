@@ -44,3 +44,12 @@ it('defines the assistant settings', function () {
         'max_concurrent' => 1,
     ]);
 });
+
+it('points the email links to the frontend', function () {
+    expect(config('app.frontend_url'))->toBe('http://localhost:5173');
+});
+
+it('keeps the email verification link valid for 24 hours and the reset link for 60 minutes', function () {
+    expect(config('auth.verification.expire'))->toBe(1440)
+        ->and(config('auth.passwords.users.expire'))->toBe(60);
+});

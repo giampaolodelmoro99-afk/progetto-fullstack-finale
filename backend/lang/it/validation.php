@@ -195,6 +195,9 @@ return [
         'password' => 'password',
         'password_confirmation' => 'conferma password',
         'current_password' => 'password attuale',
+        'code' => 'codice',
+        'method' => 'metodo',
+        'token' => 'token',
     ],
 
 ];

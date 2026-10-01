@@ -9,7 +9,7 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 2a | Migration, modelli, enum, observer, factory e test | completata |
 | Fase 2b | Seeder e dati demo | completata |
 | Fase 2c | Infrastruttura dell'assistente AI: servizio Ollama, Modelfile, interfaccia con implementazione finta, prova e scelta del modello | completata |
-| Fase 3a | Registrazione, login, verifica email, recupero password, rate limiting | |
+| Fase 3a | Registrazione, login, verifica email, recupero password, rate limiting | completata |
 | Fase 3b | Doppia autenticazione TOTP, codici di recupero, conferma dell'identità, cambio password ed email, notifiche, eventi di sicurezza, eliminazione dell'account con anonimizzazione | |
 | Fase 3c | Passkey | |
 | Fase 4 | Catalogo pubblico, impostazioni del negozio, testi dell'assistenza (`GET /shop/support`), CRUD admin di prodotti e categorie con immagini | |

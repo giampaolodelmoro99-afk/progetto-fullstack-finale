@@ -22,8 +22,14 @@ final class InterruptedProductSeeder extends Seeder
     }
 }
 
+/**
+ * The generators of the previous tests are destroyed first: their destructor
+ * reseeds mt_rand at random (see DatabaseSeeder).
+ */
 function seedDemoShop(): void
 {
+    gc_collect_cycles();
+
     test()->seed(DatabaseSeeder::class);
 }
 
