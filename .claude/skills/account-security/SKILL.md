@@ -16,7 +16,7 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 5. Con la doppia autenticazione attiva il secondo fattore (codice TOTP, codice di recupero o passkey) è richiesto al login con password, al recupero password, al cambio password e in ogni operazione sensibile.
 6. Ogni operazione sensibile invia una notifica email e scrive un evento di sicurezza. Unica eccezione: l'eliminazione dell'account invia la notifica ma non scrive l'evento, perché il registro dell'utente viene cancellato (sezione "Eliminazione dell'account").
 7. I segreti non si salvano mai in chiaro e non compaiono mai nelle risposte, tranne nel momento in cui l'utente deve vederli una sola volta.
-8. Le risposte non rivelano se un indirizzo email è registrato.
+8. Le risposte non rivelano se un indirizzo email è registrato. **Eccezione motivata:** la registrazione risponde «Questo indirizzo email è già in uso» (422 sul campo `email`) e quindi rivela che l'indirizzo è registrato. È un compromesso accettato per non confondere chi sbaglia indirizzo o si è già registrato; il limiter `register` (5 registrazioni all'ora per IP) impedisce di usarla per verificare molti indirizzi.
 9. L'eliminazione dell'account **anonimizza** l'utente invece di cancellarlo: gli ordini si conservano per gli obblighi fiscali, tutto il resto si cancella. Un account anonimizzato non può più accedere.
 
 ## Librerie
@@ -289,6 +289,7 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 
 | Limiter | Limite |
 |---|---|
+| `register` | 5 all'ora per IP |
 | `login` | 5 al minuto per email + IP |
 | `two-factor` | 5 al minuto per sessione |
 | `password-reset` | 3 ogni 10 minuti per email + IP |
@@ -299,6 +300,7 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 
 - `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
 - `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`.
+- `register` si applica a `POST /register`; `password-reset` solo a `POST /forgot-password`: check e reset li protegge il token (alta entropia, 60 minuti), più il limiter generale `api` (120 al minuto per utente, per IP da ospite) applicato a tutto il gruppo.
 - `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification` con un solo contatore condiviso: per un utente autenticato sono 6 richieste al minuto in totale tra le due rotte. Il test del 429 usa una rotta sola.
 - Oltre il limite si risponde 429 con messaggio in italiano e header `Retry-After` in secondi.
 - Frontend e backend sono su origini diverse: `config/cors.php` include `Retry-After` in `exposed_headers`, altrimenti il browser non lo rende leggibile ad axios.

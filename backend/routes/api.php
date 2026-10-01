@@ -8,7 +8,7 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         require __DIR__.'/api/v1/customer.php';
 
-        Route::prefix('admin')->name('admin.')->group(function (): void {
+        Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function (): void {
             require __DIR__.'/api/v1/admin.php';
         });
     });
