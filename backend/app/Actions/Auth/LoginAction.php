@@ -5,6 +5,7 @@ namespace App\Actions\Auth;
 use App\Actions\Security\RecordSecurityEventAction;
 use App\Enums\SecurityEventType;
 use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Http\Middleware\EnsureIdentityConfirmed;
 use App\Models\User;
 use App\Support\Auth\LoginResult;
 use Illuminate\Http\Request;
@@ -15,7 +16,9 @@ use Illuminate\Support\Timebox;
 /**
  * Password login. Without two-factor authentication it authenticates and
  * regenerates the session; with it, it only stores the pending challenge in
- * a regenerated session and the second factor completes the login.
+ * a regenerated session and the second factor completes the login. An
+ * identity confirmation left in the session belongs to the previous user,
+ * so both paths drop it.
  *
  * A failed attempt always lasts at least TIMEBOX_MICROSECONDS, as in the
  * SessionGuard of Laravel: an unknown email answers at once while a known
@@ -63,6 +66,7 @@ final class LoginAction
 
         if ($user->hasSecondFactor()) {
             Auth::guard('web')->logout();
+            $session->forget(EnsureIdentityConfirmed::SESSION_KEY);
             $session->regenerate();
             $session->put([
                 self::PENDING_USER_KEY => $user->id,
@@ -72,7 +76,7 @@ final class LoginAction
             return LoginResult::twoFactorRequired($user->secondFactorMethods());
         }
 
-        $session->forget([self::PENDING_USER_KEY, self::PENDING_AT_KEY]);
+        $session->forget([self::PENDING_USER_KEY, self::PENDING_AT_KEY, EnsureIdentityConfirmed::SESSION_KEY]);
         Auth::guard('web')->login($user);
         $session->regenerate();
 

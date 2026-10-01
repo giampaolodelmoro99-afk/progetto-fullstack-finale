@@ -9,18 +9,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 
-function insertSession(string $id, User $user): void
-{
-    DB::table('sessions')->insert([
-        'id' => $id,
-        'user_id' => $user->id,
-        'ip_address' => '127.0.0.1',
-        'user_agent' => 'Mozilla/5.0',
-        'payload' => '',
-        'last_activity' => now()->getTimestamp(),
-    ]);
-}
-
 function resetData(string $token, array $overrides = []): array
 {
     return array_merge([
@@ -148,16 +136,97 @@ it('requires the second factor when two-factor authentication is active', functi
         ->and(DB::table('password_reset_tokens')->count())->toBe(1);
 });
 
-it('rejects any second factor until its verification exists', function () {
-    $user = User::factory()->withTwoFactor()->create(['email' => 'giulia.ferri@esempio.it']);
+it('rejects a wrong second factor and records the failed attempt', function (string $method, string $code) {
+    $this->travelTo('2026-10-01 10:30:00');
+    $user = userWithTwoFactor(['email' => 'giulia.ferri@esempio.it']);
     $token = Password::broker()->createToken($user);
 
-    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => '123456']))
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => $method, 'code' => $code]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.code.0', 'Codice non valido.')
+        ->assertJsonMissingPath('code');
+
+    $event = SecurityEvent::sole();
+
+    expect(Hash::check('password', $user->fresh()->password))->toBeTrue()
+        ->and(DB::table('password_reset_tokens')->count())->toBe(1)
+        ->and($event->type)->toBe(SecurityEventType::TwoFactorChallengeFailed)
+        ->and($event->metadata)->toEqual(['context' => 'password_reset', 'method' => $method])
+        ->and(json_encode($event->getAttributes()))->not->toContain($code);
+    Notification::assertNothingSent();
+})->with([
+    'totp' => ['totp', '000000'],
+    'recovery code' => ['recovery_code', 'ZZZZ-ZZZZ'],
+]);
+
+it('resets the password with the code of the authenticator app', function () {
+    $this->travelTo('2026-10-01 10:30:00');
+    $user = userWithTwoFactor(['email' => 'giulia.ferri@esempio.it']);
+    $token = Password::broker()->createToken($user);
+
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => totpCode(totpSecret())]))
+        ->assertOk()
+        ->assertExactJson(['message' => 'La password è stata reimpostata: accedi con la nuova password.']);
+
+    expect(Hash::check('Montagna2026', $user->fresh()->password))->toBeTrue()
+        ->and(SecurityEvent::where('type', SecurityEventType::PasswordReset)->count())->toBe(1);
+    Notification::assertSentTo($user, PasswordResetNotification::class);
+});
+
+it('rejects a code of the authenticator app already used at the login', function () {
+    $this->travelTo('2026-10-01 10:30:00');
+    $user = userWithTwoFactor(['email' => 'giulia.ferri@esempio.it']);
+    $code = totpCode(totpSecret());
+    $token = Password::broker()->createToken($user);
+
+    fromFrontend()->postJson('/api/v1/login', ['email' => 'giulia.ferri@esempio.it', 'password' => 'password'])->assertOk();
+    fromFrontend()->postJson('/api/v1/login/two-factor', ['method' => 'totp', 'code' => $code])->assertOk();
+
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => $code]))
         ->assertUnprocessable()
         ->assertJsonPath('errors.code.0', 'Codice non valido.');
 
     expect(Hash::check('password', $user->fresh()->password))->toBeTrue();
-    Notification::assertNothingSent();
+});
+
+it('limits the second factor attempts to 5 per minute for each user', function () {
+    $this->travelTo('2026-10-01 10:30:00');
+    $user = userWithTwoFactor(['email' => 'giulia.ferri@esempio.it']);
+    $token = Password::broker()->createToken($user);
+
+    foreach (range(1, 5) as $attempt) {
+        fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => '000000']))
+            ->assertUnprocessable();
+    }
+
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => totpCode(totpSecret())]))
+        ->assertTooManyRequests()
+        ->assertHeader('Retry-After', '60')
+        ->assertJsonPath('message', 'Troppi tentativi. Riprova tra 60 secondi.');
+
+    expect(Hash::check('password', $user->fresh()->password))->toBeTrue()
+        ->and($user->fresh()->two_factor_last_used_step)->toBeNull();
+
+    $this->travel(61)->seconds();
+
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'totp', 'code' => totpCode(totpSecret())]))
+        ->assertOk();
+});
+
+it('resets the password with a recovery code, which is consumed', function () {
+    $user = userWithTwoFactor(['email' => 'giulia.ferri@esempio.it']);
+    $token = Password::broker()->createToken($user);
+
+    fromFrontend()->postJson('/api/v1/reset-password', resetData($token, ['method' => 'recovery_code', 'code' => 'AB12-CD34']))
+        ->assertOk()
+        ->assertJsonPath('meta.recovery_codes_remaining', 7)
+        ->assertJsonPath('meta.recovery_codes_low', false);
+
+    $user->refresh();
+
+    expect(Hash::check('Montagna2026', $user->password))->toBeTrue()
+        ->and($user->two_factor_recovery_codes)->toHaveCount(7)
+        ->and(SecurityEvent::where('type', SecurityEventType::RecoveryCodeUsed)->count())->toBe(1);
 });
 
 it('checks the token before the second factor', function () {

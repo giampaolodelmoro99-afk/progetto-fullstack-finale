@@ -237,7 +237,7 @@ Oltre a questi, il seeder crea 20 clienti casuali (`nome.cognome@esempio.it`, st
 
 ### Doppia autenticazione di Davide Conti
 
-Il segreto è fisso e pubblicato qui **solo per la demo**, così durante la presentazione si può aggiungere l'account all'app di autenticazione (Google Authenticator, 1Password, Aegis…). Il login con il secondo fattore è disponibile dalla Fase 3.
+Il segreto è fisso e pubblicato qui **solo per la demo**, così durante la presentazione si può aggiungere l'account all'app di autenticazione (Google Authenticator, 1Password, Aegis…). Il login con il secondo fattore è disponibile dalla Fase 3b (`POST /api/v1/login/two-factor`). Ogni codice di recupero vale una sola volta: dopo averne usato uno nelle prove, `make fresh` ricrea i dati demo e ripristina gli otto codici elencati qui.
 
 | Dato | Valore |
 |---|---|

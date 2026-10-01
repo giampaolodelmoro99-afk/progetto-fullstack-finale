@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Enums\SecondFactorMethod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -26,7 +27,7 @@ final class ResetPasswordRequest extends FormRequest
             'token' => ['required', 'string'],
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string', 'confirmed', Password::defaults()],
-            'method' => ['nullable', 'string', Rule::in(['totp', 'recovery_code'])],
+            'method' => ['nullable', 'string', Rule::enum(SecondFactorMethod::class)],
             'code' => ['nullable', 'string', 'max:64'],
         ];
     }

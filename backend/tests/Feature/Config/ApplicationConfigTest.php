@@ -22,6 +22,7 @@ it('defines the account security settings', function () {
         'login_challenge_ttl' => 300,
         'email_change_ttl' => 60,
         'recovery_codes_count' => 8,
+        'totp_issuer' => 'Casa del Silicio',
         'security_events_per_page' => 10,
     ]);
 });

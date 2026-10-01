@@ -53,6 +53,10 @@ class UserFactory extends Factory
             'role' => UserRole::Customer,
             'password_changed_at' => now(),
             'remember_token' => Str::random(10),
+            'two_factor_secret' => null,
+            'two_factor_recovery_codes' => null,
+            'two_factor_confirmed_at' => null,
+            'two_factor_last_used_step' => null,
         ];
     }
 

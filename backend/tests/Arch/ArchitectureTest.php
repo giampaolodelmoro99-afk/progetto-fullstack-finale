@@ -81,6 +81,10 @@ arch('the assistant services implement the contract')
     ->expect(['App\Services\Assistant\OllamaAssistant', 'App\Services\Assistant\FakeAiAssistant'])
     ->toImplement('App\Contracts\AiAssistant');
 
+arch('the second factor verifiers implement the contract')
+    ->expect(['App\Services\Security\TotpVerifier', 'App\Services\Security\RecoveryCodeVerifier'])
+    ->toImplement('App\Contracts\Security\SecondFactorVerifier');
+
 arch('notifications are final and queued')
     ->expect('App\Notifications')
     ->toBeFinal()

@@ -176,6 +176,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 3. `POST /me/two-factor/recovery-codes` (`identity.confirmed`): rigenera i codici, invalida i precedenti, li mostra una sola volta.
 4. `DELETE /me/two-factor` (`identity.confirmed`): disattiva la doppia autenticazione, cancella segreto e codici di recupero, chiude le altre sessioni, notifica, evento. Le passkey restano e continuano a permettere l'accesso senza password.
 5. Formato dei codici di recupero: `XXXX-XXXX`, salvati come hash e monouso.
+6. Le risposte che mostrano segreti in chiaro (attivazione con segreto, URI e QR code; conferma e rigenerazione con i codici di recupero) hanno l'header `Cache-Control: no-store`, così non restano nella cache del browser o di un proxy.
 
 ### Passkey
 
@@ -291,16 +292,19 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 |---|---|
 | `register` | 5 all'ora per IP |
 | `login` | 5 al minuto per email + IP |
-| `two-factor` | 5 al minuto per sessione |
+| `two-factor` | 5 al minuto per utente |
 | `password-reset` | 3 ogni 10 minuti per email + IP |
 | `verification` | 6 al minuto per utente, per IP se ospite |
 | `email-change` | 3 all'ora per utente |
 | `identity-confirmation` | 5 al minuto per utente |
 | `assistant` | 10 al minuto per utente, per IP se ospite (skill `ai-assistant`) |
 
+- `two-factor` si applica a `POST /login/two-factor` e a `POST /me/two-factor/confirm`. La chiave è l'utente, non la sessione: al login è il `login.pending_user_id` della challenge (senza challenge, la sessione o l'IP come ripiego), nella conferma dell'attivazione l'utente autenticato. **Motivo:** con la chiave sulla sessione, chi conosce la password potrebbe aprire sessioni nuove con altri login e moltiplicare i tentativi sul codice.
 - `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
 - `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`.
-- `register` si applica a `POST /register`; `password-reset` solo a `POST /forgot-password`: check e reset li protegge il token (alta entropia, 60 minuti), più il limiter generale `api` (120 al minuto per utente, per IP da ospite) applicato a tutto il gruppo.
+- `register` si applica a `POST /register`; `password-reset` solo a `POST /forgot-password`. `POST /reset-password/check` lo protegge il token (alta entropia, 60 minuti), più il limiter generale `api` (120 al minuto per utente, per IP da ospite) applicato a tutto il gruppo. `POST /reset-password` ha in più il limite dei tentativi del secondo fattore (punto seguente): il token da solo non basta, perché chi ha il link (cioè l'email) è proprio chi il secondo fattore deve fermare.
+- **Tentativi del secondo fattore:** oltre ai limiter delle rotte, `VerifySecondFactorAction` conta i codici sbagliati **per utente, con un solo contatore condiviso da tutti i contesti** (login, recupero password, conferma dell'identità e, dalla Fase 3b-2, cambio password): dopo 5 fallimenti in un minuto ogni verifica di quell'utente risponde 429 con `Retry-After`, anche con un codice giusto, che non viene consumato. Un codice mancante non conta. **Motivo:** un limiter per rotta lascerebbe scoperta ogni rotta nuova che accetta il secondo fattore, e un limite per IP si aggira cambiando indirizzo.
+- **Compromesso accettato:** chi conosce la password, ha un link di reset valido o una sessione aperta dell'utente può bloccargli il secondo fattore per un minuto sbagliando apposta. Il blocco dura al massimo 60 secondi dall'ultimo tentativo contato e non rivela nulla; è preferibile alla possibilità di provare migliaia di codici.
 - `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification` con un solo contatore condiviso: per un utente autenticato sono 6 richieste al minuto in totale tra le due rotte. Il test del 429 usa una rotta sola.
 - Oltre il limite si risponde 429 con messaggio in italiano e header `Retry-After` in secondi.
 - Frontend e backend sono su origini diverse: `config/cors.php` include `Retry-After` in `exposed_headers`, altrimenti il browser non lo rende leggibile ad axios.
@@ -359,4 +363,6 @@ Oltre ai casi standard della skill `testing`:
 - notifiche inviate (`Notification::fake()`) ed eventi di sicurezza registrati
 - segreti mai presenti nelle risposte JSON
 - rate limiting sulle rotte di autenticazione, su `PUT /me/password` (sesto tentativo nel minuto) e su `DELETE /me/email-change`: 429 con header `Retry-After`
+- tentativi del secondo fattore: sesto codice sbagliato nel minuto su `POST /reset-password` → 429 con `Retry-After`; contatore condiviso tra i contesti (fallimenti sparsi tra reset e login, poi la conferma dell'identità con un codice giusto → 429)
+- `Cache-Control: no-store` sulle risposte di attivazione del TOTP e dei codici di recupero
 - eliminazione dell'account: casi della skill `testing`, sezione "Eliminazione dell'account"

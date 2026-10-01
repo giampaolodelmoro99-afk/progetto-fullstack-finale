@@ -2,6 +2,8 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PragmaRX\Google2FA\Google2FA;
 use Tests\TestCase;
 
 /*
@@ -91,6 +93,57 @@ function actingAsAdmin(): User
     test()->actingAs($user, 'web');
 
     return $user;
+}
+
+/**
+ * Marks the identity as confirmed now in the session of the next requests.
+ */
+function confirmIdentity(): TestCase
+{
+    return test()->withSession(['auth.identity_confirmed_at' => now()->getTimestamp()]);
+}
+
+/**
+ * Fixed TOTP secret of the tests: with a fixed time every code is
+ * deterministic, so a wrong code such as 000000 never matches by chance.
+ */
+function totpSecret(): string
+{
+    return 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+}
+
+/**
+ * A user with confirmed two-factor authentication on the fixed secret and
+ * the recovery codes of UserFactory::RECOVERY_CODES.
+ */
+function userWithTwoFactor(array $attributes = []): User
+{
+    return User::factory()->withTwoFactor()->create(['two_factor_secret' => totpSecret(), ...$attributes]);
+}
+
+/**
+ * A code of the authenticator app for the 30 second interval of now(),
+ * moved by $offset intervals, generated with the library of the code.
+ */
+function totpCode(string $secret, int $offset = 0): string
+{
+    return app(Google2FA::class)->oathTotp($secret, intdiv(now()->getTimestamp(), 30) + $offset);
+}
+
+/**
+ * A row of the database session driver for the user, as another browser
+ * would leave it.
+ */
+function insertSession(string $id, User $user): void
+{
+    DB::table('sessions')->insert([
+        'id' => $id,
+        'user_id' => $user->id,
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'Mozilla/5.0',
+        'payload' => '',
+        'last_activity' => now()->getTimestamp(),
+    ]);
 }
 
 /**

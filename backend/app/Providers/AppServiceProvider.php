@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Auth\LoginAction;
 use App\Contracts\AiAssistant;
 use App\Models\User;
 use App\Services\Assistant\FakeAiAssistant;
@@ -112,5 +113,30 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('verification', fn (Request $request): Limit => Limit::perMinute(6)
             ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
+
+        RateLimiter::for('two-factor', fn (Request $request): Limit => Limit::perMinute(5)
+            ->by(self::twoFactorThrottleKey($request)));
+
+        RateLimiter::for('identity-confirmation', fn (Request $request): Limit => Limit::perMinute(5)
+            ->by($request->user()->getAuthIdentifier()));
+    }
+
+    /**
+     * The two-factor attempts count per user, not per session: whoever knows
+     * the password could otherwise open new sessions to multiply the
+     * attempts on the code. The login challenge names its user; the
+     * activation has the authenticated one. Without either, the session or
+     * the IP address.
+     */
+    private static function twoFactorThrottleKey(Request $request): string
+    {
+        $pendingUserId = $request->hasSession() ? $request->session()->get(LoginAction::PENDING_USER_KEY) : null;
+        $userId = $pendingUserId ?? $request->user()?->getAuthIdentifier();
+
+        if ($userId !== null) {
+            return 'user:'.$userId;
+        }
+
+        return $request->hasSession() ? 'session:'.$request->session()->getId() : 'ip:'.$request->ip();
     }
 }

@@ -35,6 +35,17 @@ return [
 
     'recovery_codes_count' => 8,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Authenticator app
+    |--------------------------------------------------------------------------
+    |
+    | Name shown by the authenticator app next to the account email.
+    |
+    */
+
+    'totp_issuer' => 'Casa del Silicio',
+
     'security_events_per_page' => 10,
 
 ];

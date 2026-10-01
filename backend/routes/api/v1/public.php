@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\ForgotPasswordController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\Auth\ResetPasswordController;
+use App\Http\Controllers\Api\V1\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Api\V1\Auth\VerifyEmailController;
 use App\Http\Controllers\Api\V1\System\HealthController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,10 @@ Route::post('register', RegisterController::class)
 Route::post('login', LoginController::class)
     ->middleware('throttle:login')
     ->name('login');
+
+Route::post('login/two-factor', TwoFactorChallengeController::class)
+    ->middleware('throttle:two-factor')
+    ->name('login.two-factor');
 
 /*
 | Protected only by the signature of the link, not by authentication: the
