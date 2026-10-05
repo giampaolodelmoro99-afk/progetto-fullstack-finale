@@ -101,6 +101,8 @@ make migrate
 
 Se il pull contiene nuove migration, basta `make migrate`.
 
+Se il pull modifica `docker/php/Dockerfile` o `docker/php/php.ini` (per esempio il supporto WebP della GD o i limiti di upload), l'immagine già costruita resta quella vecchia: esegui `make build` e poi `make up`. Da un clone pulito non serve, perché `docker compose up` costruisce l'immagine la prima volta.
+
 ### Watcher del frontend
 
 Se le modifiche ai file del frontend non vengono rilevate (per esempio con Docker Desktop su Windows), imposta `VITE_USE_POLLING=true` nel `.env` alla radice.

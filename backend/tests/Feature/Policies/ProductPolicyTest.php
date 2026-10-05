@@ -25,3 +25,18 @@ it('lets everybody view an active product and answers 404 for a deactivated one'
     'active' => [true],
     'deactivated' => [false],
 ]);
+
+it('gives the admin abilities on products to administrators only', function (string $role, bool $allowed) {
+    $user = $role === 'admin' ? User::factory()->admin()->create() : User::factory()->customer()->create();
+    $product = Product::factory()->for(Category::factory())->inactive()->create();
+    $policy = new ProductPolicy;
+
+    expect($policy->viewAny($user))->toBe($allowed)
+        ->and($policy->view($user, $product))->toBe($allowed)
+        ->and($policy->create($user))->toBe($allowed)
+        ->and($policy->update($user, $product))->toBe($allowed)
+        ->and($policy->delete($user, $product))->toBe($allowed);
+})->with([
+    'admin' => ['admin', true],
+    'customer' => ['customer', false],
+]);

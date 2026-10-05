@@ -13,7 +13,8 @@ RUN apt-get update \
         libpng-dev \
         libjpeg62-turbo-dev \
         libfreetype6-dev \
-    && docker-php-ext-configure gd --with-jpeg --with-freetype \
+        libwebp-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql bcmath intl zip gd exif pcntl opcache \
     && pecl install pcov \
     && docker-php-ext-enable pcov \
