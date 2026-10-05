@@ -187,6 +187,7 @@ Dal mockup `01-negozio.pdf`:
 | Prezzo decrescente | `price_desc` |
 
 - Il valore predefinito non compare nella query string; cambiare ordinamento o filtri riporta a pagina 1.
+- Categoria inesistente: `GET /products` risponde 422 con un errore su `category` (es. un link a una categoria eliminata). La pagina non mostra l'errore generico ma lo stato «Questa categoria non esiste», nello stile dello stato vuoto del mockup `01-negozio`, con il pulsante "Vedi tutti i prodotti" che porta al catalogo completo (`/products` senza parametri).
 - I limiti dello slider del prezzo arrivano da `meta.price_range` della risposta, in centesimi.
 - Il numero di prodotti mostrato sotto il titolo arriva da `meta.total`.
 - Il dettaglio prodotto carica i correlati con `GET /products/{slug}/related`; se l'elenco è vuoto la sezione non si mostra.
