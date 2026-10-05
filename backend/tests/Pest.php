@@ -1,6 +1,7 @@
 <?php
 
 use App\Contracts\Security\PasskeyCeremony;
+use App\Models\Category;
 use App\Models\Passkey;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -227,4 +228,28 @@ function drainAssistantEvents(iterable $events, array &$received = []): array
     }
 
     return $received;
+}
+
+/**
+ * A complete body of the admin product form, valid unless overridden.
+ *
+ * @return array<string, mixed>
+ */
+function adminProductPayload(array $overrides = []): array
+{
+    return [
+        'category_id' => $overrides['category_id'] ?? Category::factory()->create()->id,
+        'name' => 'Cuffie Aria',
+        'sku' => 'CDS-AUD-001',
+        'short_description' => 'Cuffie wireless con cancellazione del rumore.',
+        'description' => 'Suono pulito e bilanciato.',
+        'specifications' => [
+            ['label' => 'Peso', 'value' => '250 g'],
+            ['label' => 'Autonomia', 'value' => '30 ore'],
+        ],
+        'price' => 34900,
+        'stock' => 18,
+        'is_active' => true,
+        ...$overrides,
+    ];
 }

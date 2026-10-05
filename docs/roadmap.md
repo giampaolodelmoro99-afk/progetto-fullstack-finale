@@ -13,7 +13,7 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 3b | Doppia autenticazione TOTP, codici di recupero, conferma dell'identità, cambio password ed email, notifiche, eventi di sicurezza, eliminazione dell'account con anonimizzazione | completata |
 | Fase 3c | Passkey | completata |
 | Fase 4, parte 1 | Catalogo pubblico, impostazioni del negozio, testi dell'assistenza (`GET /shop/support`) | |
-| Fase 4, parte 2 | Admin del catalogo: CRUD di prodotti e categorie con immagini | |
+| Fase 4, parte 2 | Admin del catalogo: CRUD di prodotti e categorie con immagini | completata |
 | Fase 4b | Backend dell'assistente AI: endpoint, ricerca nel catalogo, streaming, limiti, test | |
 | Fase 5 | Carrello, checkout, ordini, pagamenti, annullamento, email, ordini e dashboard admin | |
 | Fase 6 | Revisione della copertura dei test e documentazione delle API | |

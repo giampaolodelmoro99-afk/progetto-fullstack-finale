@@ -3,7 +3,6 @@
 namespace App\Observers;
 
 use App\Models\Category;
-use Illuminate\Support\Str;
 
 final class CategoryObserver
 {
@@ -13,6 +12,6 @@ final class CategoryObserver
      */
     public function creating(Category $category): void
     {
-        $category->slug = Str::slug($category->name) ?: 'categoria';
+        $category->slug = Category::slugFrom($category->name);
     }
 }
