@@ -8,8 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Summary of the Security page. Without two-factor authentication the
- * recovery code counts are 0. Passkeys arrive in Phase 3c: until then the
- * count is 0.
+ * recovery code counts are 0. passkeys_count needs loadCount('passkeys').
  *
  * @mixin User
  */
@@ -25,7 +24,7 @@ final class SecurityOverviewResource extends JsonResource
             'two_factor_confirmed_at' => $this->two_factor_confirmed_at?->toIso8601String(),
             'recovery_codes_remaining' => $this->recovery_codes_remaining,
             'recovery_codes_total' => $this->hasSecondFactor() ? config('security.recovery_codes_count') : 0,
-            'passkeys_count' => 0,
+            'passkeys_count' => $this->passkeys_count,
             'email_verified' => $this->hasVerifiedEmail(),
             'password_changed_at' => $this->password_changed_at?->toIso8601String(),
         ];

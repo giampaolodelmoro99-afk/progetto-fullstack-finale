@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\UserRole;
 use App\Models\EmailChangeRequest;
+use App\Models\Passkey;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -97,6 +98,16 @@ class UserFactory extends Factory
             ),
             'two_factor_confirmed_at' => now(),
         ]);
+    }
+
+    /**
+     * A fake passkey with the given name, without two-factor authentication.
+     */
+    public function withPasskey(string $name = 'MacBook di prova'): static
+    {
+        return $this->afterCreating(function (User $user) use ($name) {
+            Passkey::factory()->for($user)->create(['name' => $name]);
+        });
     }
 
     /**

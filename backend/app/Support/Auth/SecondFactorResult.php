@@ -7,7 +7,8 @@ use App\Enums\SecondFactorMethod;
 /**
  * Outcome of a successful second factor. After a recovery code the response
  * tells how many codes are left, so the frontend can invite the user to
- * regenerate them when LOW_RECOVERY_CODES or fewer remain.
+ * regenerate them when LOW_RECOVERY_CODES or fewer remain. After a passkey
+ * the name of the passkey is kept for the login event.
  */
 final readonly class SecondFactorResult
 {
@@ -16,6 +17,7 @@ final readonly class SecondFactorResult
     public function __construct(
         public SecondFactorMethod $method,
         public int $recoveryCodesRemaining,
+        public ?string $passkeyName = null,
     ) {}
 
     public function recoveryCodesLow(): bool
@@ -40,5 +42,15 @@ final readonly class SecondFactorResult
                 'recovery_codes_low' => $this->recoveryCodesLow(),
             ],
         ];
+    }
+
+    /**
+     * Metadata of the login event: the name of the passkey, when one was used.
+     *
+     * @return array<string, string>
+     */
+    public function loginEventMetadata(): array
+    {
+        return $this->passkeyName === null ? [] : ['passkey_name' => $this->passkeyName];
     }
 }

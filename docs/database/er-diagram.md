@@ -11,7 +11,7 @@ Convenzioni del documento:
 - I tipi sono i metodi di `Blueprint` usati nelle migration (`unsignedInteger`, `string(64)`, `json`…). `id` è `bigIncrements`, `foreignId` è `unsignedBigInteger`.
 - "Nullable" vale **no** se non indicato diversamente; "—" nella colonna Default significa nessun default.
 - `created_at` e `updated_at` creati da `timestamps()` sono nullable in tutte le tabelle, anche dove il diagramma non lo indica.
-- Lo schema descrive lo stato finale. Le tabelle annotate come provvisorie o con una fase (es. `passkeys`, Fase 3c) sono previste e non ancora migrate.
+- Lo schema descrive lo stato finale. Le tabelle annotate come provvisorie o con una fase sono previste e non ancora migrate.
 - Le tabelle e le colonne che non esistono ancora nascono da **nuove** migration: quelle già committate non si modificano (CLAUDE.md, "Modo di lavorare").
 - Fino alla Fase 2 (migration e modelli) questo documento si allinea alle skill; dalla Fase 2 la fonte sono le migration, e il documento si aggiorna nello stesso task di ogni migration che cambia il database.
 
@@ -241,11 +241,11 @@ erDiagram
     }
 
     passkeys {
-        bigint id PK "PROVVISORIA"
+        bigint id PK
         bigint user_id FK
         string name
-        text credential_id
-        json data "chiave pubblica e contatore"
+        string credential_id UK "1364, ascii_bin"
+        json credential "chiave pubblica e contatore"
         timestamp last_used_at "nullable"
         timestamp created_at
         timestamp updated_at
@@ -269,8 +269,6 @@ erDiagram
     users |o..o{ sessions : "user_id senza FK"
     users ||..o| password_reset_tokens : "email senza FK"
 ```
-
-La tabella `passkeys` è **provvisoria**: la sua forma dipende dalla libreria WebAuthn, non ancora scelta (decisione D7).
 
 ## Tabelle di Laravel
 
@@ -616,22 +614,23 @@ Registro degli eventi di sicurezza dell'account, mostrato in "Attività recente"
 - FK: `user_id` `cascadeOnDelete`.
 - Indici: composto (`user_id`, `created_at`) per l'elenco paginato dal più recente.
 
-### passkeys (provvisoria)
+### passkeys
 
-Credenziali WebAuthn dell'utente. **Forma provvisoria**, modellata su `spatie/laravel-passkeys`; la tabella reale è quella della libreria scelta (D7).
+Credenziali WebAuthn dell'utente, gestite con `laravel/passkeys` (D7). Migration `2026_10_05_000001_create_passkeys_table`, scritta dal progetto invece di pubblicare quella del pacchetto. Modello `App\Models\Passkey`, che estende quello del pacchetto.
 
 | Colonna | Tipo | Nullable | Default | Chiave | Note |
 |---|---|---|---|---|---|
 | id | `id` | no | — | PK | |
-| user_id | `foreignId` | no | — | FK → users.id | nella libreria può chiamarsi `authenticatable_id` |
+| user_id | `foreignId` | no | — | FK → users.id | |
 | name | `string` | no | — | | scelto dall'utente, rinominabile |
-| credential_id | `text` | no | — | | nessun vincolo unico: MySQL non indicizza una colonna `text` senza lunghezza (D7) |
-| data | `json` | no | — | | chiave pubblica e contatore; mai la chiave privata |
-| last_used_at | `timestamp` | sì | null | | |
+| credential_id | `string(1364)` | no | — | UK | id della credenziale in base64url senza padding; charset `ascii`, collation `ascii_bin` (D7) |
+| credential | `json` | no | — | | dati pubblici della credenziale: chiave pubblica, contatore delle firme, user handle, AAGUID; mai la chiave privata. `$hidden`: non esce mai dal backend |
+| last_used_at | `timestamp` | sì | null | | aggiornato a ogni verifica riuscita, insieme al contatore |
 | created_at, updated_at | `timestamps` | sì | null | | |
 
 - FK: `user_id` `cascadeOnDelete`.
-- Unicità: da decidere con la libreria (D7).
+- Indici: unico su `credential_id` (una credenziale appartiene a un solo account); l'indice della FK su `user_id`.
+- Eliminazione dell'account: `DeleteAccountAction` cancella le passkey nella transazione dell'anonimizzazione.
 
 ## Valori calcolati
 
@@ -701,8 +700,8 @@ Contraddizioni e lacune trovate tra le skill durante la stesura dello schema, co
 - Decisione: `security_events.user_id` non nullable; `login_failed` si registra solo per utenti esistenti. La risposta HTTP resta identica nei due casi.
 
 **D7 — Tabella delle passkey**
-- Problema: `account-security` parla di tabella `passkeys` con nome e ultimo utilizzo (forma di `spatie/laravel-passkeys`); `laragear/webauthn` usa `webauthn_credentials`, con `alias` e senza `last_used_at`.
-- Decisione: forma provvisoria `passkeys` in questo documento, da sostituire con la tabella reale quando si sceglie la libreria. Anche il vincolo di unicità sulla credenziale si decide con la libreria: `credential_id` è `text` e MySQL non accetta un indice unico su `text` senza lunghezza (servirebbe una colonna `string` o un hash della credenziale).
+- Problema: `account-security` parlava di una tabella `passkeys` con nome e ultimo utilizzo, con la forma provvisoria di `spatie/laravel-passkeys` (`credential_id` `text`, senza vincolo di unicità perché MySQL non indicizza un `text` senza lunghezza).
+- Decisione (Fase 3c): libreria `laravel/passkeys` (pacchetto ufficiale di Laravel; `laragear/webauthn` è dichiarato abbandonato in suo favore). La tabella `passkeys` segue la forma del pacchetto (`user_id`, `name`, `credential_id`, `credential`, `last_used_at`), con una migration del progetto. `credential_id` è `string(1364)` con indice unico: l'id di una credenziale arriva a 1023 byte per la specifica WebAuthn, cioè 1364 caratteri in base64url senza padding; con charset `ascii` sono 1364 byte, sotto il limite di 3072 byte di un indice InnoDB. La collation `ascii_bin` distingue maiuscole e minuscole, come richiede base64url: con una collation `_ci` due id diversi solo nelle maiuscole collidirebbero.
 
 **D8 — Nuove colonne di `users`** (minore)
 - Problema: `account-security` indicava solo `password_changed_at` come colonna da nuova migration, ma anche `role` e le colonne `two_factor_*` mancano dalla migration committata.

@@ -38,6 +38,18 @@ describe('users', function () {
             ->and(Hash::check('GH90-JK12', $user->two_factor_recovery_codes[7]))->toBeTrue();
     });
 
+    it('creates a user with a fake passkey and without two-factor authentication', function () {
+        $user = User::factory()->withPasskey('iPhone di prova')->create();
+        $passkey = $user->passkeys()->sole();
+
+        expect($passkey->name)->toBe('iPhone di prova')
+            ->and($passkey->credential_id)->toMatch('/^[A-Za-z0-9_-]{43}$/')
+            ->and($passkey->credential['type'])->toBe('public-key')
+            ->and($passkey->last_used_at)->toBeNull()
+            ->and($user->hasSecondFactor())->toBeFalse()
+            ->and(User::factory()->withPasskey()->create()->passkeys()->sole()->name)->toBe('MacBook di prova');
+    });
+
     it('creates a user with a pending email change', function () {
         $user = User::factory()->withPendingEmailChange('nuova@example.com')->create();
 

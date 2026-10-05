@@ -253,6 +253,15 @@ Il segreto è fisso e pubblicato qui **solo per la demo**, così durante la pres
 
 I seeder usano Faker, che è una dipendenza di sviluppo: il database demo si crea nell'ambiente Docker di sviluppo, non in produzione.
 
+## Passkey
+
+Le passkey (WebAuthn) permettono l'accesso senza password e valgono come secondo fattore quando la doppia autenticazione è attiva.
+
+- Funzionano solo dal frontend, su `http://localhost:5173`: è l'unica origine ammessa e il relying party è `localhost` (i browser considerano `localhost` un contesto sicuro anche senza HTTPS). Non si usano dall'indirizzo del backend.
+- Libreria: `laravel/passkeys`, il pacchetto ufficiale di Laravel. Il vincolo in `composer.json` è `^0.2.1`, che non accetta la 0.3: in una versione 0.x un aggiornamento minore può cambiare l'API, quindi si aggiorna a mano, verificando i test.
+- `PASSKEYS_USER_HANDLE_SECRET` è facoltativa e non serve in sviluppo: se manca, il segreto dell'identificativo WebAuthn dell'utente si ricava dalla `APP_KEY` dell'installazione. Va impostata prima di un'eventuale rotazione della `APP_KEY`.
+- I dati demo non contengono passkey: si registrano dalla pagina Sicurezza con un dispositivo reale.
+
 ## Carte di test
 
 Il pagamento è simulato: nessun addebito reale. Scadenza qualsiasi non passata nel formato MM/AA, CVC di 3 cifre qualsiasi.

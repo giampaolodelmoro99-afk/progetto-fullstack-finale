@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Account;
 
 use App\Enums\SecondFactorMethod;
+use App\Support\Auth\PasskeyCredentialRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,6 +27,7 @@ final class ConfirmIdentityRequest extends FormRequest
             'password' => ['required', 'string', 'current_password:web'],
             'method' => ['nullable', 'string', Rule::enum(SecondFactorMethod::class)],
             'code' => ['nullable', 'string', 'max:64'],
+            ...PasskeyCredentialRules::rules(['nullable']),
         ];
     }
 }

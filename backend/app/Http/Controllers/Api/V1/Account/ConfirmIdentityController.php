@@ -16,7 +16,10 @@ final class ConfirmIdentityController extends Controller
         $confirmation = $confirmIdentity->execute(
             $request->user(),
             SecondFactorMethod::tryFrom((string) $request->validated('method')),
-            $request->validated('code'),
+            [
+                'code' => $request->validated('code'),
+                'credential' => $request->validated('credential'),
+            ],
         );
 
         return IdentityConfirmationResource::make($confirmation)

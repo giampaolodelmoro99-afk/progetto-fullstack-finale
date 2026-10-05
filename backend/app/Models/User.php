@@ -16,13 +16,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\PasskeyAuthenticatable;
 
 #[Fillable(['name', 'email', 'password', 'password_changed_at'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, PasskeyAuthenticatable;
 
     /**
      * Name stored by the account deletion, neutral with respect to the role.
@@ -135,6 +137,8 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Two-factor authentication is active only once the TOTP is confirmed.
+     * Passkeys never turn it on: they always allow the passwordless login,
+     * and count as a second factor only when the TOTP is active.
      */
     public function hasSecondFactor(): bool
     {
@@ -143,13 +147,18 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Second factor methods offered by the login challenge and the password
-     * reset; empty without two-factor authentication.
+     * reset; empty without two-factor authentication. The passkey is offered
+     * only when the user has registered at least one.
      *
      * @return list<string>
      */
     public function secondFactorMethods(): array
     {
-        return $this->hasSecondFactor() ? ['totp', 'recovery_code'] : [];
+        if (! $this->hasSecondFactor()) {
+            return [];
+        }
+
+        return $this->hasPasskeysEnabled() ? ['totp', 'recovery_code', 'passkey'] : ['totp', 'recovery_code'];
     }
 
     public function sendEmailVerificationNotification(): void

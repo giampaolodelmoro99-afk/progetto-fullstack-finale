@@ -27,6 +27,30 @@ it('asks for the second factor when two-factor authentication is active', functi
         ]);
 });
 
+it('offers the passkey only to a user with two-factor authentication and a passkey', function () {
+    $user = User::factory()->withTwoFactor()->withPasskey()->create(['email' => 'davide.conti@esempio.it']);
+    $token = Password::broker()->createToken($user);
+
+    fromFrontend()->postJson('/api/v1/reset-password/check', ['email' => 'davide.conti@esempio.it', 'token' => $token])
+        ->assertOk()
+        ->assertExactJson([
+            'requires_second_factor' => true,
+            'methods' => ['totp', 'recovery_code', 'passkey'],
+        ]);
+});
+
+it('asks for no second factor from a user with passkeys only', function () {
+    $user = User::factory()->withPasskey()->create(['email' => 'giulia.ferri@esempio.it']);
+    $token = Password::broker()->createToken($user);
+
+    fromFrontend()->postJson('/api/v1/reset-password/check', ['email' => 'giulia.ferri@esempio.it', 'token' => $token])
+        ->assertOk()
+        ->assertExactJson([
+            'requires_second_factor' => false,
+            'methods' => [],
+        ]);
+});
+
 it('rejects an invalid token', function (string $case) {
     $this->travelTo('2026-10-01 10:30:00');
     $user = User::factory()->create(['email' => 'giulia.ferri@esempio.it']);

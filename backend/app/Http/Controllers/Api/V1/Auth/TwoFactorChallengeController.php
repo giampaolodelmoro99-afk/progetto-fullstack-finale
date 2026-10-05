@@ -15,7 +15,10 @@ final class TwoFactorChallengeController extends Controller
     {
         $result = $completeLogin->execute(
             SecondFactorMethod::from($request->validated('method')),
-            $request->validated('code'),
+            [
+                'code' => $request->validated('code'),
+                'credential' => $request->validated('credential'),
+            ],
         );
 
         return UserResource::make($result->user->load('pendingEmailChange'))

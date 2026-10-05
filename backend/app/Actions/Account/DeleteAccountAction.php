@@ -30,8 +30,7 @@ use Illuminate\Support\Str;
  * Before the logout the user is read again: the guard would otherwise cycle
  * the stale remember token kept in memory and save it on the anonymized user.
  *
- * No security event: the log of the user has just been erased. Passkeys
- * join the deletion in Phase 3c, with the table of the library.
+ * No security event: the log of the user has just been erased.
  */
 final class DeleteAccountAction
 {
@@ -61,6 +60,7 @@ final class DeleteAccountAction
             $locked->cart()->delete();
             $locked->securityEvents()->delete();
             $locked->emailChangeRequests()->delete();
+            $locked->passkeys()->delete();
             DB::table(config('auth.passwords.users.table'))->where('email', $originalEmail)->delete();
             DB::table(config('session.table'))->where('user_id', $locked->id)->delete();
 

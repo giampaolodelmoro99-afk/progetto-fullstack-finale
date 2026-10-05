@@ -23,9 +23,11 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 
 - Verifica email e reset password: strumenti nativi di Laravel (`MustVerifyEmail`, URL firmati, password broker).
 - TOTP: libreria candidata `pragmarx/google2fa`, con QR code SVG generato dal backend (es. `bacon/bacon-qr-code`).
-- Passkey: libreria WebAuthn per Laravel, candidate `laragear/webauthn` e `spatie/laravel-passkeys`. Verifica la compatibilità con la versione di Laravel installata e proponi la scelta prima di installarla. La crittografia WebAuthn non si scrive a mano.
+- Passkey: `laravel/passkeys` (pacchetto ufficiale di Laravel, su `web-auth/webauthn-lib`), scelto nella Fase 3c al posto di `laragear/webauthn` (dichiarato abbandonato in suo favore) e di `spatie/laravel-passkeys` (pensato per Blade e Livewire). Vincolo `^0.2.1`: è una versione 0.x, quindi un aggiornamento 0.3 può cambiare l'API e si fa a mano. Del pacchetto si usano solo le Action (`GenerateRegistrationOptions`, `GenerateVerificationOptions`, `StorePasskey`, `VerifyPasskey`) e la serializzazione di `Support\WebAuthn`, dietro il contratto `App\Contracts\Security\PasskeyCeremony` (`WebAuthnPasskeyCeremony`); le sue rotte sono disattivate (`Passkeys::ignoreRoutes()`) e la migration è del progetto. La crittografia WebAuthn non si scrive a mano.
+- Opzioni di registrazione: credenziale **rilevabile** obbligatoria (`authenticatorSelection.residentKey` `required`) e **verifica dell'utente** obbligatoria (`userVerification` `required`, impronta, volto o PIN), anche nelle opzioni di verifica. **Motivo:** senza credenziale rilevabile alcuni dispositivi creano passkey che funzionano come secondo fattore (dove il backend elenca le credenziali dell'utente) ma non per l'accesso senza email, dove il browser deve trovarle da solo. Sono i default di `laravel/passkeys`; un test sulle opzioni li blocca.
+- Segreto dello user handle (`passkeys.user_handle_secret`): l'handle WebAuthn dell'utente è un HMAC opaco dell'id, che non rivela dati personali. Il segreto **non è mai un valore fisso nel repository**: si legge da `PASSKEYS_USER_HANDLE_SECRET` e, se è vuota (il caso normale, la variabile non è in `.env.example`), `AppServiceProvider` lo deriva dalla `APP_KEY` dell'installazione con `hash_hmac('sha256', 'passkeys.user_handle', APP_KEY)` (`App\Support\Auth\PasskeyUserHandleSecret`): diverso per ogni installazione, perché `entrypoint.sh` genera una `APP_KEY` propria, e distinto dalla `APP_KEY` stessa. Senza `APP_KEY` resta vuoto e una cerimonia passkey fallisce, invece di usare un valore comune a tutte le installazioni. Valore fisso solo in `.env.testing`. Lo user handle si salva anche nella credenziale e la verifica usa quello salvato: una rotazione della `APP_KEY` non rompe le passkey esistenti, cambia solo l'handle di quelle nuove; per evitarlo si imposta `PASSKEYS_USER_HANDLE_SECRET` prima di ruotare.
 - Frontend passkey: `@simplewebauthn/browser` (`startRegistration`, `startAuthentication`, `browserSupportsWebAuthn`).
-- Le passkey funzionano su `http://localhost` perché i browser lo considerano un contesto sicuro. Relying party: id `localhost`, origine ammessa `http://localhost:5173`.
+- Le passkey funzionano su `http://localhost` perché i browser lo considerano un contesto sicuro. Relying party: id `localhost`, origine ammessa `http://localhost:5173` (`config/passkeys.php`, entrambi da `FRONTEND_URL`, mai l'indirizzo del backend): le cerimonie avvengono nel browser sulla pagina del frontend.
 - User agent: parser interno senza dipendenze (sezione "Eventi di sicurezza").
 - Niente Fortify: rotte e struttura seguono le convenzioni del progetto (`/api/v1`, Action, Resource).
 
@@ -40,14 +42,14 @@ Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 | users.two_factor_confirmed_at | data di attivazione della doppia autenticazione, null se non attiva | — |
 | users.two_factor_last_used_step | ultimo intervallo TOTP usato | impedisce il riutilizzo dello stesso codice |
 | users.anonymized_at | data dell'eliminazione dell'account, null per un account attivo | nuova migration nella Fase 3b; cast `datetime`, non fillable: la valorizza solo `DeleteAccountAction` |
-| passkeys (tabella della libreria, forma provvisoria) | credenziali WebAuthn, nome, ultimo utilizzo | chiave pubblica soltanto |
+| passkeys | user_id, name, credential_id (base64url, unico), credential (JSON di `laravel/passkeys`), last_used_at | chiave pubblica soltanto; `credential` in `$hidden`, mai nelle risposte |
 | password_reset_tokens | token di reset di Laravel | hash, scadenza 60 minuti |
 | email_change_requests | user_id, new_email, token_hash, cancel_token_hash, expires_at, confirmed_at, cancelled_at | hash SHA-256 in esadecimale (`char(64)`, indice unico), scadenza 60 minuti, monouso |
 | security_events | user_id, type, ip_address, user_agent (grezzo), metadata (JSON), created_at | nessun segreto nei metadata |
 | sessions | sessioni del driver `database` | usate per chiudere le altre sessioni |
 
 - `role`, `password_changed_at` e le quattro colonne `two_factor_*` si aggiungono a `users` con un'unica nuova migration, perché quella di Laravel è già committata. `password_changed_at` è nullable nel database (colonna aggiunta a una tabella esistente), ma registrazione, cambio e reset la valorizzano sempre, e così la `UserFactory`.
-- La tabella `passkeys` di `docs/database/er-diagram.md` è provvisoria, modellata su `spatie/laravel-passkeys` (nome e `last_used_at`); `laragear/webauthn` usa `webauthn_credentials` con `alias` e senza ultimo utilizzo. Lo schema si aggiorna alla scelta della libreria.
+- La tabella `passkeys` segue la forma di `laravel/passkeys` con una migration del progetto; il vincolo di unicità su `credential_id` è descritto nella decisione D7 di `docs/database/er-diagram.md`.
 - I token del cambio email si salvano come SHA-256 in esadecimale con indice unico, non con l'hash lento del password broker. Sono casuali ad alta entropia, quindi un hash veloce senza salt basta; e la richiesta va cercata per hash anche da ospite, perché il link di annullamento arriva al vecchio indirizzo e si apre senza login.
 - I codici di recupero, invece, si salvano con `Hash::make` (bcrypt). I codici `XXXX-XXXX` hanno bassa entropia: in caso di furto del database un hash veloce come SHA-256 sarebbe forzabile, mentre bcrypt è lento e con salt. Non serve cercarli con un indice: la verifica confronta il codice con gli hash dell'utente, al massimo 8.
 - `security_events.user_id` non è nullable: gli eventi riguardano solo utenti esistenti. `login_failed` si registra solo quando l'email appartiene a un utente; per un'email inesistente non si scrive nessun evento, e la risposta HTTP resta identica nei due casi.
@@ -88,6 +90,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 - `confirmation_timeout`: 600 secondi
 - `login_challenge_ttl`: 300 secondi
+- `passkey_challenge_ttl`: 300 secondi (validità delle opzioni di una cerimonia passkey in sessione)
 - `email_change_ttl`: 60 minuti
 - `recovery_codes_count`: 8
 - `account_deletion_pending_window`: 15 minuti (un ordine `pending` più recente blocca l'eliminazione dell'account)
@@ -97,11 +100,12 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 - Interfaccia `App\Contracts\Security\SecondFactorVerifier` con `verify(User $user, array $payload): bool`.
 - Implementazioni: `TotpVerifier`, `RecoveryCodeVerifier`, `PasskeyVerifier`.
-- `VerifySecondFactorAction` si usa solo se `hasSecondFactor()`: sceglie l'implementazione in base al campo `method` (`totp`, `recovery_code`, `passkey`) e lancia `InvalidSecondFactorException` (422) se la verifica fallisce.
+- `VerifySecondFactorAction` si usa solo se `hasSecondFactor()`: sceglie l'implementazione in base al campo `method` (`totp`, `recovery_code`, `passkey`) e lancia `InvalidSecondFactorException` (422) se la verifica fallisce: errore sul campo `code` («Codice non valido.») per TOTP e codici di recupero, sul campo `credential` («Passkey non valida: riprova.») per la passkey.
+- Il payload contiene `code` oppure, per la passkey, `credential`: la risposta del browser (`startAuthentication()`), verificata dalla libreria. Un `credential` mancante con `method` `passkey` è un errore di campo obbligatorio sul campo `credential` e non conta come tentativo. L'Action passa al verificatore anche il contesto, perché la passkey usa le opzioni generate per quel contesto e per quell'utente.
 - I metodi disponibili, restituiti nel campo `methods` delle risposte, sono `totp` e `recovery_code`, più `passkey` se l'utente ha almeno una passkey registrata.
 - Il TOTP accetta una finestra di un intervallo e rifiuta intervalli già usati.
 - Un codice di recupero usato viene rimosso; se ne restano due o meno, la risposta lo segnala e il frontend invita a rigenerarli.
-- Nei test `PasskeyVerifier` si sostituisce con un'implementazione finta tramite il container.
+- Nei test la crittografia WebAuthn (`PasskeyCeremony`) si sostituisce con `Tests\Support\FakePasskeyCeremony` tramite il container; `PasskeyVerifier` e la conservazione delle opzioni in sessione restano reali.
 
 ## Conferma dell'identità (step-up)
 
@@ -134,11 +138,11 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 1. `POST /login` con email e password.
 2. Senza doppia autenticazione: rigenera la sessione e restituisce l'utente.
 3. Con doppia autenticazione: **non** autentica. Salva in sessione `login.pending_user_id` con scadenza `login_challenge_ttl` e risponde `{ "two_factor_required": true, "methods": [...] }`.
-4. `POST /login/two-factor` con `method` e `code`, oppure con la risposta della passkey ottenuta da `POST /login/two-factor/passkey-options`. Se riesce, autentica e rigenera la sessione.
+4. `POST /login/two-factor` con `method` e `code`, oppure con `method` `passkey` e `credential`, la risposta alle opzioni di `POST /login/two-factor/passkey-options` (rotta con il limiter `two-factor`, che richiede la challenge). Se riesce, autentica e rigenera la sessione; dopo una passkey l'evento `login` contiene `passkey_name`.
    - Challenge mancante o scaduta (`login.pending_user_id` assente o oltre `login_challenge_ttl`): `TwoFactorChallengeExpiredException`, 422 con `{ "message": "La verifica è scaduta: accedi di nuovo.", "code": "two_factor_challenge_expired" }`. Il frontend torna al login.
    - Codice sbagliato: 422 con errore sul campo `code` e nessun `code` di primo livello. Il frontend resta sulla pagina.
    - Non si usa il 419, che appartiene al CSRF e viene ripetuto dall'interceptor.
-5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login`. La passkey da sola basta, non si chiede altro.
+5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login` con `credential`. La passkey da sola basta, non si chiede altro. Le opzioni sono monouso e valgono `passkey_challenge_ttl` secondi; se riesce, l'accesso rimuove una challenge del login con password e una conferma dell'identità rimaste in sessione, rigenera la sessione e scrive l'evento `login` con `passkey_name`. Ogni fallimento (opzioni mancanti, usate o scadute, credenziale sconosciuta, firma, origine o verifica dell'utente non valide, account anonimizzato) dà la stessa `InvalidPasskeyException`: 422 con `{ "message": "Passkey non riconosciuta: riprova o accedi con la password.", "code": "invalid_passkey" }`, senza `errors` e senza evento `login_failed` (senza una passkey valida l'utente non è identificato in modo affidabile).
 6. Credenziali errate: `InvalidCredentialsException` (422) con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi (non si usa `ValidationException`, che porta sempre `errors`), così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
 7. Account anonimizzato (`anonymized_at` valorizzata): la stessa `InvalidCredentialsException`, senza evento `login_failed`. Con email fittizia e password casuale l'accesso non riuscirebbe comunque; il controllo esplicito rende la regola indipendente da questo. Per difesa in profondità lo stesso controllo vale per `forgot-password` (nessuna email, stessa risposta generica) e per l'accesso con passkey.
 
@@ -180,12 +184,19 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 ### Passkey
 
-1. `GET /me/passkeys`: elenco con nome, data di creazione e ultimo utilizzo.
-2. `POST /me/passkeys/options` (`identity.confirmed`), poi `POST /me/passkeys` con la risposta del browser e un nome scelto dall'utente. Evento `passkey_added` con `passkey_name`.
-3. `PATCH /me/passkeys/{passkey}`: rinomina.
-4. `DELETE /me/passkeys/{passkey}` (`identity.confirmed`): rimozione, notifica, evento `passkey_removed` con `passkey_name`.
-5. L'interfaccia consiglia di registrare almeno due passkey, su dispositivi diversi.
-6. Se il browser non supporta WebAuthn, le opzioni passkey non vengono mostrate.
+1. `GET /me/passkeys`: elenco dal più recente con `id`, `name`, `created_at`, `last_used_at` (`PasskeyResource`, mai la credenziale).
+2. `POST /me/passkeys/options` (`identity.confirmed`), poi `POST /me/passkeys` (`identity.confirmed`: un 423 qui non consuma le opzioni, quindi il frontend conferma e ripete) con `name` e `credential`, la risposta di `startRegistration()`. Risposta 201 con la passkey. Evento `passkey_added` con `passkey_name`, notifica. Opzioni mancanti, scadute o già usate → 422 su `credential` («La registrazione della passkey è scaduta: riprova.»); risposta rifiutata dalla libreria o credenziale già registrata → 422 su `credential` («Non è stato possibile registrare la passkey: riprova.»).
+3. `PATCH /me/passkeys/{passkey}` con `name`: rinomina, senza conferma dell'identità, evento o notifica (non è un'operazione sensibile; gli eventi passati conservano il nome di allora).
+4. `DELETE /me/passkeys/{passkey}` (`can:delete` prima di `identity.confirmed`): rimozione, notifica, evento `passkey_removed` con `passkey_name`, risposta 204.
+5. Le passkey di un altro utente rispondono 404 (`PasskeyPolicy` con `denyAsNotFound()`), anche prima della conferma dell'identità.
+6. Opzioni in sessione (`PasskeyChallengeStore`): una per scopo (`PasskeyPurpose`: registrazione, accesso senza password e un posto per ogni contesto del secondo fattore), monouso anche quando la verifica fallisce, valide `passkey_challenge_ttl` secondi. Le opzioni di un'operazione non completano un'altra.
+7. Opzioni del secondo fattore: `POST /login/two-factor/passkey-options`, `POST /reset-password/passkey-options` (con `token` ed `email`, controllati per primi), `POST /me/confirm-identity/passkey-options` e `POST /me/password/passkey-options`. Elencano solo le passkey dell'utente, e la verifica rifiuta quelle di un altro. Senza doppia autenticazione o senza passkey: 422 con `{ "message": "Nessuna passkey disponibile per questa verifica.", "code": "passkey_unavailable" }`. Risposta delle opzioni: `{ "data": { "options": { ... } } }`, pronta per `@simplewebauthn/browser`.
+8. Forma della risposta del browser (`credential`): la valida ogni Form Request che la accetta, con le regole condivise di `App\Support\Auth\PasskeyCredentialRules` (`id`, `rawId`, `type` `public-key`, `response` con `clientDataJSON`, `attestationObject`, `authenticatorData`, `signature`, `userHandle` come stringhe, `transports` come elenco di stringhe, `clientExtensionResults`, `authenticatorAttachment`). Una forma sbagliata è un 422 sul campo prima della libreria e, come un codice mancante, non conta come tentativo. Un contenuto ben formato ma non valido (base64, CBOR o JSON non validi, firma sbagliata) arriva alla libreria e finisce come passkey non valida: `invalid_passkey` all'accesso senza password, 422 su `credential` nella registrazione e, **nel secondo fattore, un tentativo fallito** con il suo evento, contato nel contatore condiviso.
+9. Contatore delle firme: un contatore che torna indietro o resta uguale rispetto a quello salvato indica un autenticatore clonato e viene rifiutato (`invalid_passkey`, contatore e ultimo utilizzo invariati). Il contatore che resta a **0** sia nella risposta sia nel valore salvato invece si **accetta**: le passkey sincronizzate (portachiavi iCloud, Gestore password di Google) sono copiate tra più dispositivi e non possono tenere un contatore condiviso, quindi la specifica WebAuthn prevede che lo mandino sempre a 0. Rifiutarlo bloccherebbe proprio le passkey più diffuse. La protezione contro il riuso di una risposta resta la challenge monouso.
+10. Errori inattesi nella cerimonia: `TypeError` e `ValueError` dentro la libreria sono quasi certamente un difetto (nostro o della libreria dopo un aggiornamento), non una risposta sbagliata del browser. L'utente riceve comunque la risposta di una passkey non valida, ma l'errore si registra con `report()`, avvolto in `PasskeyCeremonyFailedException`, che porta classe, messaggio e posizione dell'errore originale ma non l'errore stesso: la sua traccia potrebbe mostrare, troncato, il JSON della credential. I parametri della cerimonia sono `#[\SensitiveParameter]`. Gli altri errori (per esempio il database non raggiungibile) non si nascondono.
+11. Blocco della sessione: le rotte che consumano le opzioni (`POST /passkeys/login`, `POST /me/passkeys`, `POST /login/two-factor`, `POST /me/confirm-identity`, `PUT /me/password`, `POST /reset-password`) hanno `->block()` (lock nella cache, 10 secondi di lock e 10 di attesa). **Motivo:** le opzioni sono monouso, ma il driver di sessione `database` non blocca la sessione: due richieste parallele della stessa sessione potrebbero leggerle entrambe prima che la prima salvi la sessione. Con il blocco la seconda richiesta parte dopo la prima e trova le opzioni già consumate. Il contatore delle firme non basta, perché con le passkey sincronizzate resta a 0. Le rotte che generano soltanto le opzioni non bloccano.
+12. L'interfaccia consiglia di registrare almeno due passkey, su dispositivi diversi.
+13. Se il browser non supporta WebAuthn, le opzioni passkey non vengono mostrate.
 
 ### Eliminazione dell'account
 
@@ -198,7 +209,7 @@ Si realizza nella Fase 3b (`docs/roadmap.md`), con la colonna `users.anonymized_
 5. **In `DB::transaction()`, con `lockForUpdate()` sull'utente** (il controllo degli ordini aperti si ripete sotto lock; un checkout che arriva dopo trova le sessioni chiuse e riceve 401):
    - si cancellano indirizzi, carrello con le sue righe, eventi di sicurezza, richieste di cambio email, token di reset dell'indirizzo originale (`password_reset_tokens`) e tutte le sessioni dell'utente, compresa quella corrente
    - si disattiva la doppia autenticazione: `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at` e `two_factor_last_used_step` a null
-   - si cancellano le passkey: la cancellazione si aggiunge a `DeleteAccountAction` nella Fase 3c, insieme alla tabella della libreria
+   - si cancellano le passkey
    - si anonimizza l'utente: `name` «Utente eliminato»; `email` fittizia e univoca `deleted-{id}@anonymized.invalid` (il dominio `.invalid` è riservato e non riceve posta); `password` con l'hash di una stringa casuale lunga; `email_verified_at` e `remember_token` a null; `anonymized_at` valorizzata
    - ordini, righe, cronologia degli stati e pagamenti **non** si toccano
 6. **Dopo il commit:** notifica on-demand `AccountDeletedNotification` all'indirizzo originale (`Notification::route('mail', $originalEmail)`), con `afterCommit()`. Così parte solo se l'eliminazione è riuscita, e anche con un driver di coda asincrono non finisce all'indirizzo `.invalid`. Poi logout della guard `web`, invalidazione della sessione e risposta 204.
@@ -297,13 +308,15 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 | `verification` | 6 al minuto per utente, per IP se ospite |
 | `email-change` | 3 all'ora per utente |
 | `identity-confirmation` | 5 al minuto per utente |
+| `passkey-login` | 10 al minuto per IP |
 | `assistant` | 10 al minuto per utente, per IP se ospite (skill `ai-assistant`) |
 
 - `two-factor` si applica a `POST /login/two-factor` e a `POST /me/two-factor/confirm`. La chiave è l'utente, non la sessione: al login è il `login.pending_user_id` della challenge (senza challenge, la sessione o l'IP come ripiego), nella conferma dell'attivazione l'utente autenticato. **Motivo:** con la chiave sulla sessione, chi conosce la password potrebbe aprire sessioni nuove con altri login e moltiplicare i tentativi sul codice.
 - `identity-confirmation` si applica a `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password` e `POST /me/password/passkey-options`: tutte accettano o preparano un secondo fattore.
+- `passkey-login` si applica a `POST /passkeys/login/options` e `POST /passkeys/login`, con un solo contatore: l'utente è ignoto finché la passkey non è verificata, quindi la chiave è l'IP. Un accesso consuma due richieste, quindi 10 richieste sono 5 tentativi al minuto, come il limiter `login`. `POST /login/two-factor/passkey-options` usa `two-factor`; `POST /reset-password/passkey-options` è protetta dal token e dal limiter `api`.
 - `email-change` si applica a `POST /me/email` e `DELETE /me/email-change`. **Comportamento noto:** nella priorità dei middleware di Laravel il throttle gira prima di `identity.confirmed`, quindi anche un 423 (conferma mancante) o un 422 (indirizzo non valido) consumano uno dei 3 tentativi dell'ora. È accettato: il frontend apre la conferma dell'identità in modo esplicito prima del dialog "Nuova email", quindi nel flusso normale il 423 non arriva.
 - `register` si applica a `POST /register`; `password-reset` solo a `POST /forgot-password`. `POST /reset-password/check` lo protegge il token (alta entropia, 60 minuti), più il limiter generale `api` (120 al minuto per utente, per IP da ospite) applicato a tutto il gruppo. `POST /reset-password` ha in più il limite dei tentativi del secondo fattore (punto seguente): il token da solo non basta, perché chi ha il link (cioè l'email) è proprio chi il secondo fattore deve fermare.
-- **Tentativi del secondo fattore:** oltre ai limiter delle rotte, `VerifySecondFactorAction` conta i codici sbagliati **per utente, con un solo contatore condiviso da tutti i contesti** (login, recupero password, conferma dell'identità e, dalla Fase 3b-2, cambio password): dopo 5 fallimenti in un minuto ogni verifica di quell'utente risponde 429 con `Retry-After`, anche con un codice giusto, che non viene consumato. Un codice mancante non conta. **Motivo:** un limiter per rotta lascerebbe scoperta ogni rotta nuova che accetta il secondo fattore, e un limite per IP si aggira cambiando indirizzo.
+- **Tentativi del secondo fattore:** oltre ai limiter delle rotte, `VerifySecondFactorAction` conta i codici e le passkey sbagliati **per utente, con un solo contatore condiviso da tutti i contesti e i metodi** (login, recupero password, conferma dell'identità e, dalla Fase 3b-2, cambio password): dopo 5 fallimenti in un minuto ogni verifica di quell'utente risponde 429 con `Retry-After`, anche con un codice giusto, che non viene consumato. Un codice mancante non conta. **Motivo:** un limiter per rotta lascerebbe scoperta ogni rotta nuova che accetta il secondo fattore, e un limite per IP si aggira cambiando indirizzo.
 - **Compromesso accettato:** chi conosce la password, ha un link di reset valido o una sessione aperta dell'utente può bloccargli il secondo fattore per un minuto sbagliando apposta. Il blocco dura al massimo 60 secondi dall'ultimo tentativo contato e non rivela nulla; è preferibile alla possibilità di provare migliaia di codici.
 - `verification` si applica a `POST /email/verify/{id}/{hash}` e a `POST /email/verification-notification` con un solo contatore condiviso: per un utente autenticato sono 6 richieste al minuto in totale tra le due rotte. Il test del 429 usa una rotta sola.
 - Oltre il limite si risponde 429 con messaggio in italiano e header `Retry-After` in secondi.
@@ -357,7 +370,16 @@ Oltre ai casi standard della skill `testing`:
 - `DELETE /me/email-change`: 204 con evento `email_change_cancelled`, avviso inviato all'indirizzo attuale ed email invariata, 404 senza richiesta in sospeso, 401 da ospite; `pending_email_change` in `GET /me` prima e dopo
 - chiusura delle altre sessioni dopo cambio e reset password
 - `UserAgentLabel` (unit), con user agent reali scritti a mano nel test: Chrome su macOS, Safari su iOS, Safari su iPadOS, Firefox su Windows, Firefox su Linux, Edge su Windows (non Chrome), Opera su Windows (non Chrome), Chrome su Android, stringa vuota e stringa sconosciuta → «Dispositivo sconosciuto»
-- `POST /me/password/passkey-options` e `POST /me/confirm-identity/passkey-options`: 401 da ospite; 422 per un utente senza passkey; 200 con le opzioni per un utente con passkey (verificatore finto); per entrambe 422 anche per un utente con passkey ma senza doppia autenticazione attiva
+- `POST /me/password/passkey-options` e `POST /me/confirm-identity/passkey-options`: 401 da ospite; 422 per un utente senza passkey; 200 con le opzioni per un utente con passkey (cerimonia finta); per entrambe 422 anche per un utente con passkey ma senza doppia autenticazione attiva
+- opzioni di registrazione con `authenticatorSelection.residentKey` `required` e `userVerification` `required`, relying party `localhost`; opzioni di verifica con `userVerification` `required`
+- passkey con la libreria reale e un autenticatore software (`Tests\Support\SoftwareAuthenticator`): registrazione e accesso riusciti con origine `http://localhost:5173`; rifiutati con l'origine del backend, senza verifica dell'utente, con un'altra challenge o con la firma di un'altra chiave; risposta riusata rifiutata
+- forma della `credential` sbagliata → 422 sul campo prima della libreria; contenuto ben formato ma non valido → `invalid_passkey`, 422 su `credential` nella registrazione e tentativo fallito contato nel secondo fattore
+- contatore delle firme che torna indietro → `invalid_passkey` con contatore e ultimo utilizzo invariati; contatore sempre a 0 (passkey sincronizzata) → due accessi riusciti
+- errore inatteso della libreria (`TypeError`) → `invalid_passkey` e una sola `PasskeyCeremonyFailedException` nel log, senza il contenuto della credential
+- `->block()` (10 secondi) sulle rotte che consumano le opzioni, assente su quelle che le generano
+- accesso senza password: opzioni monouso e scadute dopo 300 secondi, account anonimizzato, credenziale sconosciuta e firma sbagliata con la stessa risposta `invalid_passkey` e nessun evento; 429 all'11ª richiesta
+- gestione delle passkey: 423 senza conferma, 201 con evento e notifica, 404 per la passkey di un altro utente, rinomina senza evento
+- segreto dello user handle derivato dalla `APP_KEY` (valore atteso calcolato fuori dal codice), esplicito se impostato, assente senza `APP_KEY`
 - `GET /me/security-events`: 10 elementi per pagina con `meta`, solo gli eventi dell'utente, `device` e `passkey_name` negli eventi passkey
 - `GET /me/security` con i valori attesi per un utente con e senza doppia autenticazione
 - notifiche inviate (`Notification::fake()`) ed eventi di sicurezza registrati

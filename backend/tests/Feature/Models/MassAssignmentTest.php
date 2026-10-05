@@ -101,6 +101,19 @@ it('hides the password and the two-factor secrets from serialization', function 
     expect($user->toArray())->not->toHaveKeys(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes']);
 });
 
+it('hides the passkey credential and the authenticator guess from serialization', function () {
+    $passkey = User::factory()->withPasskey()->create()->passkeys()->sole();
+
+    expect($passkey->toArray())->not->toHaveKeys(['credential', 'authenticator'])
+        ->and($passkey->toArray())->toHaveKeys(['id', 'user_id', 'name', 'credential_id', 'last_used_at']);
+});
+
+it('refuses to move a passkey to another user by mass assignment', function () {
+    $passkey = User::factory()->withPasskey()->create()->passkeys()->sole();
+
+    $passkey->fill(['user_id' => User::factory()->create()->id]);
+})->throws(MassAssignmentException::class);
+
 it('stores the two-factor secrets encrypted', function () {
     $user = User::factory()->withTwoFactor()->create();
 

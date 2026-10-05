@@ -206,7 +206,8 @@ it('validates the fields', function (array $data, string $field) {
 })->with([
     'missing method' => [['code' => '123456'], 'method'],
     'unknown method' => [['method' => 'sms', 'code' => '123456'], 'method'],
-    'passkey not available yet' => [['method' => 'passkey', 'code' => '123456'], 'method'],
+    'passkey without its answer' => [['method' => 'passkey'], 'credential'],
+    'passkey answer that is not an object' => [['method' => 'passkey', 'credential' => 'abc'], 'credential'],
     'missing code' => [['method' => 'totp'], 'code'],
     'code of 65 characters' => [['method' => 'totp', 'code' => str_repeat('1', 65)], 'code'],
 ]);

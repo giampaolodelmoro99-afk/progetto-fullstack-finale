@@ -186,6 +186,16 @@ it('creates the tables with the columns of the er schema', function (string $tab
         'metadata' => ['json', true, null],
         'created_at' => ['timestamp', false, null],
     ]],
+    'passkeys' => ['passkeys', [
+        'id' => ['bigint unsigned', false, null],
+        'user_id' => ['bigint unsigned', false, null],
+        'name' => ['varchar(255)', false, null],
+        'credential_id' => ['varchar(1364)', false, null],
+        'credential' => ['json', false, null],
+        'last_used_at' => ['timestamp', true, null],
+        'created_at' => ['timestamp', true, null],
+        'updated_at' => ['timestamp', true, null],
+    ]],
 ]);
 
 it('creates the indexes of the er schema', function (string $table, array $indexes) {
@@ -246,6 +256,10 @@ it('creates the indexes of the er schema', function (string $table, array $index
     'security_events' => ['security_events', [
         'security_events_user_id_created_at_index' => [['user_id', 'created_at'], false],
     ]],
+    'passkeys' => ['passkeys', [
+        'passkeys_credential_id_unique' => [['credential_id'], true],
+        'passkeys_user_id_foreign' => [['user_id'], false],
+    ]],
 ]);
 
 it('declares the delete behaviour of every foreign key', function (string $table, array $foreignKeys) {
@@ -262,9 +276,15 @@ it('declares the delete behaviour of every foreign key', function (string $table
     'payments' => ['payments', ['order_id' => ['orders', 'restrict']]],
     'email_change_requests' => ['email_change_requests', ['user_id' => ['users', 'cascade']]],
     'security_events' => ['security_events', ['user_id' => ['users', 'cascade']]],
+    'passkeys' => ['passkeys', ['user_id' => ['users', 'cascade']]],
 ]);
 
-it('does not create the personal access tokens and passkeys tables', function () {
-    expect(Schema::hasTable('personal_access_tokens'))->toBeFalse()
-        ->and(Schema::hasTable('passkeys'))->toBeFalse();
+it('does not create the personal access tokens table', function () {
+    expect(Schema::hasTable('personal_access_tokens'))->toBeFalse();
+});
+
+it('stores the passkey credential id in ascii with a case sensitive collation', function () {
+    $column = collect(Schema::getColumns('passkeys'))->firstWhere('name', 'credential_id');
+
+    expect($column['collation'])->toBe('ascii_bin');
 });

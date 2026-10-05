@@ -27,6 +27,14 @@ it('asks for the password without two-factor authentication', function () {
         ]);
 });
 
+it('asks for the password alone from a user with passkeys only', function () {
+    actingAsCustomer(User::factory()->withPasskey()->create());
+
+    fromFrontend()->postJson('/api/v1/testing/sensitive')
+        ->assertStatus(423)
+        ->assertJsonPath('requires', ['password']);
+});
+
 it('asks for password and second factor with two-factor authentication', function () {
     actingAsCustomer(userWithTwoFactor());
 

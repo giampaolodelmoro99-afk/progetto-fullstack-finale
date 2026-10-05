@@ -1,9 +1,12 @@
 <?php
 
+use App\Contracts\Security\PasskeyCeremony;
+use App\Models\Passkey;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PragmaRX\Google2FA\Google2FA;
+use Tests\Support\FakePasskeyCeremony;
 use Tests\TestCase;
 
 /*
@@ -128,6 +131,64 @@ function userWithTwoFactor(array $attributes = []): User
 function totpCode(string $secret, int $offset = 0): string
 {
     return app(Google2FA::class)->oathTotp($secret, intdiv(now()->getTimestamp(), 30) + $offset);
+}
+
+/**
+ * Replaces the WebAuthn cryptography with FakePasskeyCeremony; the options
+ * kept in the session stay real.
+ */
+function fakePasskeys(): void
+{
+    app()->instance(PasskeyCeremony::class, new FakePasskeyCeremony);
+}
+
+/**
+ * A passkey of the user, with a credential id that the tests can name.
+ */
+function passkeyFor(User $user, string $name = 'MacBook di Giulia', string $credentialId = 'Y3JlZGVudGlhbC1naXVsaWE'): Passkey
+{
+    return Passkey::factory()->for($user)->create(['name' => $name, 'credential_id' => $credentialId]);
+}
+
+/**
+ * Answer of the browser to verification options, as FakePasskeyCeremony
+ * reads it: valid unless the signature is "invalid".
+ *
+ * @return array<string, mixed>
+ */
+function passkeyAnswer(string $credentialId = 'Y3JlZGVudGlhbC1naXVsaWE', bool $valid = true): array
+{
+    return [
+        'id' => $credentialId,
+        'rawId' => $credentialId,
+        'type' => 'public-key',
+        'response' => [
+            'clientDataJSON' => 'eyJ0eXBlIjoid2ViYXV0aG4uZ2V0In0',
+            'authenticatorData' => 'SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M',
+            'signature' => $valid ? 'MEUCIQDvalidsignature' : 'invalid',
+        ],
+        'clientExtensionResults' => [],
+    ];
+}
+
+/**
+ * Answer of the browser to registration options, as FakePasskeyCeremony
+ * reads it: valid unless the attestation is "invalid".
+ *
+ * @return array<string, mixed>
+ */
+function passkeyRegistrationAnswer(string $credentialId = 'bnVvdmEtcGFzc2tleQ', bool $valid = true): array
+{
+    return [
+        'id' => $credentialId,
+        'rawId' => $credentialId,
+        'type' => 'public-key',
+        'response' => [
+            'clientDataJSON' => 'eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIn0',
+            'attestationObject' => $valid ? 'o2NmbXRkbm9uZQ' : 'invalid',
+        ],
+        'clientExtensionResults' => [],
+    ];
 }
 
 /**

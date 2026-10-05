@@ -53,6 +53,18 @@ it('shows the overview with two-factor authentication and the codes left', funct
         ]]);
 });
 
+it('counts the passkeys of the user only', function () {
+    $user = actingAsCustomer(User::factory()->withPasskey('MacBook di Giulia')->withPasskey('iPhone di Giulia')->create());
+    User::factory()->withPasskey()->create();
+
+    fromFrontend()->getJson('/api/v1/me/security')
+        ->assertOk()
+        ->assertJsonPath('data.passkeys_count', 2)
+        ->assertJsonPath('data.two_factor_enabled', false);
+
+    expect($user->hasSecondFactor())->toBeFalse();
+});
+
 it('shows an unverified email', function () {
     actingAsCustomer();
 

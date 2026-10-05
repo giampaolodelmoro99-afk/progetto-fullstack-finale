@@ -46,7 +46,8 @@ tests/
 - Fake a seconda del caso: `Notification::fake()`, `Mail::fake()`, `Event::fake()`, `Storage::fake('public')`.
 - Nell'ambiente di test `uncompromised()` è disattivato.
 - Il TOTP si testa generando codici validi con la stessa libreria usata dal codice.
-- Il verificatore delle passkey, il `PaymentGateway` e l'`AiAssistant` si sostituiscono con implementazioni finte tramite il container. Nessun test chiama Ollama.
+- La crittografia delle passkey (`PasskeyCeremony`), il `PaymentGateway` e l'`AiAssistant` si sostituiscono con implementazioni finte tramite il container. Nessun test chiama Ollama.
+- Passkey: `fakePasskeys()` in `Pest.php` collega `Tests\Support\FakePasskeyCeremony` per i test dei flussi; la conservazione delle opzioni in sessione (monouso, scadenza, scopo) resta reale. Helper `passkeyFor()`, `passkeyAnswer()` e `passkeyRegistrationAnswer()`. I test d'integrazione con la libreria reale (`tests/Feature/Security/PasskeyCeremonyTest.php`) usano `Tests\Support\SoftwareAuthenticator`, un autenticatore in software (chiave ES256 con openssl, attestazione `none` in CBOR con `spomky-labs/cbor-php`, dipendenza di sviluppo) che risponde alle opzioni dell'API come un browser e permette di cambiare origine, verifica dell'utente, challenge e chiave.
 
 ### Cosa testare per ogni endpoint
 
@@ -132,7 +133,7 @@ tests/
 - Login con l'email originale e la vecchia password → 422 `invalid_credentials`; un utente con `anonymized_at` valorizzata e una password nota → 422 `invalid_credentials` senza evento `login_failed`.
 - Nuova registrazione con l'indirizzo originale → 201 con un utente nuovo, senza gli ordini precedenti.
 - Dalla Fase 5, con gli endpoint di ordini e dashboard admin (`docs/roadmap.md`): `GET /admin/orders`, `GET /admin/orders/{order}` e `latest_orders` della dashboard mostrano `customer.name` «Cliente eliminato» ed `email` null; la cronologia dell'annullamento fatto dal cliente dice «da Cliente eliminato»; la ricerca con l'email originale non trova l'ordine.
-- Dalla Fase 3c: passkey cancellate.
+- Passkey cancellate, quelle degli altri utenti conservate.
 - Dati demo (Fase 3b): dopo il seeding esiste un utente con `anonymized_at` valorizzata, `name` «Utente eliminato», email con dominio `.invalid` e almeno un ordine `delivered`; nessun indirizzo, carrello o evento di sicurezza collegato.
 
 ### Assistente AI

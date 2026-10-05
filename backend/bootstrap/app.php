@@ -15,8 +15,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -68,9 +68,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 : $e->getMessage(),
         ], Response::HTTP_FORBIDDEN));
 
-        $exceptions->render(fn (NotFoundHttpException $e) => response()->json([
-            'message' => 'La risorsa richiesta non esiste.',
-        ], Response::HTTP_NOT_FOUND));
+        // Also the 404 of a policy that denies as not found (HttpException).
+        $exceptions->render(fn (HttpException $e) => $e->getStatusCode() === Response::HTTP_NOT_FOUND
+            ? response()->json(['message' => 'La risorsa richiesta non esiste.'], Response::HTTP_NOT_FOUND)
+            : null);
 
         $exceptions->render(fn (MethodNotAllowedHttpException $e) => response()->json([
             'message' => 'Metodo non consentito per questo indirizzo.',
