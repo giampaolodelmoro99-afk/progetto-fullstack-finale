@@ -82,8 +82,12 @@ arch('the assistant services implement the contract')
     ->toImplement('App\Contracts\AiAssistant');
 
 arch('the second factor verifiers implement the contract')
-    ->expect(['App\Services\Security\TotpVerifier', 'App\Services\Security\RecoveryCodeVerifier'])
+    ->expect(['App\Services\Security\TotpVerifier', 'App\Services\Security\RecoveryCodeVerifier', 'App\Services\Security\PasskeyVerifier'])
     ->toImplement('App\Contracts\Security\SecondFactorVerifier');
+
+arch('the passkey ceremonies implement the contract')
+    ->expect(['App\Services\Security\WebAuthnPasskeyCeremony', 'Tests\Support\FakePasskeyCeremony'])
+    ->toImplement('App\Contracts\Security\PasskeyCeremony');
 
 arch('notifications are final and queued')
     ->expect('App\Notifications')

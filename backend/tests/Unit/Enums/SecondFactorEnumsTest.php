@@ -9,10 +9,11 @@ it('labels the second factor methods in italian', function (SecondFactorMethod $
 })->with([
     [SecondFactorMethod::Totp, 'totp', 'App di autenticazione'],
     [SecondFactorMethod::RecoveryCode, 'recovery_code', 'Codice di recupero'],
+    [SecondFactorMethod::Passkey, 'passkey', 'Passkey'],
 ]);
 
-it('offers only the methods of this phase', function () {
-    expect(SecondFactorMethod::cases())->toHaveCount(2);
+it('offers the app, the recovery codes and the passkey', function () {
+    expect(SecondFactorMethod::cases())->toHaveCount(3);
 });
 
 it('labels the second factor contexts in italian', function (SecondFactorContext $context, string $value, string $label) {

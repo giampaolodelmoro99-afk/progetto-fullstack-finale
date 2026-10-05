@@ -264,6 +264,20 @@ it('disables two-factor authentication and closes the other sessions', function 
     Notification::assertSentTo($user, TwoFactorDisabledNotification::class);
 });
 
+it('keeps the passkeys when two-factor authentication is disabled', function () {
+    $user = actingAsCustomer(userWithTwoFactor());
+    passkeyFor($user);
+    confirmIdentity();
+
+    fromFrontend()->deleteJson('/api/v1/me/two-factor')->assertNoContent();
+
+    $user->refresh();
+
+    expect($user->two_factor_recovery_codes)->toBeNull()
+        ->and($user->passkeys()->pluck('name')->all())->toBe(['MacBook di Giulia'])
+        ->and($user->secondFactorMethods())->toBe([]);
+});
+
 it('refuses to disable two-factor authentication when it is not active', function () {
     actingAsVerifiedCustomer();
     confirmIdentity();

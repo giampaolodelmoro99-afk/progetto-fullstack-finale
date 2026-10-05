@@ -20,3 +20,10 @@ it('signals the recovery codes left after a recovery code', function (int $remai
 it('adds no meta after a code of the authenticator app', function () {
     expect((new SecondFactorResult(SecondFactorMethod::Totp, 8))->meta())->toBe([]);
 });
+
+it('names the passkey in the login event only after a passkey', function () {
+    expect((new SecondFactorResult(SecondFactorMethod::Passkey, 8, 'MacBook di Davide'))->loginEventMetadata())
+        ->toBe(['passkey_name' => 'MacBook di Davide'])
+        ->and((new SecondFactorResult(SecondFactorMethod::Passkey, 8, 'MacBook di Davide'))->meta())->toBe([])
+        ->and((new SecondFactorResult(SecondFactorMethod::Totp, 8))->loginEventMetadata())->toBe([]);
+});

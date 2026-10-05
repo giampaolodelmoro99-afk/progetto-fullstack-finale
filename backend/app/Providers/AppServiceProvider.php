@@ -4,9 +4,13 @@ namespace App\Providers;
 
 use App\Actions\Auth\LoginAction;
 use App\Contracts\AiAssistant;
+use App\Contracts\Security\PasskeyCeremony;
+use App\Models\Passkey;
 use App\Models\User;
 use App\Services\Assistant\FakeAiAssistant;
 use App\Services\Assistant\OllamaAssistant;
+use App\Services\Security\WebAuthnPasskeyCeremony;
+use App\Support\Auth\PasskeyUserHandleSecret;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -18,6 +22,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use InvalidArgumentException;
+use Laravel\Passkeys\Passkeys;
 use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
@@ -34,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
             'ollama' => $app->make(OllamaAssistant::class),
             default => throw new InvalidArgumentException('Unsupported assistant driver ['.config('assistant.driver').'].'),
         });
+
+        $this->registerPasskeys();
     }
 
     /**
@@ -45,7 +52,37 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configurePasswords();
         $this->configureAuthentication();
+        $this->configurePasskeys();
         $this->configureRateLimiting();
+    }
+
+    /**
+     * laravel/passkeys gives only its actions: its routes, built for Blade
+     * and redirects, are replaced by the API routes of the project, and its
+     * model by App\Models\Passkey. The tests replace the ceremony with a
+     * fake from the container.
+     */
+    private function registerPasskeys(): void
+    {
+        Passkeys::ignoreRoutes();
+        Passkeys::usePasskeyModel(Passkey::class);
+
+        $this->app->bind(PasskeyCeremony::class, WebAuthnPasskeyCeremony::class);
+    }
+
+    /**
+     * Without PASSKEYS_USER_HANDLE_SECRET the secret of the user handle is
+     * derived from the APP_KEY. Without an APP_KEY either (only before the
+     * entrypoint generates it) it stays empty, and a passkey ceremony fails
+     * instead of using a value shared by every installation.
+     */
+    private function configurePasskeys(): void
+    {
+        $appKey = config('app.key');
+
+        if (blank(config('passkeys.user_handle_secret')) && is_string($appKey) && $appKey !== '') {
+            config(['passkeys.user_handle_secret' => PasskeyUserHandleSecret::derive($appKey)]);
+        }
     }
 
     /**
@@ -122,6 +159,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('email-change', fn (Request $request): Limit => Limit::perHour(3)
             ->by($request->user()->getAuthIdentifier()));
+
+        RateLimiter::for('passkey-login', fn (Request $request): Limit => Limit::perMinute(10)
+            ->by($request->ip()));
     }
 
     /**

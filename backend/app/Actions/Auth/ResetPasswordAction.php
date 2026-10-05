@@ -39,7 +39,7 @@ final class ResetPasswordAction
     ) {}
 
     /**
-     * @param  array{email: string, token: string, password: string, method?: string|null, code?: string|null}  $data
+     * @param  array{email: string, token: string, password: string, method?: string|null, code?: string|null, credential?: array<string, mixed>|null}  $data
      */
     public function execute(#[\SensitiveParameter] array $data): ?SecondFactorResult
     {
@@ -49,7 +49,7 @@ final class ResetPasswordAction
             ? $this->verifySecondFactor->execute(
                 $user,
                 SecondFactorMethod::tryFrom((string) ($data['method'] ?? '')),
-                ['code' => $data['code'] ?? null],
+                ['code' => $data['code'] ?? null, 'credential' => $data['credential'] ?? null],
                 SecondFactorContext::PasswordReset,
             )
             : null;

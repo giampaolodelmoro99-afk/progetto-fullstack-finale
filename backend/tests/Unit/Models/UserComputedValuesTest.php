@@ -39,12 +39,6 @@ it('is a customer when no role is given', function () {
     expect((new User)->role)->toBe(UserRole::Customer);
 });
 
-it('offers the totp and the recovery codes as second factor methods', function () {
-    $user = (new User)->forceFill(['two_factor_confirmed_at' => '2026-09-12 21:40']);
-
-    expect($user->secondFactorMethods())->toBe(['totp', 'recovery_code']);
-});
-
 it('offers no second factor method without two-factor authentication', function () {
     expect((new User)->secondFactorMethods())->toBe([]);
 });

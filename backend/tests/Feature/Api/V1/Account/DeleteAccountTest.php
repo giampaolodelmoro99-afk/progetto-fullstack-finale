@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\EmailChangeRequest;
 use App\Models\Order;
+use App\Models\Passkey;
 use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Notifications\AccountDeletedNotification;
@@ -30,12 +31,13 @@ function customerToDelete(array $attributes = []): User
 }
 
 /**
- * Addresses, cart with a row, security event, email change request, reset
- * token and session of the user.
+ * Addresses, cart with a row, security event, email change request,
+ * passkey, reset token and session of the user.
  */
 function givePersonalData(User $user, string $sessionId): void
 {
     Address::factory()->for($user)->count(2)->create();
+    Passkey::factory()->for($user)->create();
     CartItem::factory()->for(Cart::factory()->for($user))->create();
     SecurityEvent::factory()->for($user)->create();
     EmailChangeRequest::factory()->for($user)->create();
@@ -176,12 +178,14 @@ it('erases the personal data of the user and keeps those of the others', functio
         ->and(CartItem::whereHas('cart', fn ($query) => $query->whereBelongsTo($user))->count())->toBe(0)
         ->and(SecurityEvent::whereBelongsTo($user)->count())->toBe(0)
         ->and(EmailChangeRequest::whereBelongsTo($user)->count())->toBe(0)
+        ->and(Passkey::query()->where('user_id', $user->id)->count())->toBe(0)
         ->and(DB::table('sessions')->where('user_id', $user->id)->exists())->toBeFalse()
         ->and(Address::whereBelongsTo($other)->count())->toBe(2)
         ->and(Cart::whereBelongsTo($other)->count())->toBe(1)
         ->and(CartItem::count())->toBe(1)
         ->and(SecurityEvent::whereBelongsTo($other)->count())->toBe(1)
         ->and(EmailChangeRequest::whereBelongsTo($other)->count())->toBe(1)
+        ->and(Passkey::query()->where('user_id', $other->id)->count())->toBe(1)
         ->and(DB::table('sessions')->where('id', 'davide-browser')->exists())->toBeTrue();
     $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'giulia.ferri@esempio.it']);
     $this->assertDatabaseHas('password_reset_tokens', ['email' => 'davide.conti@esempio.it']);

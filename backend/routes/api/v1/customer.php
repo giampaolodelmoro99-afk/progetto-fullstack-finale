@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Account\ConfirmIdentityController;
+use App\Http\Controllers\Api\V1\Account\ConfirmIdentityPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Account\ConfirmTwoFactorController;
 use App\Http\Controllers\Api\V1\Account\EmailChangeController;
+use App\Http\Controllers\Api\V1\Account\PasskeyController;
 use App\Http\Controllers\Api\V1\Account\PasswordController;
+use App\Http\Controllers\Api\V1\Account\PasswordPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
 use App\Http\Controllers\Api\V1\Account\RecoveryCodeController;
 use App\Http\Controllers\Api\V1\Account\SecurityEventController;
@@ -36,9 +39,18 @@ Route::post('email/verification-notification', SendVerificationEmailController::
     ->middleware('throttle:verification')
     ->name('verification.send');
 
+/*
+| block(): the routes that consume the options of a passkey ceremony run one
+| at a time for each session (see routes/api/v1/public.php).
+*/
 Route::post('me/confirm-identity', ConfirmIdentityController::class)
     ->middleware('throttle:identity-confirmation')
+    ->block()
     ->name('identity.confirm');
+
+Route::post('me/confirm-identity/passkey-options', ConfirmIdentityPasskeyOptionsController::class)
+    ->middleware('throttle:identity-confirmation')
+    ->name('identity.passkey-options');
 
 Route::post('me/two-factor', [TwoFactorController::class, 'store'])
     ->middleware('identity.confirmed')
@@ -62,7 +74,36 @@ Route::delete('me/two-factor', [TwoFactorController::class, 'destroy'])
 */
 Route::put('me/password', [PasswordController::class, 'update'])
     ->middleware('throttle:identity-confirmation')
+    ->block()
     ->name('password.update');
+
+Route::post('me/password/passkey-options', PasswordPasskeyOptionsController::class)
+    ->middleware('throttle:identity-confirmation')
+    ->name('password.update.passkey-options');
+
+/*
+| Passkeys. The registration needs a recent identity confirmation for the
+| options and for the save: a 423 on the save leaves the options in the
+| session, so the frontend confirms and repeats it. The permission comes
+| before the identity confirmation, so a passkey of somebody else answers
+| 404 without asking for the password.
+*/
+Route::get('me/passkeys', [PasskeyController::class, 'index'])->name('passkeys.index');
+
+Route::post('me/passkeys/options', [PasskeyController::class, 'options'])
+    ->middleware('identity.confirmed')
+    ->name('passkeys.options');
+
+Route::post('me/passkeys', [PasskeyController::class, 'store'])
+    ->middleware('identity.confirmed')
+    ->block()
+    ->name('passkeys.store');
+
+Route::patch('me/passkeys/{passkey}', [PasskeyController::class, 'update'])->name('passkeys.update');
+
+Route::delete('me/passkeys/{passkey}', [PasskeyController::class, 'destroy'])
+    ->middleware(['can:delete,passkey', 'identity.confirmed'])
+    ->name('passkeys.destroy');
 
 /*
 | The throttle runs before identity.confirmed (middleware priority of

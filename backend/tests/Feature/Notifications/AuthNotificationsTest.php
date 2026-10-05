@@ -6,6 +6,8 @@ use App\Notifications\EmailChangeCancelledNotification;
 use App\Notifications\EmailChangeConfirmationNotification;
 use App\Notifications\EmailChangedNotification;
 use App\Notifications\EmailChangeRequestedNotification;
+use App\Notifications\PasskeyAddedNotification;
+use App\Notifications\PasskeyRemovedNotification;
 use App\Notifications\PasswordChangedNotification;
 use App\Notifications\PasswordResetNotification;
 use App\Notifications\RecoveryCodesRegeneratedNotification;
@@ -65,6 +67,23 @@ it('writes the two-factor notices with date, time, device and the invitation to 
     'enabled' => [TwoFactorEnabledNotification::class, 'Doppia autenticazione attivata', 'la doppia autenticazione del tuo account è stata attivata il 1 ottobre 2026 alle 16:52 da Safari su iOS.'],
     'disabled' => [TwoFactorDisabledNotification::class, 'Doppia autenticazione disattivata', 'la doppia autenticazione del tuo account è stata disattivata il 1 ottobre 2026 alle 16:52 da Safari su iOS.'],
     'regenerated' => [RecoveryCodesRegeneratedNotification::class, 'Codici di recupero rigenerati', 'i codici di recupero del tuo account sono stati rigenerati il 1 ottobre 2026 alle 16:52 da Safari su iOS.'],
+]);
+
+it('writes the passkey notices with name, date, time, device and the invitation to change the password', function (string $notification, string $subject, string $firstLine, string $secondLine) {
+    $user = User::factory()->make(['name' => 'Giulia Ferri']);
+
+    $mail = (new $notification('MacBook di Giulia', CarbonImmutable::parse('2026-10-05 18:02:00'), 'Safari su macOS'))->toMail($user);
+
+    expect($mail->subject)->toBe($subject)
+        ->and($mail->greeting)->toBe('Ciao Giulia Ferri,')
+        ->and($mail->introLines)->toBe([
+            $firstLine,
+            $secondLine,
+            'Se non hai fatto tu questa operazione, cambia subito la password e controlla la pagina Sicurezza del tuo account.',
+        ]);
+})->with([
+    'added' => [PasskeyAddedNotification::class, 'Passkey aggiunta', 'la passkey «MacBook di Giulia» è stata aggiunta al tuo account il 5 ottobre 2026 alle 18:02 da Safari su macOS.', 'Da ora puoi usarla per accedere senza password.'],
+    'removed' => [PasskeyRemovedNotification::class, 'Passkey rimossa', 'la passkey «MacBook di Giulia» è stata rimossa dal tuo account il 5 ottobre 2026 alle 18:02 da Safari su macOS.', 'Non potrai più usarla per accedere.'],
 ]);
 
 it('writes the recovery code notice with the codes left', function (int $remaining, string $left, bool $suggestsNewCodes) {

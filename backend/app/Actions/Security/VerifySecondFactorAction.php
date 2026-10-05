@@ -9,6 +9,7 @@ use App\Enums\SecurityEventType;
 use App\Exceptions\Auth\InvalidSecondFactorException;
 use App\Models\User;
 use App\Notifications\RecoveryCodeUsedNotification;
+use App\Services\Security\PasskeyVerifier;
 use App\Services\Security\RecoveryCodeVerifier;
 use App\Services\Security\TotpVerifier;
 use App\Support\Auth\SecondFactorResult;
@@ -21,30 +22,32 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Second factor of an access check: login, password reset and identity
- * confirmation. Used only when the user hasSecondFactor().
+ * Second factor of an access check: login, password reset, identity
+ * confirmation and password change. Used only when the user
+ * hasSecondFactor().
  *
- * A missing method or code is a required error, not a failed attempt: no
- * event is written.
+ * A missing method, code or passkey answer (credential) is a required
+ * error, not a failed attempt: no event is written.
  *
  * The user is read again with a row lock, so two parallel requests with the
- * same code cannot both pass. A failure is recorded after the transaction of
- * this action, with the context and the method but never the code. Callers
- * must not run it inside a transaction of their own: a rollback would erase
- * the event of the failed attempt. A used recovery code writes its event and
- * sends a notice with the codes left.
+ * same code cannot both pass. The verifier receives the context too, which
+ * the passkey needs to find the options of the operation. A failure is
+ * recorded after the transaction of this action, with the context and the
+ * method but never the code. Callers must not run it inside a transaction
+ * of their own: a rollback would erase the event of the failed attempt. A
+ * used recovery code writes its event and sends a notice with the codes
+ * left; a passkey leaves its name in the result.
  *
- * Wrong codes count per user, with one counter shared by every context:
- * after MAX_FAILURES in DECAY_SECONDS every verification of that user is a
- * 429, even with a right code, which is not consumed. The route limiters
- * alone would leave uncovered the password reset, protected only by the
- * link, and every future route that accepts a second factor. Accepted
- * trade-off: whoever knows the password, a reset link or a session can
- * lock the second factor of the user for a minute.
+ * Wrong codes and passkeys count per user, with one counter shared by every
+ * context and method: after MAX_FAILURES in DECAY_SECONDS every
+ * verification of that user is a 429, even with a right code, which is not
+ * consumed. The route limiters alone would leave uncovered the password
+ * reset, protected only by the link, and every future route that accepts a
+ * second factor. Accepted trade-off: whoever knows the password, a reset
+ * link or a session can lock the second factor of the user for a minute.
  *
- * VERIFIERS is the extension point of the passkey (Phase 3c): a new method
- * case and its verifier, resolved from the container so that the tests can
- * replace it with a fake.
+ * Each verifier is resolved from the container, so that the tests can
+ * replace what it depends on with a fake.
  */
 final class VerifySecondFactorAction
 {
@@ -55,6 +58,7 @@ final class VerifySecondFactorAction
     private const VERIFIERS = [
         SecondFactorMethod::Totp->value => TotpVerifier::class,
         SecondFactorMethod::RecoveryCode->value => RecoveryCodeVerifier::class,
+        SecondFactorMethod::Passkey->value => PasskeyVerifier::class,
     ];
 
     public function __construct(
@@ -78,10 +82,10 @@ final class VerifySecondFactorAction
         /** @var SecondFactorVerifier $verifier */
         $verifier = $this->container->make(self::VERIFIERS[$method->value]);
 
-        $verified = DB::transaction(function () use ($user, $verifier, $payload): bool {
+        $verified = DB::transaction(function () use ($user, $verifier, $payload, $context): bool {
             $locked = User::query()->lockForUpdate()->findOrFail($user->id);
 
-            return $verifier->verify($locked, $payload);
+            return $verifier->verify($locked, [...$payload, 'context' => $context]);
         });
 
         $user->refresh();
@@ -94,10 +98,14 @@ final class VerifySecondFactorAction
                 'method' => $method->value,
             ]);
 
-            throw new InvalidSecondFactorException;
+            throw InvalidSecondFactorException::forMethod($method);
         }
 
-        $result = new SecondFactorResult($method, $user->recovery_codes_remaining);
+        $result = new SecondFactorResult(
+            $method,
+            $user->recovery_codes_remaining,
+            $verifier instanceof PasskeyVerifier ? $verifier->verifiedPasskey()?->name : null,
+        );
 
         if ($method === SecondFactorMethod::RecoveryCode) {
             $this->recordSecurityEvent->execute($user, SecurityEventType::RecoveryCodeUsed);
@@ -137,7 +145,13 @@ final class VerifySecondFactorAction
             $errors['method'] = __('validation.required', ['attribute' => __('validation.attributes.method')]);
         }
 
-        if (blank($payload['code'] ?? null)) {
+        if ($method === SecondFactorMethod::Passkey) {
+            $credential = $payload['credential'] ?? null;
+
+            if (! is_array($credential) || $credential === []) {
+                $errors['credential'] = __('validation.required', ['attribute' => __('validation.attributes.credential')]);
+            }
+        } elseif (blank($payload['code'] ?? null)) {
             $errors['code'] = __('validation.required', ['attribute' => __('validation.attributes.code')]);
         }
 

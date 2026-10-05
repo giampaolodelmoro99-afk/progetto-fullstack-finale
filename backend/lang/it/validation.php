@@ -198,6 +198,7 @@ return [
         'code' => 'codice',
         'method' => 'metodo',
         'token' => 'token',
+        'credential' => 'passkey',
     ],
 
 ];

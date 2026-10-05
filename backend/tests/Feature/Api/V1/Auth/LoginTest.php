@@ -149,6 +149,29 @@ it('asks for the second factor without authenticating', function () {
     expect(SecurityEvent::count())->toBe(0);
 });
 
+it('offers the passkey in the challenge to a user who has one', function () {
+    User::factory()->withTwoFactor()->withPasskey()->create(['email' => 'davide.conti@esempio.it']);
+
+    fromFrontend()->postJson('/api/v1/login', ['email' => 'davide.conti@esempio.it', 'password' => 'password'])
+        ->assertOk()
+        ->assertExactJson([
+            'two_factor_required' => true,
+            'methods' => ['totp', 'recovery_code', 'passkey'],
+        ]);
+});
+
+it('logs in with the password alone a user with passkeys only', function () {
+    $user = User::factory()->withPasskey()->create(['email' => 'giulia.ferri@esempio.it']);
+
+    fromFrontend()->postJson('/api/v1/login', ['email' => 'giulia.ferri@esempio.it', 'password' => 'password'])
+        ->assertOk()
+        ->assertJsonPath('data.id', $user->id)
+        ->assertJsonMissingPath('two_factor_required');
+
+    $this->assertAuthenticatedAs($user, 'web');
+    expect($user->hasSecondFactor())->toBeFalse();
+});
+
 it('logs out another account and regenerates the session before the challenge', function () {
     actingAsVerifiedCustomer();
     User::factory()->withTwoFactor()->create(['email' => 'davide.conti@esempio.it']);

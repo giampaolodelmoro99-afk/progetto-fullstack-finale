@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Enums\SecondFactorMethod;
+use App\Support\Auth\PasskeyCredentialRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -29,6 +30,7 @@ final class ResetPasswordRequest extends FormRequest
             'password' => ['required', 'string', 'confirmed', Password::defaults()],
             'method' => ['nullable', 'string', Rule::enum(SecondFactorMethod::class)],
             'code' => ['nullable', 'string', 'max:64'],
+            ...PasskeyCredentialRules::rules(['nullable']),
         ];
     }
 

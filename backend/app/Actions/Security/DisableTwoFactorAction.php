@@ -15,8 +15,9 @@ use Illuminate\Support\Str;
  * Turns two-factor authentication off: secret, recovery codes and last used
  * interval are erased, and every other session of the user is closed. The
  * remember token changes too, so a remember cookie of a closed session
- * cannot open a new one. Passkeys (Phase 3c) stay. The check runs under a
- * row lock, as in the other two-factor actions.
+ * cannot open a new one. Passkeys stay: they still allow the passwordless
+ * login. The check runs under a row lock, as in the other two-factor
+ * actions.
  */
 final class DisableTwoFactorAction
 {

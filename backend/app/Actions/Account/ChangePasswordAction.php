@@ -38,7 +38,7 @@ final class ChangePasswordAction
     ) {}
 
     /**
-     * @param  array{password: string, method?: string|null, code?: string|null}  $data
+     * @param  array{password: string, method?: string|null, code?: string|null, credential?: array<string, mixed>|null}  $data
      */
     public function execute(User $user, #[\SensitiveParameter] array $data): ?SecondFactorResult
     {
@@ -46,7 +46,7 @@ final class ChangePasswordAction
             ? $this->verifySecondFactor->execute(
                 $user,
                 SecondFactorMethod::tryFrom((string) ($data['method'] ?? '')),
-                ['code' => $data['code'] ?? null],
+                ['code' => $data['code'] ?? null, 'credential' => $data['credential'] ?? null],
                 SecondFactorContext::PasswordChange,
             )
             : null;

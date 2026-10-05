@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 /**
  * Step-up before a sensitive operation. The password is checked by the Form
  * Request (current_password); with two-factor authentication the second
- * factor is required too. The confirmation is stored in the session and
+ * factor is required too: code of the app, recovery code or passkey. The confirmation is stored in the session and
  * lasts confirmation_timeout seconds.
  */
 final class ConfirmIdentityAction
@@ -22,10 +22,13 @@ final class ConfirmIdentityAction
         private readonly VerifySecondFactorAction $verifySecondFactor,
     ) {}
 
-    public function execute(User $user, ?SecondFactorMethod $method, #[\SensitiveParameter] ?string $code): IdentityConfirmation
+    /**
+     * @param  array{code?: string|null, credential?: array<string, mixed>|null}  $payload
+     */
+    public function execute(User $user, ?SecondFactorMethod $method, #[\SensitiveParameter] array $payload): IdentityConfirmation
     {
         $secondFactor = $user->hasSecondFactor()
-            ? $this->verifySecondFactor->execute($user, $method, ['code' => $code], SecondFactorContext::IdentityConfirmation)
+            ? $this->verifySecondFactor->execute($user, $method, $payload, SecondFactorContext::IdentityConfirmation)
             : null;
 
         $confirmedAt = now();

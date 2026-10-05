@@ -10,6 +10,6 @@ final class SecurityOverviewController extends Controller
 {
     public function __invoke(Request $request): SecurityOverviewResource
     {
-        return SecurityOverviewResource::make($request->user());
+        return SecurityOverviewResource::make($request->user()->loadCount('passkeys'));
     }
 }
