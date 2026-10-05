@@ -105,7 +105,7 @@ Il frontend non scrive mai a mano importi o soglie della configurazione: li legg
 
 ### Testi dell'assistenza
 
-I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li usano sia la pagina sia l'assistente AI (skill `ai-assistant`). La fonte e la classe che la costruisce sono state realizzate nella Fase 2c, per la prova dei modelli; la Fase 4 aggiunge solo l'endpoint.
+I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li usano sia la pagina sia l'assistente AI (skill `ai-assistant`). La fonte e la classe che la costruisce sono state realizzate nella Fase 2c, per la prova dei modelli; la Fase 4, parte 1, aggiunge solo l'endpoint.
 
 - I testi stanno in `resources/content/support.php` e li costruisce `App\Actions\Shop\GetSupportSectionsAction`, in italiano e secondo `voice-and-content.md`. Consegna in 24/48 ore, reso entro 30 giorni e garanzia di 2 anni sono testi fissi; costo di spedizione e soglia della spedizione gratuita si inseriscono da `config/shop.php`, formattati come prezzo (6,90 €, 99,00 €), mai scritti a mano.
 - `GET /shop/support` (pubblico):
@@ -155,13 +155,16 @@ Parametri, validati da `IndexProductRequest`:
 
 | Parametro | Valori | Effetto |
 |---|---|---|
-| `search` | testo | cerca in nome e descrizione breve |
-| `category` | slug | prodotti della categoria |
-| `min_price`, `max_price` | centesimi | fascia di prezzo |
-| `in_stock` | `1` | solo prodotti con stock maggiore di 0 |
-| `new` | `1` | solo novità (regola 13) |
+| `search` | testo, massimo 100 caratteri | cerca in nome e descrizione breve |
+| `category` | slug di una categoria esistente; uno slug inesistente → 422 «Questa categoria non esiste.» | prodotti della categoria |
+| `min_price`, `max_price` | centesimi, interi da 0 a 999999; `max_price` minore di `min_price` → 422 | fascia di prezzo |
+| `in_stock` | `1`, `0`, `true`, `false` | con `1` o `true`: solo prodotti con stock maggiore di 0 |
+| `new` | `1`, `0`, `true`, `false` | con `1` o `true`: solo novità (regola 13) |
 | `sort` | `newest` (predefinito), `price_asc`, `price_desc` | ordinamento |
-| `page`, `per_page` | interi | paginazione |
+| `page` | intero da 1 | pagina |
+| `per_page` | `4`, `12` (predefinito), `24`, `48` | prodotti per pagina |
+
+- `in_stock` e `new`: `IndexProductRequest` normalizza in `prepareForValidation()` le stringhe `true` e `false`, senza distinzione di maiuscole, in `1` e `0`, perché la regola `boolean` di Laravel non le accetta ma sono la forma più naturale in una query string; qualunque altro valore (es. `forse`) → 422.
 
 - Ordinamenti: `newest` per `created_at` decrescente; `price_asc` e `price_desc` per prezzo. A parità si ordina per `id`, così la paginazione è stabile.
 - Oltre a `data`, `links` e `meta` della paginazione, `meta.price_range` contiene `{ "min": ..., "max": ... }` in centesimi: il prezzo minimo e massimo dei prodotti attivi della categoria filtrata, o di tutto il catalogo se `category` manca. Gli altri filtri non lo influenzano, così i limiti dello slider del prezzo restano fermi mentre l'utente lo muove. Per una categoria senza prodotti attivi `min` e `max` valgono `null`.

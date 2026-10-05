@@ -12,10 +12,33 @@ use App\Http\Controllers\Api\V1\Auth\ResetPasswordPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Api\V1\Auth\TwoFactorPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Auth\VerifyEmailController;
+use App\Http\Controllers\Api\V1\Catalog\CategoryController;
+use App\Http\Controllers\Api\V1\Catalog\ProductController;
+use App\Http\Controllers\Api\V1\Catalog\RelatedProductController;
+use App\Http\Controllers\Api\V1\Shop\SettingsController;
+use App\Http\Controllers\Api\V1\Shop\SupportController;
 use App\Http\Controllers\Api\V1\System\HealthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('health', HealthController::class)->name('health');
+
+Route::get('shop/settings', SettingsController::class)->name('shop.settings');
+
+Route::get('shop/support', SupportController::class)->name('shop.support');
+
+/*
+| Public catalog, bound on the slug. The binding leaves out soft deleted
+| products; ProductPolicy answers 404 for the deactivated ones.
+*/
+Route::apiResource('categories', CategoryController::class)
+    ->only(['index', 'show'])
+    ->parameters(['categories' => 'category:slug']);
+
+Route::get('products', [ProductController::class, 'index'])->name('products.index');
+
+Route::get('products/{product:slug}', [ProductController::class, 'show'])->name('products.show');
+
+Route::get('products/{product:slug}/related', RelatedProductController::class)->name('products.related');
 
 Route::post('register', RegisterController::class)
     ->middleware('throttle:register')

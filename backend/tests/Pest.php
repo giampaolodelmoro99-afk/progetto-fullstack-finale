@@ -5,6 +5,7 @@ use App\Models\Passkey;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use PragmaRX\Google2FA\Google2FA;
 use Tests\Support\FakePasskeyCeremony;
 use Tests\TestCase;
@@ -33,6 +34,14 @@ pest()->extend(TestCase::class)
 | Helpers
 |--------------------------------------------------------------------------
 */
+
+/**
+ * Slugs of the products in the data of a catalog response, in order.
+ */
+function responseSlugs(TestResponse $response): array
+{
+    return collect($response->json('data'))->pluck('slug')->all();
+}
 
 function frontendOrigin(): string
 {

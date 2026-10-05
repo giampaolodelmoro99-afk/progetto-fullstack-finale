@@ -93,6 +93,7 @@ final class ProductController extends Controller
 - Ogni permesso passa da una Policy, una per modello, scoperta automaticamente per convenzione di nomi.
 - Se l'azione ha una Form Request, la Policy si invoca in `authorize()` della Form Request, così l'autorizzazione avviene prima della validazione.
 - Se l'azione non ha una Form Request (`index`, `show`, `destroy`), si usa `Gate::authorize()` come prima istruzione del controller.
+- Eccezione: le rotte pubbliche senza regole di visibilità (categorie, elenco prodotti, impostazioni e testi dell'assistenza del negozio) non hanno Policy; il dettaglio e i correlati di un prodotto passano da `ProductPolicy::viewInShop`, che risponde 404 per i prodotti disattivati anche all'admin; `view` resta per lo `show` dell'area admin, che vede anche i disattivati.
 - Non usare `before()` per concedere tutto all'admin: ogni permesso è esplicito.
 - Il cliente accede solo alle proprie risorse (`$order->user_id === $user->id`).
 - Il middleware `role:admin` protegge l'area admin come prima barriera; le Policy restano comunque obbligatorie.
