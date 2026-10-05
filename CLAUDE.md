@@ -55,7 +55,7 @@ Comandi del `Makefile`: `up`, `up-ai` (profilo `ai`), `up-gpu` (profilo `ai` con
 2. Scrivi sempre file completi e funzionanti, mai frammenti con "resto invariato".
 3. Non aggiungere dipendenze non concordate: se una serve, proponila motivandola.
 4. Una migration già committata non si modifica: se ne crea una nuova.
-5. I test si scrivono nello stesso task del codice che verificano. Un task non è concluso finché `make test` e `make lint` non sono verdi.
+5. I test si scrivono nello stesso task del codice che verificano. Un task non è concluso finché `make test` e `make lint` non sono verdi. Mai due esecuzioni dei test backend in parallelo sullo stesso database di test (`ecommerce_testing`): né due `make test`, né un `make test` mentre gira il subagent `code-reviewer`, che li lancia anche lui. Le migration di `RefreshDatabase` si scontrano e producono centinaia di falsi fallimenti.
 6. Nei test i valori attesi si scrivono a mano, non si ricavano dal codice o dalla configurazione che il test verifica.
 7. Le regole di design, dominio e contenuti si prendono dalle fonti nella repository (skill, `design/`, `docs/`) o si chiedono all'utente, mai ricostruite. Se un mockup e una decisione approvata divergono, vale la decisione.
 8. A fine task elenca le verifiche manuali che l'utente deve fare (Postman per le API, browser e Mailpit per il frontend) con passi precisi.

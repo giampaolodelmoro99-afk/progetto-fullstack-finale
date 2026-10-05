@@ -50,14 +50,14 @@ final class AssistantTools
                 'type' => 'function',
                 'function' => [
                     'name' => self::SEARCH_PRODUCTS,
-                    'description' => 'Cerca i prodotti del catalogo di Casa del Silicio. Restituisce nome, slug, categoria, prezzo, disponibilità e descrizione breve.',
+                    'description' => 'Cerca i prodotti del catalogo di Casa del Silicio. Restituisce nome, slug, categoria, prezzo, disponibilità e descrizione breve, e in total il numero dei prodotti trovati.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
-                            'search' => ['type' => 'string', 'description' => 'Una sola parola da cercare nel nome e nella descrizione, per esempio "cuffie". Per due tipi di prodotto fai due ricerche.'],
+                            'search' => ['type' => 'string', 'description' => 'Una sola parola da cercare nel nome e nella descrizione, per esempio "cuffie". Usala sempre quando il cliente nomina un tipo di prodotto (caricatore, cuffie, radio): cercare solo per categoria restituisce al massimo '.config('assistant.max_tool_results').' prodotti. Per due tipi di prodotto fai due ricerche.'],
                             'category' => $category,
-                            'min_price' => ['type' => 'number', 'description' => 'Prezzo minimo in euro.'],
-                            'max_price' => ['type' => 'number', 'description' => 'Prezzo massimo in euro.'],
+                            'min_price' => ['type' => 'number', 'description' => 'Prezzo minimo in euro. Solo per un prezzo detto dal cliente, mai per watt, capacità o altre caratteristiche: quelle si leggono nei risultati.'],
+                            'max_price' => ['type' => 'number', 'description' => 'Prezzo massimo in euro. Solo per un prezzo detto dal cliente, mai per watt, capacità o altre caratteristiche.'],
                             'in_stock' => ['type' => 'boolean', 'description' => 'Solo prodotti disponibili.'],
                             'new' => ['type' => 'boolean', 'description' => 'Solo novità degli ultimi giorni.'],
                             'sort' => ['type' => 'string', 'enum' => self::SORTS, 'description' => 'Ordinamento: newest, price_asc o price_desc.'],
@@ -114,20 +114,34 @@ final class AssistantTools
     }
 
     /**
+     * At most max_tool_results products, with the total of the matching
+     * ones. When the list is partial, the note states only the fact: tool
+     * results are data, never instructions, and what to do about a partial
+     * list is in the Modelfile.
+     *
      * @param  array<string, mixed>  $arguments
-     * @return array{products: list<array<string, mixed>>}
+     * @return array{products: list<array<string, mixed>>, total: int, note?: string}
      */
     private function searchProducts(array $arguments): array
     {
-        $products = $this->searchProducts
-            ->execute($this->searchFilters($arguments))
+        $query = $this->searchProducts->execute($this->searchFilters($arguments));
+        $total = (clone $query)->count();
+
+        $products = $query
             ->with('category')
             ->limit(config('assistant.max_tool_results'))
             ->get();
 
-        return [
+        $result = [
             'products' => $products->map(fn (Product $product): array => $this->summary($product))->all(),
+            'total' => $total,
         ];
+
+        if ($total > $products->count()) {
+            $result['note'] = "Mostrati {$products->count()} prodotti su {$total}.";
+        }
+
+        return $result;
     }
 
     /**

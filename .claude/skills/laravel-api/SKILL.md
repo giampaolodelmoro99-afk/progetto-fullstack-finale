@@ -21,7 +21,7 @@ app/
 ├── Events/  Listeners/
 ├── Exceptions/                # eccezioni di dominio con render()
 ├── Http/
-│   ├── Controllers/Api/V1/{Auth,Shop,Catalog,Cart,Checkout,Account,Admin}/
+│   ├── Controllers/Api/V1/{Auth,Shop,Catalog,Assistant,Cart,Checkout,Account,Admin}/
 │   ├── Middleware/            # ForceJsonResponse, EnsureUserHasRole, EnsureIdentityConfirmed
 │   ├── Requests/{Area}/{Model}/
 │   └── Resources/             # pubbliche; Resources/Admin/ per le varianti admin
@@ -30,7 +30,7 @@ app/
 ├── Observers/
 ├── Policies/
 ├── Providers/
-├── Services/{Area}/           # implementazioni delle interfacce (Assistant/ per l'assistente AI)
+├── Services/{Area}/           # implementazioni delle interfacce e servizi di un'area (Assistant/: implementazioni di AiAssistant, giri dei tool, slot, citazione dei prodotti, streaming NDJSON)
 └── Support/                   # piccole classi di utilità senza stato (UserAgentLabel)
 config/
 ├── cors.php                   # origine del frontend, credenziali, exposed_headers con Retry-After
@@ -61,7 +61,7 @@ routes/
 
 - In `App\Http\Controllers\Api\V1\{Area}`, un controller per risorsa, classe `final`.
 - Solo metodi resource (`index`, `store`, `show`, `update`, `destroy`) oppure `__invoke`.
-- Restituiscono sempre una Resource, una collection di Resource o `response()->noContent()`.
+- Restituiscono sempre una Resource, una collection di Resource o `response()->noContent()`. Unica eccezione: `Assistant\AssistantMessageController` restituisce lo `StreamedResponse` NDJSON costruito da `App\Services\Assistant\AssistantAnswerStream` (skill `ai-assistant`).
 - Status: 201 per la creazione, 204 per l'eliminazione.
 - Usano `$request->validated()`, mai `$request->all()` o `$request->input()` per i dati da salvare.
 

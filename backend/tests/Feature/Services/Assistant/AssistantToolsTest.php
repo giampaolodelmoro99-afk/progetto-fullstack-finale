@@ -61,6 +61,25 @@ it('returns at most the configured number of products', function () {
     expect(searchProductsToolSlugs([]))->toHaveCount(8);
 });
 
+it('tells the model how many products match when the list is partial', function () {
+    $charging = Category::query()->where('slug', 'ricarica-ed-energia')->first();
+    Product::factory()->for($charging)->count(9)->create();
+
+    $result = app(AssistantTools::class)->call('search_products', ['category' => 'ricarica-ed-energia', 'sort' => 'price_asc']);
+
+    expect($result['products'])->toHaveCount(8)
+        ->and($result['total'])->toBe(10)
+        ->and($result['note'])->toBe('Mostrati 8 prodotti su 10.');
+});
+
+it('gives the total without a note when every product is shown', function () {
+    $result = app(AssistantTools::class)->call('search_products', ['category' => 'audio']);
+
+    expect($result['products'])->toHaveCount(3)
+        ->and($result['total'])->toBe(3)
+        ->and($result)->not->toHaveKey('note');
+});
+
 it('returns a compact summary with formatted price and availability', function () {
     $result = app(AssistantTools::class)->call('search_products', ['search' => 'Cuffie Aria Studio']);
 

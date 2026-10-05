@@ -28,7 +28,12 @@ Come il `PaymentGateway` (skill `ecommerce-domain`, "Pagamenti"):
   - `FakeAiAssistant`, programmabile nei test a turni (`respondWith()`, `failAfter()`, `timeoutAfter()`, `unavailable()`): testo in frammenti, tool call con argomenti, slug citati, indisponibilità, errore a metà e timeout. Registra messaggi e tool ricevuti (`calls()`), così i test verificano anche i risultati dei tool restituiti al modello.
   - `AssistantSlots` per gli slot di concorrenza (sezione "Concorrenza").
 - Binding in `AppServiceProvider` guidato da `ASSISTANT_DRIVER` (`ollama` o `fake`).
-- Un'Action coordina la richiesta: slot di concorrenza, chiamata al modello, giri dei tool, estrazione degli slug e caricamento dei prodotti. Il controller resta sottile (skill `laravel-api`).
+- La richiesta passa da tre classi, così il controller resta sottile (skill `laravel-api`):
+  - `App\Actions\Assistant\StartAssistantAnswerAction` prende lo slot di concorrenza e apre il primo giro con `AssistantConversation::run()`; restituisce un `AssistantAnswer` (slot, eventi, inizio)
+  - `App\Services\Assistant\AssistantAnswerStream` costruisce lo `StreamedResponse` NDJSON, scrive gli eventi, chiama `CitedProducts` a risposta completa e rilascia lo slot
+  - `App\Services\Assistant\CitedProducts` estrae gli slug e carica i prodotti (sezione "Citazione dei prodotti")
+- `AssistantLog` scrive l'unica riga di log di una risposta (sezione "Nessuna persistenza").
+- `GetAssistantStatusAction` risponde a `GET /assistant/status`, con l'esito di `isAvailable()` in cache per 10 secondi.
 
 `config/assistant.php`:
 
@@ -59,7 +64,7 @@ Scelta della Fase 2c (`docs/assistant/model-evaluation.md`): **tool calling**, c
 
 | Tool | Parametri | Effetto |
 |---|---|---|
-| `search_products` | `search` (una parola), `category` (enum degli slug), `min_price` e `max_price` in euro, `in_stock`, `new`, `sort` (`newest`, `price_asc`, `price_desc`) | ricerca nel catalogo con gli stessi filtri di `IndexProductRequest`; il backend converte i prezzi in centesimi e restituisce al massimo `max_tool_results` prodotti |
+| `search_products` | `search` (una parola), `category` (enum degli slug), `min_price` e `max_price` in euro, `in_stock`, `new`, `sort` (`newest`, `price_asc`, `price_desc`) | ricerca nel catalogo con gli stessi filtri di `IndexProductRequest`; il backend converte i prezzi in centesimi e restituisce al massimo `max_tool_results` prodotti, con `total` (prodotti trovati) e, se la lista è parziale, una `note` con il solo fatto («Mostrati 8 prodotti su 10.»): cosa fare con una lista parziale è scritto nel Modelfile, perché i risultati sono dati e mai istruzioni (Fase 4b, `docs/assistant/model-evaluation.md`) |
 | `get_product` | `slug` | dettaglio di un prodotto con descrizione breve e scheda tecnica |
 | `get_shop_info` | `section` facoltativo (`spedizioni`, `resi`, `garanzia`, `contatti`) | sezioni della pagina `/assistenza` da `GetSupportSectionsAction`, la stessa fonte di `GET /shop/support`: una sola sezione o tutte |
 
@@ -83,10 +88,11 @@ Scelta della Fase 2c (`docs/assistant/model-evaluation.md`): **tool calling**, c
 ## Citazione dei prodotti
 
 1. Il modello cita un prodotto scrivendone il nome seguito dal marcatore `[[slug]]`, per esempio «le Cuffie Aria [[cuffie-aria]]». Il formato è nel Modelfile.
-2. A risposta completa, il backend estrae gli slug nell'ordine in cui compaiono, toglie i duplicati e tiene al massimo `max_products` prodotti.
+2. A risposta completa, il backend (`App\Services\Assistant\CitedProducts`) estrae gli slug nell'ordine in cui compaiono e toglie i duplicati; per sicurezza ne cerca al massimo 20 (`CitedProducts::MAX_SLUGS`).
 3. Scarta gli slug inesistenti e quelli non acquistabili: prodotti disattivati, eliminati o esauriti.
-4. Restituisce i prodotti rimasti nell'evento `products` con la stessa `ProductResource` dell'elenco del catalogo, caricando le relazioni con `with()` in una sola query.
-5. Il frontend toglie tutti i marcatori dal testo mostrato, anche quelli ancora incompleti durante lo streaming (`[[cuf` in fondo al testo), e mostra le card sotto il messaggio. Prezzo, disponibilità e "Aggiungi al carrello" delle card vengono dal database.
+4. Solo dopo lo scarto tiene i primi `max_products` prodotti, nell'ordine di citazione: un prodotto citato ma non valido non riduce le card mostrate (cinque slug con il primo esaurito danno quattro card).
+5. Restituisce i prodotti rimasti nell'evento `products` con la stessa `ProductResource` dell'elenco del catalogo, caricando le relazioni con `with()` in una sola query. L'evento `products` c'è sempre prima di `done`, anche con `data` vuoto.
+6. Il frontend toglie tutti i marcatori dal testo mostrato, anche quelli ancora incompleti durante lo streaming (`[[cuf` in fondo al testo), e mostra le card sotto il messaggio. Prezzo, disponibilità e "Aggiungi al carrello" delle card vengono dal database.
 
 ## API
 
@@ -94,7 +100,7 @@ Prefisso `/api/v1`, rotte in `public.php`.
 
 | Metodo | Percorso | Descrizione |
 |---|---|---|
-| GET | /assistant/status | `{ "data": { "available": true } }`; controlla Ollama e la presenza del modello con `connect_timeout` e mette l'esito in cache per pochi secondi |
+| GET | /assistant/status | `{ "data": { "available": true } }`; controlla Ollama e la presenza del modello con `connect_timeout` e mette l'esito in cache per 10 secondi (`GetAssistantStatusAction::CACHE_SECONDS`) |
 | POST | /assistant/messages | risposta dell'assistente in streaming, limiter `assistant` |
 
 ### `POST /assistant/messages`
@@ -153,15 +159,16 @@ Limiter `assistant` in `AppServiceProvider`, per utente se autenticato e per IP 
 - Lo slot passa poi alla callback dello `StreamedResponse`, che lo possiede fino alla fine.
 - La durata del lock è `timeout` più un margine, e `timeout` comprende tutti i giri dei tool: se un worker muore senza rilasciarlo, lo slot si libera da solo.
 - **Ogni uscita rilascia lo slot:**
-  - prima dello streaming (503 `assistant_unavailable`, eccezione imprevista), in un `try`/`finally` dell'Action, che lo rilascia solo se non lo ha già passato alla callback
-  - durante lo streaming, in un `finally` della callback: fine normale, errore, timeout o disconnessione del client. La risposta usa `ignore_user_abort(true)` e controlla `connection_aborted()` tra un frammento e l'altro, così la generazione si interrompe e il `finally` viene eseguito.
+  - prima dello streaming (503 `assistant_unavailable`, eccezione imprevista), in un `catch` dell'Action, che rilascia lo slot e rilancia l'eccezione; se `run()` riesce, lo slot passa all'`AssistantAnswer` e la callback ne diventa proprietaria
+  - durante lo streaming, in un `finally` della callback che chiama `AssistantAnswer::finish()`: fine normale, errore, timeout o disconnessione del client. La risposta usa `ignore_user_abort(true)` e, dopo ogni riga scritta, chiede al contratto `App\Contracts\ClientConnection` (`PhpClientConnection` con `connection_aborted()`, sostituibile nei test con `Tests\Support\FakeClientConnection`) se il client si è disconnesso. In quel caso esce dal ciclo e `finish()` rilascia l'ultimo riferimento ai generatori: vengono distrutti subito, il `finally` di `OllamaAssistant` chiude il body della risposta, la connessione verso Ollama si chiude e la generazione si ferma
+  - se la callback non parte mai (per esempio un middleware fallisce dopo il controller), con un `app()->terminating()` registrato da `AssistantAnswerStream::toResponse()`, che rilascia lo slot se non è già stato rilasciato. In produzione l'applicazione termina dopo l'invio del corpo; nei test HTTP termina prima di `streamedContent()`, quindi i test sul rilascio nel `finally` eseguono lo stream direttamente (helper `streamAnswerDirectly()`)
 - Nessuno slot libero: 503 immediato con `code` `assistant_busy`, senza attesa e senza chiamare Ollama.
 - Rischio residuo accettato: con `max_concurrent` a 1, un solo utente che resta entro il limite del limiter può tenere occupato l'assistente per gli altri. Il resto del negozio non ne risente, perché gli altri worker restano liberi.
 
 ## Nessuna persistenza
 
 - Nessuna tabella: la conversazione vive solo nel frontend, che a ogni richiesta invia gli ultimi 10 messaggi.
-- Il contenuto dei messaggi non si scrive mai nei log. Si registrano solo durata, esito ed eventuale errore tecnico.
+- Il contenuto dei messaggi non si scrive mai nei log. Si registrano solo durata, esito ed eventuale errore tecnico (`AssistantLog`). Le tracce delle eccezioni non contengono gli argomenti delle chiamate: `zend.exception_ignore_args = On` in `docker/php/php.ini`.
 
 ## Docker e Modelfile (Fase 2c)
 
