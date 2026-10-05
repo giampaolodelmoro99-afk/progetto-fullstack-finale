@@ -84,6 +84,7 @@ final class AssistantAskCommand extends Command
     {
         return match (true) {
             isset($result->result['products']) => trans_choice('{0} nessun prodotto|{1} 1 prodotto|[2,*] :count prodotti', count($result->result['products']))
+                .(($result->result['total'] ?? 0) > count($result->result['products']) ? " su {$result->result['total']}" : '')
                 .rtrim(': '.implode(', ', array_column($result->result['products'], 'slug')), ': '),
             isset($result->result['product']) => 'prodotto '.$result->result['product']['slug'],
             isset($result->result['sections']) => 'regole: '.implode(', ', array_column($result->result['sections'], 'title')),

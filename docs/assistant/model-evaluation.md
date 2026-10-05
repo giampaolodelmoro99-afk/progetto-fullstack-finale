@@ -187,7 +187,46 @@ Esito: su questa versione di Ollama un messaggio `system` nella richiesta **sost
 
 - **Markdown nelle risposte.** Tutti i modelli usano grassetto ed elenchi puntati. Il widget (Design E, Fase 8) deve decidere se mostrarli o se chiedere nel Modelfile testo semplice.
 - **Header in ritardo.** Con qwen3.5 l'endpoint della Fase 4b invia gli header solo quando arriva il primo frammento (circa 14 s); il frontend mostra un indicatore di attesa fino ad allora.
-- **Ricerca senza parola chiave.** Con il limite di 8 risultati, una ricerca su tutta una categoria può escludere prodotti pertinenti (q2 del secondo giro). Da valutare nella Fase 4b un'indicazione nella descrizione del tool o un limite diverso.
+- **Ricerca senza parola chiave.** Risolto nella Fase 4b (sezione «Fase 4b: ricerca senza parola chiave»).
+- **Confronti numerici.** In q2 il modello a volte considera il Caricatore Brezza 100 W fuori da «almeno 65 W» (2 esecuzioni su 3 dopo la revisione della Fase 4b). La ricerca è corretta; da rivalutare con una regola nel Modelfile, riprovando tutte le domande fisse.
+- **Giro finale senza tool.** In una esecuzione di q1 su tre (Fase 4b) il modello ha usato tutti i `max_tool_rounds` (due ricerche e un `get_product`) e nel giro finale, senza tool, ha scritto «Ora controllo le caratteristiche degli Auricolari Riva» senza citarli. Comportamento già possibile prima della 4b; da rivalutare se si ripresenta (per esempio `max_tool_rounds` a 4, oppure una frase nel Modelfile per l'ultimo giro).
+
+## Fase 4b: ricerca senza parola chiave
+
+Problema (q2 del secondo giro): `search_products` con la sola categoria restituisce 8 dei 10 prodotti di «Ricarica ed energia» e il modello non sa che la lista è parziale.
+
+Interventi, senza alzare `max_tool_results`, così il prompt dei giri successivi non si allunga:
+
+1. **Risultato del tool**: `search_products` restituisce anche `total`, il numero dei prodotti trovati con gli stessi filtri, e, se `total` supera i prodotti mostrati, `note`. Nella prima versione la nota era «Mostrati 8 prodotti su 10: per vedere gli altri restringi la ricerca con search o con i prezzi.»; dopo la revisione di fine fase contiene solo il fatto, «Mostrati 8 prodotti su 10.», perché i risultati degli strumenti sono dati e mai istruzioni, e l'indicazione su cosa fare sta già nel Modelfile (punto 3).
+2. **Descrizione dei tool**: il parametro `search` va usato sempre quando il cliente nomina un tipo di prodotto, perché la sola categoria restituisce al massimo 8 prodotti.
+3. **Modelfile**, sezione Dati: «Quando il cliente nomina un tipo di prodotto, passa sempre quella parola in search. Se il risultato dice che ci sono altri prodotti oltre a quelli mostrati, restringi la ricerca.»
+
+Con questi tre interventi il modello cerca sempre `search: "caricatore"`, ma trasforma «almeno 65 W» in `min_price: 65` (lo stesso errore di qwen3 e granite nel primo giro) e perde il Caricatore Brezza 65 W da 59,00 € (3 esecuzioni su 3). Quarto intervento, nella stessa direzione:
+
+4. **Descrizione dei prezzi**: `min_price` e `max_price` solo per un prezzo detto dal cliente, mai per watt, capacità o altre caratteristiche, che si leggono nei risultati.
+
+Misure con `make ask` (qwen3.5:4b, CPU, 5 ottobre 2026):
+
+| Domanda | Tool chiamati | Esito | Prima parola | Totale |
+|---|---|---|---|---|
+| q2, con i soli interventi 1–3 (×3) | `search_products {"search":"caricatore","min_price":65}` | solo il 100 W | 32,5 / 6,3 / 6,3 s | 44,5 / 17,4 / 17,3 s |
+| q2, con l'intervento 4 (×3) | `search_products {"search":"caricatore","min_price":0}` | 65 W e 100 W citati con `[[slug]]` in 3 esecuzioni su 3; in due la frase dice che «solo il 65 W» soddisfa la richiesta, ma propone e cita anche il 100 W | 26,8 / 8,2 / 8,2 s | 41,5 / 24,8 / 26,3 s |
+| q1 (×3) | due ricerche (`cuffie`, `auricolari` con `max_price: 200`); nella prima esecuzione anche `get_product` | Auricolari Riva e Conchiglia in 2 esecuzioni su 3; nella prima il giro finale senza tool resta a metà (vedi «Punti aperti») | 14,1 / 14,2 / 0,2 s | 83,3 / 52,1 / 41,6 s |
+| q3 | `search_products`, due `get_product` | confronto corretto, entrambi citati | 31,4 s | 57,6 s |
+| «Cosa avete nella categoria ricarica ed energia?» | `search_products {"category":"ricarica-ed-energia"}` → 8 su 10 | elenca gli 8 prodotti e aggiunge «Ci sono altri due prodotti in questa categoria», con l'invito a restringere | 27,1 s | 59,8 s |
+
+Dopo la revisione, con la `note` ridotta al solo fatto (5 ottobre 2026, stessa giornata):
+
+| Domanda | Tool chiamati | Esito | Prima parola | Totale |
+|---|---|---|---|---|
+| q2 (×3) | `search_products {"search":"caricatore","min_price":0}`, 3 prodotti | 65 W e 100 W citati in 1 esecuzione su 3; nelle altre 2 cita solo il 65 W e scrive che «solo il 65 W» soddisfa la richiesta | 8,1 / 8,2 / 8,2 s | 18,5 / 16,2 / 17,2 s |
+| «Cosa avete nella categoria ricarica ed energia?» (×2) | `search_products {"category":"ricarica-ed-energia"}` → 8 su 10 | elenca gli 8 prodotti e dice che ce ne sono altri due, con l'invito ad approfondire | 26,4 / 12,8 s | 56,6 / 44,3 s |
+
+In q2 la `note` non compare (3 prodotti trovati) e il prompt è lo stesso delle misure precedenti: la differenza è variabilità del modello. Il residuo non riguarda più la ricerca, che restituisce tutti e tre i caricatori in ogni esecuzione, ma il confronto tra le potenze: qwen3.5:4b a volte esclude il 100 W da «almeno 65 W». La risposta resta corretta (il 65 W soddisfa la richiesta) ma meno completa. Non lo correggo nel Modelfile in questa fase: una regola sui confronti numerici andrebbe provata su tutte le domande fisse.
+
+I tempi di 0,2 s e di circa 6–8 s della prima parola sono le ripetizioni con il prefisso del prompt in cache (stessa domanda di seguito).
+
+Esito: punto aperto chiuso. Il modello usa la parola chiave, e quando cerca su tutta la categoria la `note` gli fa sapere che la lista è parziale. Gli argomenti di prezzo non vengono più ricavati dai watt. Resta il limite di ragionamento su «almeno 65 W» descritto sopra, annotato tra i punti aperti.
 
 ## GPU
 

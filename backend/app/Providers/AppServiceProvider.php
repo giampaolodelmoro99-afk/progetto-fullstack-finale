@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Auth\LoginAction;
 use App\Contracts\AiAssistant;
+use App\Contracts\ClientConnection;
 use App\Contracts\Security\PasskeyCeremony;
 use App\Models\Passkey;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Services\Assistant\FakeAiAssistant;
 use App\Services\Assistant\OllamaAssistant;
 use App\Services\Security\WebAuthnPasskeyCeremony;
 use App\Support\Auth\PasskeyUserHandleSecret;
+use App\Support\PhpClientConnection;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -39,6 +41,8 @@ class AppServiceProvider extends ServiceProvider
             'ollama' => $app->make(OllamaAssistant::class),
             default => throw new InvalidArgumentException('Unsupported assistant driver ['.config('assistant.driver').'].'),
         });
+
+        $this->app->bind(ClientConnection::class, PhpClientConnection::class);
 
         $this->registerPasskeys();
     }
@@ -131,8 +135,9 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Named limiters of the authentication routes and the general limiter
-     * of the api group. The 429 response is rendered in bootstrap/app.php.
+     * Named limiters of the authentication routes and of the assistant, and
+     * the general limiter of the api group. The 429 response is rendered in
+     * bootstrap/app.php.
      */
     private function configureRateLimiting(): void
     {
@@ -162,6 +167,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('passkey-login', fn (Request $request): Limit => Limit::perMinute(10)
             ->by($request->ip()));
+
+        RateLimiter::for('assistant', fn (Request $request): Limit => Limit::perMinute(10)
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
     }
 
     /**

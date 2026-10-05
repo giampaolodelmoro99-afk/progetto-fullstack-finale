@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Assistant\AssistantMessageController;
+use App\Http\Controllers\Api\V1\Assistant\AssistantStatusController;
 use App\Http\Controllers\Api\V1\Auth\CancelEmailChangeController;
 use App\Http\Controllers\Api\V1\Auth\CheckPasswordResetTokenController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmEmailChangeController;
@@ -39,6 +41,17 @@ Route::get('products', [ProductController::class, 'index'])->name('products.inde
 Route::get('products/{product:slug}', [ProductController::class, 'show'])->name('products.show');
 
 Route::get('products/{product:slug}/related', RelatedProductController::class)->name('products.related');
+
+/*
+| Shop assistant, for guests and customers alike. The answer streams as
+| NDJSON; the limiter keys on the user or the IP address, and the user is
+| never part of what reaches the model.
+*/
+Route::get('assistant/status', AssistantStatusController::class)->name('assistant.status');
+
+Route::post('assistant/messages', AssistantMessageController::class)
+    ->middleware('throttle:assistant')
+    ->name('assistant.messages');
 
 Route::post('register', RegisterController::class)
     ->middleware('throttle:register')

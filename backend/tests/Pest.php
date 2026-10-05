@@ -231,6 +231,33 @@ function drainAssistantEvents(iterable $events, array &$received = []): array
 }
 
 /**
+ * Sends a conversation to the assistant endpoint. A single string is one
+ * user message.
+ */
+function askAssistant(array|string $messages): TestResponse
+{
+    if (is_string($messages)) {
+        $messages = [['role' => 'user', 'content' => $messages]];
+    }
+
+    return test()->postJson('/api/v1/assistant/messages', ['messages' => $messages]);
+}
+
+/**
+ * The NDJSON events of a streamed assistant answer, decoded line by line.
+ * streamedContent() runs the callback of the StreamedResponse: without it
+ * nothing is streamed and the slot is never released.
+ *
+ * @return list<array<string, mixed>>
+ */
+function assistantEvents(TestResponse $response): array
+{
+    $lines = array_filter(explode("\n", $response->streamedContent()), fn (string $line): bool => $line !== '');
+
+    return array_values(array_map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines));
+}
+
+/**
  * A complete body of the admin product form, valid unless overridden.
  *
  * @return array<string, mixed>
