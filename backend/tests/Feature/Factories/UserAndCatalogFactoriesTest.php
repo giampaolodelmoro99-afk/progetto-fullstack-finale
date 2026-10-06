@@ -157,3 +157,14 @@ describe('catalog', function () {
             ->and($item->cart->user)->not->toBeNull();
     });
 });
+
+it('builds an anonymized account as the account deletion leaves it', function () {
+    $user = User::factory()->anonymized()->create();
+
+    expect($user->fresh())
+        ->name->toBe('Utente eliminato')
+        ->email->toBe("deleted-{$user->id}@anonymized.invalid")
+        ->email_verified_at->toBeNull()
+        ->remember_token->toBeNull()
+        ->and($user->fresh()->isAnonymized())->toBeTrue();
+});

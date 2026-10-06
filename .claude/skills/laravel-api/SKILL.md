@@ -62,7 +62,7 @@ routes/
 - In `App\Http\Controllers\Api\V1\{Area}`, un controller per risorsa, classe `final`.
 - Solo metodi resource (`index`, `store`, `show`, `update`, `destroy`) oppure `__invoke`.
 - Restituiscono sempre una Resource, una collection di Resource o `response()->noContent()`. Unica eccezione: `Assistant\AssistantMessageController` restituisce lo `StreamedResponse` NDJSON costruito da `App\Services\Assistant\AssistantAnswerStream` (skill `ai-assistant`).
-- Status: 201 per la creazione, 204 per l'eliminazione.
+- Status: 201 per la creazione, 204 per l'eliminazione. Eccezione: le scritture del carrello restituiscono sempre la `CartResource` aggiornata, comprese `DELETE /cart/items/{cartItem}` e `DELETE /cart` (200), motivo nella skill `ecommerce-domain` ("Carrello").
 - Usano `$request->validated()`, mai `$request->all()` o `$request->input()` per i dati da salvare.
 
 ```php
@@ -94,10 +94,12 @@ final class ProductController extends Controller
 - Se l'azione ha una Form Request, la Policy si invoca in `authorize()` della Form Request, così l'autorizzazione avviene prima della validazione.
 - Se l'azione non ha una Form Request (`index`, `show`, `destroy`), si usa `Gate::authorize()` come prima istruzione del controller.
 - Eccezione: le rotte pubbliche senza regole di visibilità (categorie, elenco prodotti, impostazioni e testi dell'assistenza del negozio) non hanno Policy; il dettaglio e i correlati di un prodotto passano da `ProductPolicy::viewInShop`, che risponde 404 per i prodotti disattivati anche all'admin; `view` resta per lo `show` dell'area admin, che vede anche i disattivati.
+- Le azioni sulle sole risorse dell'utente autenticato, senza id nella rotta (elenco degli indirizzi e delle passkey, carrello, aggiunta al carrello, nuovo indirizzo), non hanno controlli di Policy oltre a `create`: la query è già limitata all'utente, quindi non c'è una risorsa altrui da negare.
 - Non usare `before()` per concedere tutto all'admin: ogni permesso è esplicito.
 - Il cliente accede solo alle proprie risorse (`$order->user_id === $user->id`).
+- **Risorse personali di un altro utente → 404.** Regola unica del progetto: indirizzi, righe del carrello, ordini e passkey di un altro utente rispondono come se non esistessero, con `Response::denyAsNotFound()` nella Policy, così non si rivela la loro esistenza. Nelle Form Request `authorize()` restituisce `Gate::inspect(...)` (una `Response`), perché un `bool` darebbe 403. Il 403 resta per i permessi di ruolo: cliente su una rotta admin, admin che elimina il proprio account, admin su indirizzi, carrello e checkout (`UserPolicy::purchase` con `can:purchase` sul gruppo di rotte, skill `ecommerce-domain`).
 - Il middleware `role:admin` protegge l'area admin come prima barriera; le Policy restano comunque obbligatorie.
-- Quando l'esistenza stessa della risorsa non va rivelata, la Policy nega con `Response::denyAsNotFound()` (404) invece di un 403. Caso del progetto: `OrderPolicy::view` per il cliente consente solo i propri ordini con `paid_at` valorizzato e risponde 404 per tutti gli altri; l'admin vede tutti gli ordini. L'elenco del cliente applica lo stesso criterio con lo scope `visibleToCustomer`.
+- Quando l'esistenza stessa della risorsa non va rivelata, la Policy nega con `Response::denyAsNotFound()` (404) invece di un 403. Oltre alle risorse personali della regola precedente: `OrderPolicy::view` per il cliente consente solo i propri ordini con `paid_at` valorizzato e risponde 404 per tutti gli altri; l'admin vede tutti gli ordini. L'elenco del cliente applica lo stesso criterio con lo scope `visibleToCustomer`.
 
 ## Form Request
 
@@ -160,6 +162,7 @@ final class StoreProductRequest extends FormRequest
 - In caso di problema lanciano eccezioni di dominio, non restituiscono codici d'errore.
 - Chiamate a servizi esterni (pagamenti, rimborsi, assistente AI) mai dentro una transazione.
 - **Ordine dei lock:** dentro una transazione si blocca sempre prima l'utente (`lockForUpdate()` sulla riga di `users`) e poi le risorse collegate (richieste di cambio email, carrello, ordini). Nelle Action guidate da un token (es. conferma e annullamento del cambio email) si legge la risorsa **senza** lock solo per ricavare l'utente, poi si blocca l'utente e si rilegge la risorsa con il lock, ricontrollando che sia ancora valida. **Motivo:** due Action che bloccano le stesse righe in ordine opposto si attendono a vicenda e MySQL ne annulla una con un deadlock (errore 1213, un 500 per il client).
+- Le Action che modificano dati personali (indirizzi, carrello, dalla 5b il checkout) aprono la transazione con `App\Support\Auth\ActiveUserLock::acquire($user)`: blocca la riga dell'utente e, se l'account risulta anonimizzato sotto lock (eliminazione concorrente), lancia `AuthenticationException` (401 «Devi accedere per continuare.») senza nessun effetto. Le righe ricevute dalla rotta si rileggono con `lockForUpdate()` dopo il lock dell'utente (una riga sparita nel frattempo → 404). I prodotti nel carrello si leggono senza lock: il carrello non riserva stock.
 - Cambi di stato dell'ordine:
   - `ChangeOrderStatusAction::execute(Order $order, OrderStatus $to, ?User $by = null, ?string $reason = null)` è l'unico punto che cambia `orders.status`: apre sempre `DB::transaction()` (annidata con savepoint quando il chiamante ne ha già una), rilegge l'ordine con `lockForUpdate()`, controlla `canTransitionTo()` (altrimenti `InvalidOrderTransitionException`), valorizza il timestamp corrispondente, scrive la riga in `order_status_changes` e invia la notifica al cliente solo per le transizioni dell'elenco chiuso della skill `ecommerce-domain` (`paid → shipped`, `shipped → delivered`, `paid → cancelled`). La notifica usa `afterCommit()`, così parte solo se la transazione va a buon fine. Così anche spedito e consegnato, chiamati dal controller, sono transazionali senza che il controller usi `DB`.
   - La creazione dell'ordine in `PlaceOrderAction` scrive la riga iniziale (`from_status` null, `to_status` `pending`) nella stessa transazione.

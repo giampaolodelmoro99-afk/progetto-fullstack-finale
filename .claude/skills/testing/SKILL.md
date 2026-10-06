@@ -58,7 +58,7 @@ tests/
 | Richiesta corretta | status corretto e struttura JSON (`assertJsonStructure`, `assertJsonPath`) |
 | Dati non validi | 422 con `errors` sui campi giusti; usa i `dataset` di Pest per coprire più casi |
 | Utente non autenticato | 401 |
-| Utente non autorizzato | 403 (cliente su rotta admin, cliente su risorsa di un altro); 404 dove la Policy usa `denyAsNotFound()` (ordini del cliente) |
+| Utente non autorizzato | 403 per i permessi di ruolo (cliente su rotta admin); 404 per le risorse personali di un altro utente (indirizzi, righe del carrello, ordini, passkey), con `denyAsNotFound()` nella Policy |
 | Risorsa inesistente | 404 dove applicabile |
 | Effetti collaterali | database (`assertDatabaseHas`), notifiche, eventi, file |
 
@@ -75,19 +75,25 @@ tests/
 
 - `summary.items_count` somma le quantità di tutte le righe, comprese quelle esaurite, disattivate o eliminate.
 - Subtotale, spedizione e totale escludono le righe non acquistabili; una riga con quantità oltre lo stock resta nei totali.
-- Spedizione: 690 sotto la soglia, 0 da 9900 in su; `free_shipping_remaining` con un dataset (subtotale 5800 → 4100, 9900 → 0, 12000 → 0).
+- Spedizione: 690 sotto la soglia, 0 da 9900 in su; `free_shipping_remaining` con un dataset (subtotale 5800 → 4100, 9900 → 0, 12000 → 0); con sole righe esaurite (subtotale 0) spedizione 0, totale 0 e `free_shipping_remaining` null.
+- Totali del Design B: 34900 + 2 × 5900 + 2900 = 49600 con spedizione gratuita; 2 × 2900 = 5800 + 690 = 6490 con 4100 mancanti.
+- Tutte le scritture rispondono con la `CartResource` aggiornata, anche `DELETE /cart` (200).
 - `exceeds_stock`, `is_purchasable`, `line_total` null per le righe non acquistabili e `can_checkout` con un dataset di carrelli: vuoto, tutto acquistabile, una riga esaurita, una riga disattivata, una riga oltre lo stock.
 - `max_quantity` con un dataset: stock 3 → 3, stock 10 → 10, stock 25 → 10.
 - 422 su aggiunta o modifica oltre `max_quantity`, anche quando la somma con la quantità già presente supera il massimo; quantità 0 → 422.
 - Il carrello usa il prezzo attuale: cambiando il prezzo del prodotto cambiano `unit_price` e totali.
-- Un cliente non vede né modifica le righe del carrello di un altro.
+- Un cliente non vede né modifica le righe del carrello di un altro: 404 e riga invariata.
+- Admin: 403 con «Gli account di amministrazione non possono fare acquisti.» su ogni rotta di indirizzi e carrello, senza effetti, anche su una risorsa di un altro utente (il 403 di ruolo arriva prima del 404).
+- Quantità molto oltre uno stock basso (stock 3, quantità 11) → «Puoi avere al massimo 3 pezzi…», in `POST` e `PATCH`; riga non acquistabile con quantità 11 → messaggio «non più disponibile».
+- Account anonimizzato: ogni Action di carrello e indirizzi, chiamata con un'istanza non aggiornata di un utente anonimizzato nel database, lancia `AuthenticationException` senza effetti; via HTTP 401.
 
 ### Indirizzi
 
-- Dataset di dati non validi con 422 sul campo giusto: CAP `5612` e `561255`, provincia `pi`, `PIS` e `P1`, telefono mancante, più lungo di 20 caratteri, con lettere o con un `+` non iniziale.
-- Dati validi: CAP `56125`, provincia `PI`, telefono `+39 333 123 4567` e `3331234567`.
+- Dataset di dati non validi con 422 sul campo giusto: CAP `5612` e `561255`, provincia `PIS` e `P1`, telefono mancante, più lungo di 20 caratteri, con lettere o con un `+` non iniziale.
+- Dati validi: CAP `56125`, provincia `PI` e `pi` (salvata come `PI`), telefono `+39 333 123 4567` e `3331234567`.
 - `country` salvato sempre come `IT`, anche se la richiesta invia un altro paese.
-- Indirizzo predefinito: creare o aggiornare un indirizzo con `is_default` true lo toglie agli altri indirizzi dello stesso utente e non tocca quelli di un altro utente.
+- Indirizzo predefinito: creare o aggiornare un indirizzo con `is_default` true lo toglie agli altri indirizzi dello stesso utente e non tocca quelli di un altro utente; il primo indirizzo è predefinito; `is_default` false sul predefinito è ignorato; eliminando il predefinito diventa predefinito il più recente.
+- Indirizzo di un altro utente: 404 su `GET`, `PATCH` e `DELETE`, indirizzo invariato.
 
 ### Checkout
 
@@ -266,7 +272,7 @@ src/
 |---|---|
 | Utility | `formatDateTimeShort` («29 set 2026, 16:52»), `formatDayTimeShort` («29 set, 16:52»), `formatMonthYear` («Settembre 2026»); `parseEuroToCents` con un dataset (`249,00` → 24900, `249,5` → 24950, `249` → 24900, `0,01` → 1) e rifiuto di `1.249`, `249.00`, `249,001` e testo vuoto; `formatCentsForInput` (34900 → «349,00», 124900 → «1249,00»); `formatPrice` (349,00 €, 1.249,00 € con il punto delle migliaia, 0,00 €), `formatDate`, `normalizeApiError` (compreso il 429 con `Retry-After: 45` → `retryAfter` 45 e «Troppi tentativi. Riprova tra 45 secondi», e senza header → `retryAfter` null; `code` dalla risposta, null se manca) |
 | httpClient | ripetizione dopo 419, gestione del 423 con conferma e ripetizione |
-| Rotte | redirect al login con ritorno alla pagina di partenza, blocco dell'area admin, pagine ospite |
+| Rotte | redirect al login con ritorno alla pagina di partenza, blocco dell'area admin, pagine ospite; `CustomerRoute`: da ospite redirect al login, per un admin redirect a `/account/profile` da `/account/addresses`, `/account/orders` e `/account/orders/:orderId`, e alla home da `/cart`, `/checkout` e `/checkout/success/:orderId`; per un cliente la pagina si apre |
 | Form | validazione Zod, errori 422 del server mostrati sui campi, pulsante disabilitato durante l'invio |
 | Viste con dati | stati di caricamento, errore con "Riprova", vuoto, contenuto |
 | Catalogo | filtri e ordinamento (Novità, Prezzo crescente, Prezzo decrescente) che aggiornano la query string e i risultati, ritorno a pagina 1, limiti dello slider da `meta.price_range`, chip "Novità" ed etichetta di disponibilità ricevuti dall'API, correlati nascosti se vuoti |
@@ -278,7 +284,7 @@ src/
 | Dati della carta | dopo l'invio, riuscito e fallito, la MutationCache non contiene i dati della carta (`queryClient.getMutationCache()`), l'errore della mutation non contiene `config.data`, `localStorage` e `sessionStorage` sono vuoti, l'URL non contiene parametri della carta; rimontando la pagina il checkout riparte dal passo 1 con i campi vuoti |
 | Conferma d'ordine | dati letti da `GET /orders/{id}` (numero, stato, "Carta che termina con 4242", totali), immagine di ripiego per un prodotto eliminato, 404 con link agli ordini |
 | Sicurezza | login con secondo fattore (app, codice di recupero, passkey solo se in `methods`), credenziali errate (422 con `code` `invalid_credentials`) con un solo avviso e nessun errore sui campi, challenge scaduta (422 con `code` `two_factor_challenge_expired`) che riporta al login e codice sbagliato che resta sulla pagina con l'errore sul campo, messaggio 429 al login, verifica email da ospite con esito positivo e l'indirizzo preso dalla risposta, banner di email non verificata assente nelle pagine di accesso, `PasswordRequirements` che si aggiorna mentre si scrive e `newPasswordSchema` (9 caratteri, senza maiuscola, senza minuscola, senza numero), pagine dai link email (successo e link scaduto), reset con la sezione di verifica solo se richiesta, cambio password con secondo fattore in linea solo con la doppia autenticazione attiva, attivazione TOTP con codici di recupero, conferma dell'identità (esplicita e dopo 423, con la descrizione dell'operazione), cambio email con il `Dialog` "Nuova email" dopo la conferma, avviso di cambio in sospeso con "Annulla la richiesta", attività recente con "Mostra altre attività" che sparisce all'ultima pagina, eliminazione dell'account (conferma disabilitata finché non si spunta la checkbox, conferma dell'identità dopo 423 con la descrizione dell'operazione, 204 con navigazione alla home e Snackbar, 409 `account_has_open_orders` con il dialog aperto e il messaggio) |
-| Area account | menu account per ospite e utente autenticato, navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, timeline da `status_history`, "Annulla l'ordine" solo con `can_cancel`, dialog di annullamento con "Mantieni l'ordine" e "Annulla l'ordine", 502 `refund_failed` con il dialog aperto e il messaggio |
+| Area account | menu account per ospite e utente autenticato; per un admin, nel menu account dell'header e nei `Tabs` dell'area account, voci «Indirizzi» e «I miei ordini» assenti e voce «Amministrazione» che porta a `/admin`, mentre per un cliente «Amministrazione» è assente; navigazione del layout con la voce attiva, dettaglio ordine con solo "Carta che termina con 4242" e nessun intestatario, timeline da `status_history`, "Annulla l'ordine" solo con `can_cancel`, dialog di annullamento con "Mantieni l'ordine" e "Annulla l'ordine", 502 `refund_failed` con il dialog aperto e il messaggio |
 | Admin | layout con la voce attiva e il titolo della pagina, nome ed email nell'`AppBar`; dashboard con indicatori, «N pezzi o meno» dalle impostazioni admin e link filtrati (ogni stato con `status` e `paid_month`); elenco ordini con `paid_month` nella query string mostrato come `Chip` «Pagati a Settembre 2026» e rimosso con la sua X, con ritorno a pagina 1; elenco prodotti e ordini con filtri nella query string, ritorno a pagina 1, ricerca con attesa (timer finti di Vitest), stato vuoto con "Azzera filtri", «N ordini» e «1 ordine»; form prodotto: validazione Zod (SKU, descrizione breve di 161 caratteri, prezzo `1.249` e `10000,00` rifiutati, `9999,99` valido), prezzo inviato in centesimi, errori 422 sui campi e conteggio nell'`Alert`, su/giù della scheda tecnica, dopo la creazione navigazione alla modifica senza dialog, dialog delle modifiche non salvate con "Resta sulla pagina" ed "Esci senza salvare", "Annulla" che ripristina i valori, messaggio sulle immagini nel nuovo prodotto; immagini: file non validi scartati con il messaggio, caricamento che non perde gli `alt` non salvati, ← → che cambiano l'ordine inviato; categorie: slug in sola lettura, elimina disabilitato con tooltip, 409 mostrato, invalidazione di `categories`; dettaglio ordine: azioni da `allowed_transitions`, dialog di annullamento con rimborso e scorte, 502 `refund_failed` con il dialog aperto, pagamento rifiutato con `Chip` "Annullato", `Alert` con il motivo e nessuna azione |
 
 Fuori perimetro: test end-to-end con Playwright, extra facoltativo della Fase 10.

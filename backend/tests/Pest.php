@@ -1,8 +1,10 @@
 <?php
 
 use App\Contracts\Security\PasskeyCeremony;
+use App\Models\CartItem;
 use App\Models\Category;
 use App\Models\Passkey;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -279,4 +281,49 @@ function adminProductPayload(array $overrides = []): array
         'is_active' => true,
         ...$overrides,
     ];
+}
+
+/**
+ * A product of the shop, active and with plenty of stock unless overridden.
+ */
+function shopProduct(array $attributes = []): Product
+{
+    return Product::factory()->create(['stock' => 20, ...$attributes]);
+}
+
+/**
+ * A row in the cart of the user, creating the cart when it is missing.
+ */
+function cartRow(User $user, Product $product, int $quantity): CartItem
+{
+    $cart = $user->cart()->firstOrCreate();
+
+    return CartItem::factory()->for($cart)->for($product)->create(['quantity' => $quantity]);
+}
+
+/**
+ * A complete, valid body of the address form, unless overridden.
+ *
+ * @return array<string, mixed>
+ */
+function addressPayload(array $overrides = []): array
+{
+    return [
+        'full_name' => 'Giulia Ferri',
+        'street' => 'Via San Martino 42',
+        'city' => 'Pisa',
+        'postal_code' => '56125',
+        'province' => 'PI',
+        'phone' => '+39 333 123 4567',
+        ...$overrides,
+    ];
+}
+
+/**
+ * Anonymizes the account in the database only, as a concurrent account
+ * deletion does: the instance in memory still looks like an active user.
+ */
+function anonymizeBehindTheSession(User $user): void
+{
+    User::query()->whereKey($user->id)->update(['anonymized_at' => '2026-09-01 10:00:00']);
 }

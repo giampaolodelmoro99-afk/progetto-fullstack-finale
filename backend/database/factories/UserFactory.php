@@ -101,6 +101,22 @@ class UserFactory extends Factory
     }
 
     /**
+     * An account deleted by the customer, as DeleteAccountAction leaves it.
+     * Only with create(): the fictitious email needs the id.
+     */
+    public function anonymized(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => User::ANONYMIZED_NAME,
+            'email_verified_at' => null,
+            'remember_token' => null,
+            'anonymized_at' => now(),
+        ])->afterCreating(function (User $user) {
+            $user->forceFill(['email' => $user->anonymizedEmail()])->save();
+        });
+    }
+
+    /**
      * A fake passkey with the given name, without two-factor authentication.
      */
     public function withPasskey(string $name = 'MacBook di prova'): static

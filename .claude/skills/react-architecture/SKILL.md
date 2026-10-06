@@ -18,7 +18,7 @@ src/
 ├── app/
 │   ├── App.jsx
 │   ├── providers/            # AppProviders, AuthProvider, NotificationProvider, IdentityConfirmationProvider
-│   └── router/               # router.jsx, paths.js, ProtectedRoute.jsx, GuestRoute.jsx, AdminRoute.jsx
+│   └── router/               # router.jsx, paths.js, ProtectedRoute.jsx, GuestRoute.jsx, AdminRoute.jsx, CustomerRoute.jsx
 ├── api/
 │   ├── httpClient.js
 │   ├── queryClient.js
@@ -70,7 +70,12 @@ Una feature contiene tutto ciò che le appartiene, compresi i suoi test. Un elem
 - `GuestRoute`: login, verifica in due passaggi, registrazione e password dimenticata reindirizzano a `/` se l'utente è già autenticato. Le pagine raggiunte dai link email non sono né protette né ospiti: funzionano in entrambi i casi.
 - `/account` reindirizza a `/account/profile`.
 - `AdminRoute`: se l'utente non è autenticato si comporta come `ProtectedRoute`; se è autenticato ma non è admin reindirizza a `/`.
-- Carrello, checkout e conferma d'ordine sono rotte protette.
+- `CustomerRoute`: riceve la destinazione dell'admin come parametro (`<CustomerRoute adminRedirect={paths.accountProfile} />`). Se l'utente non è autenticato si comporta come `ProtectedRoute`; per un admin reindirizza alla destinazione ricevuta, con `replace`:
+  - pagine dell'area account `/account/addresses`, `/account/orders` e `/account/orders/:orderId` → `/account/profile` (`paths.accountProfile`)
+  - pagine d'acquisto `/cart`, `/checkout` e `/checkout/success/:orderId` → home del negozio (`paths.home`)
+
+  **Motivo:** un admin non può fare acquisti (le API di indirizzi, carrello e checkout rispondono 403, skill `ecommerce-domain`), quindi non ha carrello, indirizzi né ordini propri.
+- Carrello, checkout e conferma d'ordine sono rotte protette da `CustomerRoute`, con la home come destinazione per l'admin.
 - Il checkout richiede email verificata: se non lo è, la pagina mostra l'invito a verificarla invece del form.
 - Le pagine admin si caricano con `React.lazy` e `Suspense`, con un fallback di caricamento.
 - `errorElement` con `ErrorPage`; rotta `*` con `NotFoundPage`.
@@ -194,6 +199,7 @@ Dal mockup `01-negozio.pdf`:
 - `is_new` e `availability` arrivano dall'API: il frontend li mostra, non li calcola.
 - Il selettore di quantità della pagina prodotto va da 1 a `max_quantity` del prodotto.
 - Dopo l'aggiunta al carrello compare uno Snackbar "Aggiunto al carrello" con l'azione "Vai al carrello"; si invalida `cart`.
+- **Admin nel negozio:** gli admin non possono fare acquisti (le API di indirizzi, carrello e checkout rispondono 403, skill `ecommerce-domain`). Per un utente admin che naviga il negozio l'icona del carrello nell'header è nascosta (e `GET /cart` non viene richiesto), e al posto di "Aggiungi al carrello" compare un testo informativo con lo stesso messaggio dell'API: «Gli account di amministrazione non possono fare acquisti.».
 
 ## Carrello (`/cart`)
 
@@ -260,6 +266,7 @@ Leggono i parametri dalla query string con `useSearchParams` e chiamano l'API al
 Dal mockup `03-account.pdf`.
 
 - **Menu account nell'header:** per l'ospite l'icona porta a `paths.login`; per l'utente autenticato apre un menu con nome ed email e le voci Profilo, Indirizzi, I miei ordini, Sicurezza ed Esci. Le stesse voci formano la navigazione di `AccountLayout` (lista laterale su desktop, tab su mobile), definite una sola volta in un array condiviso con etichetta, icona e percorso. La voce attiva si ricava dalla rotta corrente.
+- **Voci per un admin:** nel menu account dell'header e nella navigazione di `AccountLayout` (lista laterale e `Tabs`) le voci «Indirizzi» e «I miei ordini» sono nascoste, perché un admin non può fare acquisti e non ha ordini propri; compare invece la voce «Amministrazione», che porta al pannello admin (`paths.admin`). L'array condiviso delle voci indica per ognuna a chi è visibile (clienti, admin o tutti), così menu e layout filtrano allo stesso modo. Le rotte `/account/addresses`, `/account/orders` e `/account/orders/:orderId` restano protette da `CustomerRoute`, che per un admin reindirizza a `/account/profile`.
 - **Esci:** `logout()` di `useAuth`, poi navigazione alla home.
 - **Profilo:**
   - "Dati personali": form del nome.
