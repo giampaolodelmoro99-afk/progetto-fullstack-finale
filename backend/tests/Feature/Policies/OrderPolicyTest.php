@@ -44,3 +44,14 @@ it('never lets the admin use the cancellation of the customer', function () {
     expect($response->allowed())->toBeFalse()
         ->and($response->status())->toBe(404);
 });
+
+it('lets only the admin list the orders and change their status', function (string $role, bool $allowed) {
+    $user = User::factory()->{$role}()->create();
+    $order = Order::factory()->paid()->create();
+
+    expect((new OrderPolicy)->viewAny($user))->toBe($allowed)
+        ->and((new OrderPolicy)->updateStatus($user, $order))->toBe($allowed);
+})->with([
+    'admin' => ['admin', true],
+    'customer' => ['customer', false],
+]);

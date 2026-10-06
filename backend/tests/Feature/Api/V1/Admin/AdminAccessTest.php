@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductImage;
 
 dataset('admin routes', [
     'settings' => ['GET', '/api/v1/admin/settings'],
+    'dashboard' => ['GET', '/api/v1/admin/dashboard'],
     'product list' => ['GET', '/api/v1/admin/products'],
     'product creation' => ['POST', '/api/v1/admin/products'],
     'product detail' => ['GET', '/api/v1/admin/products/{product}'],
@@ -17,6 +19,9 @@ dataset('admin routes', [
     'category creation' => ['POST', '/api/v1/admin/categories'],
     'category update' => ['PATCH', '/api/v1/admin/categories/{category}'],
     'category deletion' => ['DELETE', '/api/v1/admin/categories/{category}'],
+    'order list' => ['GET', '/api/v1/admin/orders'],
+    'order detail' => ['GET', '/api/v1/admin/orders/{order}'],
+    'order status change' => ['PATCH', '/api/v1/admin/orders/{order}/status'],
 ]);
 
 function adminRouteUri(string $uri): string
@@ -26,8 +31,8 @@ function adminRouteUri(string $uri): string
     $image = ProductImage::factory()->for($product)->create();
 
     return str_replace(
-        ['{product}', '{image}', '{category}'],
-        [$product->id, $image->id, Category::factory()->create()->id],
+        ['{product}', '{image}', '{category}', '{order}'],
+        [$product->id, $image->id, Category::factory()->create()->id, Order::factory()->paid()->create()->id],
         $uri,
     );
 }
@@ -57,4 +62,14 @@ it('leaves products and categories untouched when a customer calls the admin rou
 
     $this->assertNotSoftDeleted($product);
     $this->assertDatabaseHas('categories', ['id' => $category->id, 'name' => 'Audio']);
+});
+
+it('leaves the order untouched when a customer tries to ship it', function () {
+    actingAsVerifiedCustomer();
+    $order = Order::factory()->paid()->create();
+
+    $this->patchJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped'])->assertForbidden();
+
+    expect($order->fresh()->status->value)->toBe('paid')
+        ->and($order->statusChanges()->count())->toBe(2);
 });

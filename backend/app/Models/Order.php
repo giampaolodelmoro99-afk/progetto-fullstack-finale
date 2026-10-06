@@ -129,6 +129,18 @@ class Order extends Model
     }
 
     /**
+     * What the detail of Admin\OrderResource reads: the customer, rows with
+     * the current cover, the latest payment (failed too), the history with
+     * the authors and the item count.
+     */
+    public function loadAdminDetail(): static
+    {
+        return $this
+            ->load(['user', 'items.product.cover', 'latestPayment', 'statusChanges.changedBy'])
+            ->loadSum('items', 'quantity');
+    }
+
+    /**
      * Orders the customer can see: paid at least once.
      */
     #[Scope]
@@ -174,7 +186,8 @@ class Order extends Model
     }
 
     /**
-     * Order number or customer email containing the term.
+     * Order number or customer email containing the term. The email of an
+     * anonymized account is fictitious, so it is never searched.
      */
     #[Scope]
     protected function search(Builder $query, string $term): void
@@ -183,7 +196,9 @@ class Order extends Model
 
         $query->where(function (Builder $query) use ($pattern) {
             $query->where('number', 'like', $pattern)
-                ->orWhereHas('user', fn (Builder $query) => $query->where('email', 'like', $pattern));
+                ->orWhereHas('user', fn (Builder $query) => $query
+                    ->whereNull('anonymized_at')
+                    ->where('email', 'like', $pattern));
         });
     }
 
