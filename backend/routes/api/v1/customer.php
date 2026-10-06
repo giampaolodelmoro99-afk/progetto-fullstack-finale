@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Account\AddressController;
+use App\Http\Controllers\Api\V1\Account\CancelOrderController;
 use App\Http\Controllers\Api\V1\Account\ConfirmIdentityController;
 use App\Http\Controllers\Api\V1\Account\ConfirmIdentityPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Account\ConfirmTwoFactorController;
 use App\Http\Controllers\Api\V1\Account\EmailChangeController;
+use App\Http\Controllers\Api\V1\Account\OrderController;
 use App\Http\Controllers\Api\V1\Account\PasskeyController;
 use App\Http\Controllers\Api\V1\Account\PasswordController;
 use App\Http\Controllers\Api\V1\Account\PasswordPasskeyOptionsController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\SendVerificationEmailController;
 use App\Http\Controllers\Api\V1\Cart\CartController;
 use App\Http\Controllers\Api\V1\Cart\CartItemController;
+use App\Http\Controllers\Api\V1\Checkout\CheckoutController;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -126,10 +129,13 @@ Route::get('me/security', SecurityOverviewController::class)->name('security.sho
 Route::get('me/security-events', [SecurityEventController::class, 'index'])->name('security-events.index');
 
 /*
-| Addresses and cart: customers only (UserPolicy::purchase, 403 for an
-| administrator, checked before the policies of the single resources). No
-| email verification needed, only the checkout asks for it. Every write of
-| the cart answers with the updated cart.
+| Addresses, cart, checkout and orders: customers only (UserPolicy::purchase,
+| 403 for an administrator, checked before the policies of the single
+| resources and before the email verification). Only the checkout needs a
+| verified email. Every write of the cart answers with the updated cart.
+| block(): a second checkout of the same session (a double click on "Paga")
+| waits for the first one and finds the cart already emptied, instead of
+| creating and charging a second order.
 */
 Route::middleware('can:purchase,'.User::class)->group(function (): void {
     Route::apiResource('addresses', AddressController::class);
@@ -139,4 +145,13 @@ Route::middleware('can:purchase,'.User::class)->group(function (): void {
     Route::post('cart/items', [CartItemController::class, 'store'])->name('cart.items.store');
     Route::patch('cart/items/{cartItem}', [CartItemController::class, 'update'])->name('cart.items.update');
     Route::delete('cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('cart.items.destroy');
+
+    Route::post('checkout', CheckoutController::class)
+        ->middleware('verified')
+        ->block()
+        ->name('checkout');
+
+    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::post('orders/{order}/cancel', CancelOrderController::class)->name('orders.cancel');
 });

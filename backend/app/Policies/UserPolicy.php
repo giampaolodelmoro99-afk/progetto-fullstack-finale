@@ -16,7 +16,7 @@ final class UserPolicy
     public const ADMIN_CANNOT_PURCHASE_MESSAGE = 'Gli account di amministrazione non possono fare acquisti.';
 
     /**
-     * Addresses, cart and (from phase 5b) checkout belong to customers only:
+     * Addresses, cart, checkout and orders belong to customers only:
      * an administrator gets 403, a permission of the role, before any check
      * on the resource. Same reasons as the account deletion: management and
      * purchases stay separate, and orders of the administrator would distort

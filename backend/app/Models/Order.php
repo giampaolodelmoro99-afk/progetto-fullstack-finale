@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Support\LikePattern;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -100,6 +101,31 @@ class Order extends Model
     public function latestPayment(): HasOne
     {
         return $this->hasOne(Payment::class)->latestOfMany();
+    }
+
+    /**
+     * The charge that went through, refunded afterwards or not: the payment
+     * the customer sees. A rejected attempt is never shown to the customer.
+     *
+     * @return HasOne<Payment, $this>
+     */
+    public function capturedPayment(): HasOne
+    {
+        return $this->hasOne(Payment::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query) => $query->whereIn('status', [PaymentStatus::Succeeded, PaymentStatus::Refunded]),
+        );
+    }
+
+    /**
+     * What the detail of OrderResource reads: rows with the current cover,
+     * the captured payment, the history and the item count.
+     */
+    public function loadCustomerDetail(): static
+    {
+        return $this
+            ->load(['items.product.cover', 'capturedPayment', 'statusChanges'])
+            ->loadSum('items', 'quantity');
     }
 
     /**

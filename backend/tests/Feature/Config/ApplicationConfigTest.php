@@ -1,5 +1,7 @@
 <?php
 
+use App\Contracts\PaymentGateway;
+use App\Services\Payment\FakePaymentGateway;
 use Illuminate\Support\Facades\Route;
 
 it('uses the italian timezone', function () {
@@ -48,6 +50,18 @@ it('defines the assistant settings', function () {
         'max_products' => 4,
         'max_concurrent' => 1,
     ]);
+});
+
+it('uses the simulated payment gateway', function () {
+    expect(config('payment.driver'))->toBe('fake')
+        ->and(app(PaymentGateway::class))->toBeInstanceOf(FakePaymentGateway::class);
+});
+
+it('refuses an unknown payment driver', function () {
+    config(['payment.driver' => 'stripe']);
+
+    expect(fn () => app(PaymentGateway::class))
+        ->toThrow(InvalidArgumentException::class, 'Unsupported payment driver [stripe].');
 });
 
 it('points the email links to the frontend', function () {

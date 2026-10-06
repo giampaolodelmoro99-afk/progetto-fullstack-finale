@@ -275,6 +275,18 @@ Il pagamento è simulato: nessun addebito reale. Scadenza qualsiasi non passata 
 
 Un ordine con pagamento rifiutato resta nel database come tentativo fallito: lo vede solo l'admin, non compare negli ordini del cliente.
 
+### Ordini rimasti in attesa
+
+Se il checkout si interrompe tra l'addebito e la registrazione del pagamento (per esempio il processo PHP si ferma), l'ordine resta «In attesa» con le scorte già scalate. Il comando:
+
+```sh
+make artisan cmd="orders:reconcile-pending"
+# oppure
+docker compose exec app php artisan orders:reconcile-pending
+```
+
+cerca gli ordini in attesa creati da più di 15 minuti, chiede di nuovo l'esito dell'addebito al gateway con la stessa chiave di idempotenza (nessun secondo addebito) e completa l'ordine come farebbe il checkout: pagato, con carrello svuotato ed email di conferma, oppure annullato con le scorte ripristinate. Si può rilanciare senza effetti doppi; un errore del gateway lascia l'ordine in attesa per l'esecuzione successiva. Il progetto non ha uno scheduler: il comando si lancia a mano (in produzione andrebbe pianificato). Sui dati demo, passati 15 minuti dal seeding, annulla l'ordine «In attesa» creato dal seeder, perché il gateway finto non ha mai ricevuto il suo addebito, e restituisce i 2 pezzi di Cavo Seta USB-C 1 m che quell'ordine aveva scalato: le scorte tornano quelle del catalogo e le etichette di disponibilità dei prodotti scelti per la demo non cambiano.
+
 ## Sviluppi futuri
 
 - **Cancellazione automatica dopo 10 anni.** Quando un cliente elimina l'account, i suoi dati personali si cancellano e l'utente viene anonimizzato, ma ordini e pagamenti restano per l'obbligo di conservazione della documentazione contabile. Un comando pianificato potrebbe cancellarli allo scadere dei 10 anni; oggi resta fuori dal progetto.
