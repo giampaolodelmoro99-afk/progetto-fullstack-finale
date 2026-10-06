@@ -22,7 +22,9 @@ use Random\Randomizer;
  * (see DatabaseSeeder for why not Faker), with a state that depends on their
  * age (recent orders are still to ship, old
  * ones are delivered). Marta Lenzi is the author of every admin transition.
- * Stock is left untouched: these are past orders.
+ * Stock is left untouched by the past orders: the catalog stock is the
+ * stock after them. Only the pending order takes its pieces, as an
+ * interrupted checkout does.
  */
 class OrderSeeder extends Seeder
 {
@@ -33,6 +35,13 @@ class OrderSeeder extends Seeder
     private const HISTORY_DAYS = 180;
 
     private const MINUTES_PER_DAY = 1440;
+
+    /**
+     * Cavo Seta USB-C 1 m, 120 pieces in the catalog.
+     */
+    private const PENDING_ORDER_SKU = 'CDS-RIC-010';
+
+    private const PENDING_ORDER_QUANTITY = 2;
 
     private User $admin;
 
@@ -158,8 +167,22 @@ class OrderSeeder extends Seeder
             }
         }
 
-        $createdAt = now()->subMinutes(10)->startOfMinute();
-        $this->createOrder($this->pick($customers), $createdAt, 'pending', $this->randomLines($createdAt));
+        $this->seedPendingOrder($this->pick($customers));
+    }
+
+    /**
+     * A checkout whose payment is still in progress, 10 minutes old: the
+     * stock is already taken, as the first transaction of the checkout does,
+     * so that orders:reconcile-pending gives back only what it took. Only a
+     * product with plenty of stock, never one whose stock the demo chose to
+     * show an availability label (Ultimo pezzo, Esaurito…).
+     */
+    private function seedPendingOrder(User $customer): void
+    {
+        $lines = [self::PENDING_ORDER_SKU => self::PENDING_ORDER_QUANTITY];
+
+        $this->createOrder($customer, now()->subMinutes(10)->startOfMinute(), 'pending', $lines);
+        $this->productsBySku[self::PENDING_ORDER_SKU]->decrement('stock', self::PENDING_ORDER_QUANTITY);
     }
 
     /**

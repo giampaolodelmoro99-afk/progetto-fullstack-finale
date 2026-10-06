@@ -5,11 +5,13 @@ namespace App\Providers;
 use App\Actions\Auth\LoginAction;
 use App\Contracts\AiAssistant;
 use App\Contracts\ClientConnection;
+use App\Contracts\PaymentGateway;
 use App\Contracts\Security\PasskeyCeremony;
 use App\Models\Passkey;
 use App\Models\User;
 use App\Services\Assistant\FakeAiAssistant;
 use App\Services\Assistant\OllamaAssistant;
+use App\Services\Payment\FakePaymentGateway;
 use App\Services\Security\WebAuthnPasskeyCeremony;
 use App\Support\Auth\PasskeyUserHandleSecret;
 use App\Support\PhpClientConnection;
@@ -43,6 +45,13 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(ClientConnection::class, PhpClientConnection::class);
+
+        $this->app->singleton(FakePaymentGateway::class);
+
+        $this->app->bind(PaymentGateway::class, fn ($app): PaymentGateway => match (config('payment.driver')) {
+            'fake' => $app->make(FakePaymentGateway::class),
+            default => throw new InvalidArgumentException('Unsupported payment driver ['.config('payment.driver').'].'),
+        });
 
         $this->registerPasskeys();
     }

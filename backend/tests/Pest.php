@@ -1,6 +1,8 @@
 <?php
 
+use App\Contracts\PaymentGateway;
 use App\Contracts\Security\PasskeyCeremony;
+use App\Models\Address;
 use App\Models\CartItem;
 use App\Models\Category;
 use App\Models\Passkey;
@@ -11,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use PragmaRX\Google2FA\Google2FA;
 use Tests\Support\FakePasskeyCeremony;
+use Tests\Support\ScriptedPaymentGateway;
 use Tests\TestCase;
 
 /*
@@ -326,4 +329,59 @@ function addressPayload(array $overrides = []): array
 function anonymizeBehindTheSession(User $user): void
 {
     User::query()->whereKey($user->id)->update(['anonymized_at' => '2026-09-01 10:00:00']);
+}
+
+/**
+ * A verified customer with a saved address in Pisa, ready for the checkout.
+ *
+ * @return array{0: User, 1: Address}
+ */
+function checkoutCustomer(): array
+{
+    $user = actingAsVerifiedCustomer();
+    $address = Address::factory()->for($user)->create([
+        'full_name' => 'Giulia Ferri',
+        'street' => 'Via San Martino 42',
+        'city' => 'Pisa',
+        'postal_code' => '56125',
+        'province' => 'PI',
+        'country' => 'IT',
+        'phone' => '+39 333 123 4567',
+        'is_default' => true,
+    ]);
+
+    return [$user, $address];
+}
+
+/**
+ * A complete, valid body of the checkout, unless overridden. The card is the
+ * approved test card; the declined one is 4000 0000 0000 0002.
+ *
+ * @return array<string, mixed>
+ */
+function checkoutPayload(int $addressId, array $payment = [], array $overrides = []): array
+{
+    return [
+        'address_id' => $addressId,
+        'payment' => [
+            'holder' => 'Giulia Ferri',
+            'number' => '4242 4242 4242 4242',
+            'expiry' => '08/29',
+            'cvc' => '123',
+            ...$payment,
+        ],
+        'terms_accepted' => true,
+        ...$overrides,
+    ];
+}
+
+/**
+ * Replaces the payment gateway in the container and returns it, to count
+ * the calls.
+ */
+function useGateway(ScriptedPaymentGateway $gateway): ScriptedPaymentGateway
+{
+    app()->instance(PaymentGateway::class, $gateway);
+
+    return $gateway;
 }

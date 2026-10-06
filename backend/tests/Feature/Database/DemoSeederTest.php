@@ -12,6 +12,7 @@ use Database\Seeders\ProductSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 final class InterruptedProductSeeder extends Seeder
@@ -453,4 +454,40 @@ it('produces the same main data on every run with the same date', function () {
 
     expect(demoShopSnapshot())->toBe($first)
         ->and($first['orders'])->not->toBeEmpty();
+});
+
+it('takes the stock of the pending order only from a product with plenty of pieces', function () {
+    $this->travelTo(Carbon\Carbon::parse('2026-09-28 18:00:00', 'Europe/Rome'));
+    seedDemoShop();
+
+    $demoStock = fn () => Product::whereIn('slug', [
+        'auricolari-sussurro-sport',
+        'batteria-fiume-20000-mah',
+        'diffusore-eco-mini',
+        'orologio-meridiana',
+        'radio-onda-portatile',
+    ])->orderBy('slug')->get()->mapWithKeys(fn (Product $product) => [$product->slug => [$product->stock, $product->availability['label']]])->all();
+    $expectedDemoStock = [
+        'auricolari-sussurro-sport' => [4, 'Disponibile'],
+        'batteria-fiume-20000-mah' => [1, 'Ultimo pezzo'],
+        'diffusore-eco-mini' => [2, 'Ultimi 2 pezzi'],
+        'orologio-meridiana' => [2, 'Ultimi 2 pezzi'],
+        'radio-onda-portatile' => [0, 'Esaurito'],
+    ];
+    $cable = fn () => Product::where('sku', 'CDS-RIC-010')->sole();
+    $pending = Order::with('items')->where('status', 'pending')->sole();
+
+    expect($pending->items->map(fn ($item) => [$item->product_sku, $item->product_name, $item->quantity])->all())
+        ->toBe([['CDS-RIC-010', 'Cavo Seta USB-C 1 m', 2]])
+        ->and($pending->created_at->toDateTimeString())->toBe('2026-09-28 17:50:00')
+        ->and($cable()->stock)->toBe(118)
+        ->and($demoStock())->toBe($expectedDemoStock);
+
+    $this->travelTo(Carbon\Carbon::parse('2026-09-28 18:06:00', 'Europe/Rome'));
+    Notification::fake();
+    $this->artisan('orders:reconcile-pending')->assertSuccessful();
+
+    expect($pending->fresh()->status->value)->toBe('cancelled')
+        ->and($cable()->stock)->toBe(120)
+        ->and($demoStock())->toBe($expectedDemoStock);
 });

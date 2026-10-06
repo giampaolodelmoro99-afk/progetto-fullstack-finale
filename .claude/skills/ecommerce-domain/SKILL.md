@@ -286,12 +286,22 @@ Parametri, validati da `IndexProductRequest`:
 
 ### Flusso (`PlaceOrderAction`)
 
-1. Verifica che il carrello non sia vuoto e che l'indirizzo scelto appartenga all'utente.
-2. Verifica che il carrello sia acquistabile: nessuna riga non acquistabile e nessuna quantità oltre lo stock. Altrimenti `InsufficientStockException` (409) con l'elenco `[{ "product": "...", "requested": 2, "available": 1 }]`; prodotti esauriti, disattivati o eliminati hanno `available: 0`.
-3. Transazione: lock dei prodotti, stesso controllo della disponibilità sotto lock, creazione dell'ordine `pending` con righe, snapshot dell'indirizzo e `terms_accepted_at`, riga di cronologia `null → pending`, decremento dello stock.
-4. Fuori dalla transazione: addebito tramite `PaymentGateway`.
-5. Pagamento riuscito, in `DB::transaction()` con `lockForUpdate()` sull'ordine: riga in `payments` con `status` `succeeded` e le sole ultime 4 cifre, transizione `pending → paid` (valorizza `paid_at`), svuotamento del carrello. Dopo il commit, evento `OrderPlaced` che invia l'email di conferma: è l'unica email del pagamento riuscito. Risposta 201 con la `OrderResource`.
-6. Pagamento rifiutato, in `DB::transaction()` con `lockForUpdate()` su ordine e prodotti: riga in `payments` con `status` `failed`, `card_last_four` e importo; transizione `pending → cancelled` senza autore e con `reason` uguale al motivo restituito dal gateway (es. «Carta rifiutata dalla banca»); ripristino dello stock di tutte le righe con `product_id` valorizzato, compresi i prodotti eliminati con soft delete nel frattempo (`withTrashed()`, anche nel lock). Poi: carrello intatto; `PaymentFailedException` (402) con messaggio chiaro. L'ordine resta nel database come tentativo fallito, con stato Annullato e senza `paid_at`: lo vede solo l'admin. Nessuna email.
+1. Transazione, con i lock nell'ordine utente → carrello e righe → prodotti per `id` crescente (`withTrashed()`): `ActiveUserLock` rifiuta un account anonimizzato nel frattempo (401); carrello assente o vuoto → `EmptyCartException` (409, `code` `cart_empty`, «Il carrello è vuoto.»). L'indirizzo è già validato da `PlaceOrderRequest` (un indirizzo di un altro utente o inesistente → 422 sul campo `address_id`).
+2. Sotto i lock, un solo controllo della disponibilità: nessuna riga non acquistabile e nessuna quantità oltre lo stock. Altrimenti `InsufficientStockException` (409) con `{ "message": "...", "code": "insufficient_stock", "products": [{ "product": "...", "requested": 2, "available": 1 }] }`; prodotti esauriti, disattivati o eliminati hanno `available: 0`. Un controllo preliminare senza lock non aggiungerebbe garanzie.
+3. Nella stessa transazione: totali da `CartSummary` (la classe del carrello), creazione dell'ordine `pending` con righe, snapshot dell'indirizzo e `terms_accepted_at`, numero, riga di cronologia `null → pending`, decremento dello stock.
+4. Fuori dalla transazione: addebito tramite `PaymentGateway`, con l'id dell'ordine come chiave di idempotenza.
+5. L'esito lo registra `SettleOrderPaymentAction` (la seconda transazione, riusata dalla riconciliazione): se l'ordine non è più `pending` non fa nulla.
+6. Pagamento riuscito, in `DB::transaction()` con `lockForUpdate()` su utente e ordine: riga in `payments` con `status` `succeeded` e le sole ultime 4 cifre (restituite dal gateway), transizione `pending → paid` (valorizza `paid_at`), svuotamento del carrello. Dopo il commit, evento `OrderPlaced` che invia l'email di conferma (non a un account anonimizzato): è l'unica email del pagamento riuscito. Risposta 201 con la `OrderResource`.
+7. Pagamento rifiutato, in `DB::transaction()` con `lockForUpdate()` su ordine e prodotti: riga in `payments` con `status` `failed`, `card_last_four` e importo (solo se il gateway ha visto una carta); transizione `pending → cancelled` senza autore e con `reason` uguale al motivo restituito dal gateway (es. «Carta rifiutata dalla banca»); ripristino dello stock di tutte le righe con `product_id` valorizzato, compresi i prodotti eliminati con soft delete nel frattempo (`withTrashed()`, anche nel lock). Poi: carrello intatto; `PaymentFailedException` (402, `code` `payment_failed`) con il testo del mockup «La carta è stata rifiutata e non ti è stato addebitato nulla. Controlla i dati della carta e riprova.». L'ordine resta nel database come tentativo fallito, con stato Annullato e senza `paid_at`: lo vede solo l'admin. Nessuna email.
+8. `POST /checkout` ha `->block()`: un secondo invio della stessa sessione (doppio clic su «Paga») parte dopo il primo e trova il carrello già svuotato (409) invece di creare e addebitare un secondo ordine.
+
+### Eccezione del gateway e riconciliazione
+
+- **Eccezione del gateway (limite noto).** Con un gateway reale un'eccezione durante l'addebito (timeout, errore di rete) è ambigua: l'addebito potrebbe essere avvenuto. In quel caso l'ordine andrebbe lasciato `pending` e chiuso dalla riconciliazione o dalle notifiche del fornitore (webhook). Con il gateway finto non c'è nessun addebito reale, quindi `PlaceOrderAction` registra l'eccezione con `report()`, annulla subito l'ordine con il motivo «Servizio di pagamento non disponibile» senza riga in `payments` (il gateway potrebbe non aver mai visto la carta), ripristina lo stock e lascia risalire l'eccezione (500): niente ordini `pending` orfani con lo stock bloccato.
+- **Riconciliazione:** `php artisan orders:reconcile-pending` (nessuno scheduler nel progetto: si lancia a mano o da un cron in produzione). Cerca gli ordini `pending` creati da più di `security.account_deletion_pending_window` minuti (15, la stessa finestra oltre la quale un ordine `pending` non conta più come pagamento in corso), richiama `PaymentGateway::charge()` con la stessa chiave e senza dati della carta, e registra l'esito con `SettleOrderPaymentAction`, lo stesso codice del checkout: pagato, pagamento `succeeded`, carrello svuotato ed email di conferma, oppure annullato con stock ripristinato. Grazie all'idempotenza il gateway restituisce l'esito del primo addebito senza addebitare di nuovo; un addebito che il gateway non ha mai ricevuto torna come rifiutato («Pagamento non ricevuto dal servizio di pagamento»), senza riga in `payments`. Un errore del gateway lascia l'ordine `pending` per l'esecuzione successiva. Una seconda esecuzione non ha effetti.
+- **Limiti noti, accettati:**
+  - lo svuotamento del carrello a pagamento riuscito cancella tutte le righe, comprese quelle aggiunte da un'altra scheda tra la prima e la seconda transazione, che non sono nell'ordine; con la riconciliazione, che arriva dopo almeno 15 minuti, la finestra è più ampia;
+  - un ordine `pending` più vecchio di 15 minuti non blocca l'eliminazione dell'account: la riconciliazione può segnare come `paid` l'ordine di un account anonimizzato nel frattempo. È un ordine pagato e va evaso come gli altri; non parte l'email di conferma, che andrebbe all'indirizzo `.invalid`.
 
 ### Dati della carta
 
@@ -369,7 +379,7 @@ Una sola Action, usata sia da `POST /orders/{order}/cancel` (cliente) sia da `PA
 3. Se il rimborso fallisce: `RefundFailedException` (502) e **nessun cambiamento**. Stato dell'ordine, scorte e pagamento restano invariati e non si scrive nessuna riga di cronologia.
 4. Se il rimborso riesce, in una transazione con `lockForUpdate()` su ordine, pagamento e prodotti: si ricontrolla sotto lock che l'ordine sia ancora `paid` e il pagamento ancora `succeeded` (se nel frattempo un'altra richiesta l'ha annullato, si esce senza effetti e si restituisce l'ordine attuale); poi ripristino delle scorte di tutte le righe con `product_id` valorizzato, compresi i prodotti eliminati con soft delete (`withTrashed()`), pagamento a `refunded`, transizione `paid → cancelled` tramite `ChangeOrderStatusAction` con l'autore (cliente o admin). La notifica al cliente parte dopo il commit.
 
-Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il gateway prima del lock; la chiave di idempotenza evita il doppio rimborso, il ricontrollo sotto lock evita la doppia transizione.
+Limiti residui, accettati: con due richieste concorrenti entrambe chiamano il gateway prima del lock; la chiave di idempotenza evita il doppio rimborso, il ricontrollo sotto lock evita la doppia transizione. Se l'admin spedisce l'ordine tra il rimborso e il lock, il pagamento risulta rimborsato dal gateway ma l'ordine resta spedito: `CancelOrderAction` scrive un `Log::warning` con ordine, pagamento e stato, così l'admin può intervenire.
 
 ### Forma della `OrderResource` (cliente)
 
@@ -383,6 +393,8 @@ Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il ga
   "subtotal": 49600,
   "shipping_cost": 0,
   "total": 49600,
+  "items_count": 4,
+  "can_cancel": true,
   "shipping_address": { "full_name": "Giulia Ferri", "street": "Via San Martino 42", "postal_code": "56125", "city": "Pisa", "province": "PI", "country": "IT", "phone": "+39 333 123 4567" },
   "payment": { "card_last_four": "4242" },
   "items": [
@@ -399,6 +411,8 @@ Limite residuo, accettato: con due richieste concorrenti entrambe chiamano il ga
 - `payment` compare solo se esiste un pagamento `succeeded` o `refunded`; mai altri dati della carta.
 - `status_history`: senza `changed_by` e senza `reason`.
 - `can_cancel`: calcolato dal backend solo sullo stato (`status` `paid`), usato dal frontend per mostrare "Annulla l'ordine". Un ordine `paid` ha sempre un pagamento `succeeded`; `CancelOrderAction` lo ricontrolla comunque.
+- `items_count`: somma delle quantità (`withSum('items', 'quantity')`), per «N articoli» dell'elenco e del dettaglio.
+- `GET /orders`: 10 ordini per pagina (senza `per_page`), per `created_at` decrescente e poi `id`, con `data`, `links` e `meta`. Ogni elemento ha i campi dell'ordine, `items_count` e `can_cancel`, senza `items`, `payment` e `status_history`, che compaiono solo nel dettaglio.
 
 `POST /orders/{order}/cancel` è autorizzato da `OrderPolicy::cancel` con lo stesso criterio di `view`: ordini di altri utenti e ordini senza `paid_at` → 404 con `denyAsNotFound()`; ordine proprio non annullabile → 422.
 
@@ -620,7 +634,7 @@ Prefisso comune: `/api/v1`. Autenticazione, account, sicurezza ed eliminazione d
 | DELETE | /cart/items/{cartItem} | rimozione riga |
 | DELETE | /cart | svuotamento carrello |
 | POST | /checkout | creazione ordine e pagamento (email verificata); 201, 409 per disponibilità, 402 per pagamento rifiutato, 422 per dati non validi |
-| GET | /orders | storico degli ordini pagati (`paid_at` valorizzato) |
+| GET | /orders | storico degli ordini pagati (`paid_at` valorizzato), 10 per pagina, con `items_count` |
 | GET | /orders/{order} | dettaglio di un ordine pagato con `status_history`; 404 per ordini non pagati o di altri utenti |
 | POST | /orders/{order}/cancel | annullamento da parte del cliente con `CancelOrderAction`; 422 se non annullabile, 502 se il rimborso fallisce |
 
