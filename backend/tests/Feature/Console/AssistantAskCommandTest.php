@@ -1,11 +1,15 @@
 <?php
 
+use App\Contracts\AiAssistant;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Assistant\Events\TextDelta;
 use App\Services\Assistant\Events\ToolCallRequested;
 use App\Services\Assistant\FakeAiAssistant;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 function assistantSlotIsFree(): bool
 {
@@ -128,4 +132,27 @@ it('reports ollama unreachable as unavailable and releases the slot', function (
         ->assertFailed();
 
     expect(assistantSlotIsFree())->toBeTrue();
+});
+
+it('reports an unexpected error with the generic message and releases the slot', function () {
+    $errors = new ArrayObject;
+    Log::listen(function (MessageLogged $event) use ($errors): void {
+        if ($event->level === 'error') {
+            $errors->append($event->message);
+        }
+    });
+
+    $this->mock(AiAssistant::class, fn ($mock) => $mock->shouldReceive('stream')->once()->andReturnUsing(function () {
+        yield new TextDelta('Ti consiglio ');
+
+        throw new RuntimeException('Errore imprevisto');
+    }));
+
+    $this->artisan('assistant:ask', ['question' => ['Ciao']])
+        ->expectsOutputToContain('Ti consiglio')
+        ->expectsOutputToContain("Si è verificato un problema con l'assistente. Riprova tra poco.")
+        ->assertFailed();
+
+    expect(assistantSlotIsFree())->toBeTrue()
+        ->and($errors->getArrayCopy())->toBe(['Errore imprevisto']);
 });

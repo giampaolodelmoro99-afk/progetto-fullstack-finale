@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Password reset token that is wrong, expired, already used or tied to
  * another email address. The code lets the frontend tell it apart from a
  * field validation error and show "Il link è scaduto".
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class InvalidPasswordResetTokenException extends RuntimeException
+final class InvalidPasswordResetTokenException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'invalid_reset_token';
 

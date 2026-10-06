@@ -17,12 +17,12 @@ Ogni livello ha una sola responsabilità. Il controller coordina: non contiene l
 app/
 ├── Actions/{Area}/            # un caso d'uso = una classe
 ├── Contracts/                 # interfacce (PaymentGateway, AiAssistant, Security/...)
-├── Enums/                     # OrderStatus, PaymentStatus, UserRole, SecurityEventType
+├── Enums/                     # OrderStatus, PaymentStatus, UserRole, SecurityEventType, SecondFactorMethod, SecondFactorContext, PasskeyPurpose
 ├── Events/  Listeners/
 ├── Exceptions/                # eccezioni di dominio con render()
 ├── Http/
 │   ├── Controllers/Api/V1/{Auth,Shop,Catalog,Assistant,Cart,Checkout,Account,Admin}/
-│   ├── Middleware/            # ForceJsonResponse, EnsureUserHasRole, EnsureIdentityConfirmed
+│   ├── Middleware/            # ForceJsonResponse, EnsureUserHasRole, EnsureEmailIsVerified, EnsureIdentityConfirmed
 │   ├── Requests/{Area}/{Model}/
 │   └── Resources/             # pubbliche; Resources/Admin/ per le varianti admin
 ├── Models/
@@ -52,7 +52,7 @@ routes/
 - `public.php`: catalogo, impostazioni e testi dell'assistenza del negozio (`GET /shop/settings`, `GET /shop/support`), assistente AI (`GET /assistant/status`, `POST /assistant/messages`), health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
 - `customer.php`: middleware `auth:sanctum`.
 - `admin.php`: middleware `auth:sanctum` e `role:admin`, prefisso `admin`, nome `admin.`.
-- Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`).
+- Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`). L'update di `apiResource` accetta sia `PATCH` sia `PUT` (comportamento standard di Laravel): il frontend usa `PATCH`, che le skill indicano sempre, e `PUT` resta un alias senza differenze.
 - Prodotti e categorie pubblici usano il route model binding sullo slug: `{product:slug}`. Le rotte admin usano l'id: `{product}`, `{category}`, `{order}`.
 - Impostazioni: `Shop\SettingsController` (`GET /shop/settings`) e `Admin\SettingsController` (`GET /admin/settings`), invocabili, restituiscono rispettivamente `SettingsResource` e `Admin\SettingsResource`, costruite sui valori di `config/shop.php` (skill `ecommerce-domain`, "Impostazioni esposte al frontend").
 - Rate limiter nominati definiti in `AppServiceProvider` (vedi anche la skill `account-security`), compreso `assistant` della skill `ai-assistant`.
@@ -188,12 +188,14 @@ final class StoreProductRequest extends FormRequest
 
 - `ForceJsonResponse`: imposta `Accept: application/json` su ogni richiesta API; aggiunto al gruppo `api`.
 - `EnsureUserHasRole`: alias `role`, usato come `role:admin`, risponde 403 con JSON.
+- `EnsureEmailIsVerified`: alias `verified`, sostituisce quello di Laravel; risponde 403 con JSON e il messaggio «Conferma il tuo indirizzo email per continuare.» a un utente con email da confermare. Protegge `POST /checkout` (skill `ecommerce-domain`).
 - `EnsureIdentityConfirmed`: alias `identity.confirmed`, descritto nella skill `account-security`.
 - Registrazione e alias in `bootstrap/app.php`.
 
 ## Errori
 
 - Eccezioni di dominio in `App\Exceptions` con metodo `render()` che restituisce JSON e lo status corretto (`InsufficientStockException` → 409, `InvalidOrderTransitionException` → 422, `PaymentFailedException` → 402, `CategoryHasProductsException` → 409, `RefundFailedException` → 502 con `code` `refund_failed` e il messaggio «Il rimborso non è riuscito: l'ordine non è stato annullato. Riprova tra poco.»).
+- Le eccezioni di dominio sono risposte previste, non guasti: implementano `Illuminate\Contracts\Debug\ShouldntReport` e non finiscono nel log. Restano riportate solo quelle che segnalano un guasto di un servizio esterno o della libreria: `RefundFailedException` (502), `PasskeyCeremonyFailedException`, `AssistantTimeoutException` e `AssistantFailedException`. Un test di architettura impone l'interfaccia a ogni nuova classe di `App\Exceptions` che non sia in questo elenco.
 - Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... }, "code": "..." }`, con `errors` presente solo per il 422 con errori sui campi e `code` presente solo quando il frontend deve distinguere errori con lo stesso status. I valori di `code` sono stringhe stabili in snake_case (es. `two_factor_challenge_expired`), definite nell'eccezione che le produce (es. `InvalidCredentialsException` → `invalid_credentials`, `TwoFactorChallengeExpiredException` → `two_factor_challenge_expired`).
 - Le risposte 429 includono l'header `Retry-After`, esposto al frontend da `config/cors.php`.
 - Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403, `InvalidSignatureException` del middleware `signed` → 403 JSON con lo stesso messaggio italiano dell'eccezione che la verifica email lancia per un link non valido (skill `account-security`), così firma non valida, utente inesistente e hash sbagliato sono indistinguibili. Il renderer del 404 intercetta ogni `HttpException` con status 404, non solo `NotFoundHttpException`: il 404 di una Policy con `denyAsNotFound()` arriva come `HttpException` generica, e senza questo filtro avrebbe il messaggio inglese «Not Found».

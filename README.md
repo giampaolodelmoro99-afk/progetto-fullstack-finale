@@ -107,6 +107,66 @@ Se il pull modifica `docker/php/Dockerfile` o `docker/php/php.ini` (per esempio 
 
 Se le modifiche ai file del frontend non vengono rilevate (per esempio con Docker Desktop su Windows), imposta `VITE_USE_POLLING=true` nel `.env` alla radice.
 
+## Architettura del backend
+
+API REST headless in Laravel 13, senza viste: ogni risposta è JSON (o NDJSON per l'assistente), con i testi per l'utente in italiano.
+
+### Flusso di una richiesta
+
+```
+Rotta → middleware → Form Request (Policy + validazione) → Controller → Action → API Resource
+                                          (senza corpo: Gate::authorize() nel controller)
+```
+
+- **Rotte** versionate sotto `/api/v1`, divise in `routes/api/v1/public.php`, `customer.php` (`auth:sanctum`) e `admin.php` (`auth:sanctum` + `role:admin`).
+- **Middleware** del progetto: `ForceJsonResponse` (ogni richiesta API è JSON), `role` (ruolo admin), `verified` (email confermata per il checkout), `identity.confirmed` (conferma dell'identità per le operazioni sensibili, risposta 423). Gli acquisti sono riservati ai clienti con `can:purchase`, un middleware sul gruppo di rotte di indirizzi, carrello, checkout e ordini che risponde 403 a un admin prima delle Policy delle singole risorse.
+- **Autorizzazione** con una Policy per modello: nelle rotte con un corpo la invoca la Form Request in `authorize()`, prima della validazione; nelle rotte senza corpo (`show`, `destroy`, annullamento di un ordine) il controller chiama `Gate::authorize()` come prima istruzione. Le rotte admin senza modello (dashboard, impostazioni) sono protette solo da `role:admin`. Le risorse personali di un altro utente (indirizzi, righe del carrello, ordini, passkey) rispondono 404, così non se ne rivela l'esistenza.
+- **Form Request**: validazione con messaggi in italiano; i controller usano solo `validated()`.
+- **Controller** sottili e `final`: coordinano Form Request, Action e Resource, senza query complesse né accesso diretto al database.
+- **Action** (`app/Actions`, 55 classi): un caso d'uso per classe, con un solo metodo `execute()`; le scritture correlate stanno in una transazione, con un ordine fisso dei lock (prima l'utente, poi le risorse collegate). Le chiamate ai servizi esterni (pagamento, rimborso, assistente) stanno sempre fuori dalle transazioni.
+- **API Resource**: mai modelli grezzi; importi in centesimi, date ISO 8601 in ora italiana, enum come `{ value, label }`. Varianti distinte per l'area admin.
+- **Eccezioni di dominio** con `render()`: risposta JSON con lo status giusto e un `code` stabile quando il frontend deve distinguere i casi (per esempio `invalid_credentials`, `insufficient_stock`, `refund_failed`). Sono risposte previste, quindi non finiscono nel log degli errori (`ShouldntReport`); restano nel log solo i guasti dei servizi esterni e della libreria delle passkey.
+- **Servizi dietro un'interfaccia** (`app/Contracts`), scelti dalla configurazione: gateway di pagamento finto (`PAYMENT_DRIVER=fake`), assistente AI con Ollama o finto, cerimonia WebAuthn delle passkey. Nei test si sostituiscono con implementazioni finte.
+- **Eventi e notifiche** in italiano, tutti `ShouldQueue`: con `QUEUE_CONNECTION=sync` girano subito; in produzione basta un driver di coda e un worker.
+- **Sicurezza**: autenticazione solo a cookie di sessione (Sanctum SPA) con CSRF, doppia autenticazione TOTP con codici di recupero, passkey, conferma dell'identità, 10 rate limiter nominati, dati della carta mai salvati (solo le ultime 4 cifre), eliminazione dell'account con anonimizzazione.
+
+Schema del database: [`docs/database/er-diagram.md`](docs/database/er-diagram.md).
+
+### Test e copertura
+
+Misurati il 6 ottobre 2026 (Fase 6) con `make test-backend` e `make coverage-backend`:
+
+| Dato | Valore |
+|---|---|
+| Test del backend (Pest) | **1801**, con 8122 asserzioni, in 136 file |
+| Copertura delle righe (PCOV) | **99,8%** di `app/`, soglia minima 80% |
+
+I test usano il database MySQL `ecommerce_testing` e non chiamano servizi esterni: gateway, assistente e cerimonia delle passkey sono sostituiti da implementazioni finte. Un test di architettura controlla le convenzioni (controller e Action `final`, Action con il solo `execute()`, nessun accesso a `DB` dai controller, notifiche in coda, eccezioni di dominio fuori dal log); un altro tiene la documentazione delle API allineata alle rotte.
+
+## Documentazione delle API
+
+La specifica **OpenAPI 3.1**, in italiano, è [`docs/api/openapi.yaml`](docs/api/openapi.yaml): tutte le 75 rotte con parametri, corpi delle richieste, forme delle risposte, codici d'errore con il loro `code`, limiter, autenticazione a cookie con CSRF (419), conferma dell'identità (423), troppi tentativi (429) ed eventi NDJSON dell'assistente. Il test `backend/tests/Feature/Docs/OpenApiSpecTest.php` fallisce se una rotta manca dalla specifica o se la specifica descrive una rotta che non esiste.
+
+Per consultarla:
+
+- **Swagger Editor**: apri https://editor.swagger.io, poi *File → Import file* e scegli `docs/api/openapi.yaml`. A destra compare la documentazione navigabile, divisa per area.
+- **Postman**: *Import*, trascina `docs/api/openapi.yaml` e scegli di generare una collection. Le cartelle seguono le aree della specifica; la variabile `baseUrl` vale `http://localhost:8000/api/v1`.
+
+Le richieste con il cookie di sessione vanno preparate come fa il frontend:
+
+1. `GET http://localhost:8000/sanctum/csrf-cookie`, che imposta il cookie `XSRF-TOKEN`.
+2. Su ogni richiesta gli header `Accept: application/json`, `Origin: http://localhost:5173` e `X-XSRF-TOKEN` con il valore decodificato del cookie `XSRF-TOKEN`. In Postman lo aggiorna uno script post-response a livello di collection, che salva il token in una variabile della collection (non serve un environment):
+
+   ```js
+   const token = pm.cookies.get('XSRF-TOKEN');
+   if (token) {
+       pm.collectionVariables.set('xsrf_token', decodeURIComponent(token));
+   }
+   ```
+
+   con l'header `X-XSRF-TOKEN: {{xsrf_token}}`.
+3. `POST /api/v1/login` con le credenziali demo (sezione "Credenziali demo"): da qui Postman invia il cookie di sessione alle richieste successive.
+
 ## Assistente AI
 
 L'assistente risponde su prodotti, confronti e regole del negozio con un modello locale, **qwen3.5:4b**, servito da Ollama e personalizzato dal `docker/ollama/Modelfile` (persona, perimetro, formato delle citazioni). Non vede dati personali. Scelta del modello e misure: `docs/assistant/model-evaluation.md`.

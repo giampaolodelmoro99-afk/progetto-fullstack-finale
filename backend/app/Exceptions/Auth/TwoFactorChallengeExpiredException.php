@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * The login challenge is missing or older than login_challenge_ttl. It is a
  * 422 with a code, not a 419, which belongs to CSRF and is retried by the
  * frontend interceptor: here the frontend goes back to the login.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class TwoFactorChallengeExpiredException extends RuntimeException
+final class TwoFactorChallengeExpiredException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'two_factor_challenge_expired';
 

@@ -226,6 +226,7 @@ In `tests/Arch/ArchitectureTest.php`, con `arch()` di Pest:
 - Form Request estendono `FormRequest`, Resource estendono `JsonResource`
 - enum in `App\Enums`, interfacce in `App\Contracts`
 - i controller non usano direttamente `DB`
+- le eccezioni di `App\Exceptions` implementano `ShouldntReport`, tranne quelle dei guasti elencate nella skill `laravel-api` ("Errori"); un test feature verifica con richieste reali che una risposta di dominio non scriva righe `error` nel log e che un rimborso fallito sì
 - preset di sicurezza di Pest, se disponibile nella versione installata
 
 ## Frontend — Vitest, React Testing Library, MSW

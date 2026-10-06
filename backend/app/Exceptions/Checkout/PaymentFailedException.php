@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Checkout;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Charge rejected by the gateway. The message is the text of the checkout
  * mockup; the reason of the gateway stays in the history of the order,
  * visible to the admin. Only the order reference, never card data.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class PaymentFailedException extends RuntimeException
+final class PaymentFailedException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'payment_failed';
 

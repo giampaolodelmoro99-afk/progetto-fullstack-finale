@@ -1,0 +1,2929 @@
+openapi: 3.1.0
+
+info:
+  title: API di Casa del Silicio
+  version: 1.0.0
+  summary: API REST del negozio, dell'area account e dell'area admin
+  description: |
+    API REST headless dell'e-commerce Casa del Silicio (Laravel). Tutte le rotte hanno il prefisso `/api/v1` e rispondono sempre in JSON, tranne lo streaming dell'assistente (`application/x-ndjson`). Testi delle risposte in italiano.
+
+    ## Autenticazione a cookie e CSRF
+
+    L'autenticazione è **solo a cookie di sessione** (Sanctum SPA). Non esistono token personali: un header `Authorization: Bearer …` viene ignorato e una rotta protetta risponde 401.
+
+    1. `GET http://localhost:8000/sanctum/csrf-cookie` (fuori da `/api/v1`): risponde 204 e imposta il cookie `XSRF-TOKEN`.
+    2. Ogni richiesta che modifica dati (`POST`, `PUT`, `PATCH`, `DELETE`) porta l'header `X-XSRF-TOKEN` con il valore del cookie `XSRF-TOKEN` **decodificato** (`decodeURIComponent`). Senza, o con un token scaduto, la risposta è 419.
+    3. Le richieste devono arrivare dal frontend: header `Origin: http://localhost:5173` (o `Referer`), l'unico dominio stateful (`SANCTUM_STATEFUL_DOMAINS`). Senza, Sanctum non avvia la sessione e login, logout e registrazione non funzionano.
+    4. `POST /login` (oppure `POST /passkeys/login` o `POST /login/two-factor`) rigenera la sessione e imposta il cookie `e-commerce-session`; le richieste successive lo inviano con le credenziali (`credentials: 'include'` nel browser).
+    5. `POST /logout` chiude la sessione.
+
+    CORS: origine ammessa solo `http://localhost:5173`, con credenziali; l'header `Retry-After` è esposto al browser.
+
+    ## Forma degli errori
+
+    ```json
+    { "message": "...", "errors": { "campo": ["..."] }, "code": "..." }
+    ```
+
+    - `message`: sempre presente, in italiano.
+    - `errors`: solo nel 422 di validazione, con i messaggi per campo.
+    - `code`: solo quando il frontend deve distinguere errori con lo stesso status; stringa stabile in snake_case.
+
+    | Status | Quando |
+    |---|---|
+    | 401 | sessione assente o scaduta: «Devi accedere per continuare.» |
+    | 402 | carta rifiutata dal gateway al checkout (`payment_failed`) |
+    | 403 | permesso di ruolo mancante (cliente su una rotta admin, admin su indirizzi, carrello, checkout e ordini), email da confermare sul checkout, link di verifica non valido |
+    | 404 | risorsa inesistente, oppure risorsa personale di un altro utente (indirizzi, righe del carrello, ordini, passkey): non se ne rivela l'esistenza |
+    | 405 | metodo non consentito per l'indirizzo |
+    | 409 | conflitto con lo stato attuale (carrello, disponibilità, categoria con prodotti, ordini aperti, doppia autenticazione) |
+    | 413 | corpo oltre `post_max_size` (64 MB), solo per il caricamento delle immagini |
+    | 419 | token CSRF mancante o scaduto: richiedere di nuovo `/sanctum/csrf-cookie` e ripetere **una volta** |
+    | 422 | dati non validi (`errors`) oppure errore di dominio con `code` |
+    | 423 | conferma dell'identità mancante o scaduta (operazioni sensibili): `requires` dice cosa chiedere |
+    | 429 | troppi tentativi, con header `Retry-After` in secondi |
+    | 502 | il gateway di pagamento ha rifiutato il rimborso |
+    | 503 | assistente AI non disponibile o occupato |
+
+    ### Codici di dominio
+
+    | `code` | Status | Rotte |
+    |---|---|---|
+    | `invalid_credentials` | 422 | `POST /login` |
+    | `two_factor_challenge_expired` | 422 | `POST /login/two-factor`, `POST /login/two-factor/passkey-options` |
+    | `invalid_passkey` | 422 | `POST /passkeys/login` |
+    | `passkey_unavailable` | 422 | opzioni passkey del secondo fattore |
+    | `invalid_reset_token` | 422 | `POST /reset-password/check`, `POST /reset-password`, `POST /reset-password/passkey-options` |
+    | `invalid_email_change_token` | 422 | `POST /email-change/confirm`, `POST /email-change/cancel` |
+    | `email_change_unavailable` | 409 | `POST /email-change/confirm` |
+    | `two_factor_already_enabled` | 409 | `POST /me/two-factor`, `POST /me/two-factor/confirm` |
+    | `two_factor_setup_missing` | 409 | `POST /me/two-factor/confirm` |
+    | `two_factor_not_enabled` | 409 | `DELETE /me/two-factor`, `POST /me/two-factor/recovery-codes` |
+    | `account_has_open_orders` | 409 | `DELETE /me` |
+    | `cart_empty` | 409 | `POST /checkout` |
+    | `insufficient_stock` | 409 | `POST /checkout` |
+    | `payment_failed` | 402 | `POST /checkout` |
+    | `invalid_order_transition` | 422 | annullamento e cambio di stato degli ordini |
+    | `refund_failed` | 502 | annullamento di un ordine pagato |
+    | `category_has_products` | 409 | `DELETE /admin/categories/{category}` |
+    | `assistant_unavailable` | 503 | `POST /assistant/messages` |
+    | `assistant_busy` | 503 | `POST /assistant/messages` |
+
+    ## Limiter
+
+    | Limiter | Limite | Rotte |
+    |---|---|---|
+    | `api` | 120 al minuto per utente, per IP da ospite | tutte |
+    | `register` | 5 all'ora per IP | `POST /register` |
+    | `login` | 5 al minuto per email + IP | `POST /login` |
+    | `two-factor` | 5 al minuto per utente | `POST /login/two-factor`, `POST /login/two-factor/passkey-options`, `POST /me/two-factor/confirm` |
+    | `passkey-login` | 10 al minuto per IP | `POST /passkeys/login/options`, `POST /passkeys/login` |
+    | `password-reset` | 3 ogni 10 minuti per email + IP | `POST /forgot-password` |
+    | `verification` | 6 al minuto per utente, per IP da ospite | `POST /email/verify/{id}/{hash}`, `POST /email/verification-notification` |
+    | `identity-confirmation` | 5 al minuto per utente | `POST /me/confirm-identity`, `POST /me/confirm-identity/passkey-options`, `PUT /me/password`, `POST /me/password/passkey-options` |
+    | `email-change` | 3 all'ora per utente | `POST /me/email`, `DELETE /me/email-change` |
+    | `assistant` | 10 al minuto per utente, per IP da ospite | `POST /assistant/messages` |
+
+    Oltre ai limiter, i codici e le passkey sbagliati del secondo fattore contano **per utente** in un solo contatore condiviso: dopo 5 errori in un minuto ogni verifica di quell'utente risponde 429.
+
+    ## Convenzioni
+
+    - Importi sempre in **centesimi**, come interi (34900 = 349,00 €).
+    - Date in ISO 8601 con il fuso `Europe/Rome` (`2026-09-28T18:41:00+02:00`).
+    - Enum come oggetto `{ "value": "paid", "label": "Pagato" }`: l'etichetta arriva dall'API.
+    - Le risposte di una risorsa sono avvolte in `data`; gli elenchi paginati hanno `data`, `links` e `meta`.
+    - Gli update accettano `PATCH` e `PUT` come alias (comportamento di `apiResource`); il frontend usa `PATCH`.
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: ambiente Docker di sviluppo
+
+tags:
+  - name: Sistema
+    description: stato del servizio
+  - name: Negozio
+    description: impostazioni e testi dell'assistenza
+  - name: Catalogo
+    description: categorie e prodotti pubblici
+  - name: Assistente
+    description: assistente AI con un modello locale (Ollama)
+  - name: Autenticazione
+    description: registrazione, login, verifica email, recupero password
+  - name: Passkey
+    description: accesso senza password e gestione delle passkey
+  - name: Account e sicurezza
+    description: profilo, conferma dell'identità, password, email, doppia autenticazione, eliminazione
+  - name: Indirizzi
+    description: indirizzi di spedizione del cliente, solo in Italia
+  - name: Carrello
+    description: carrello del cliente; ogni scrittura risponde con il carrello aggiornato
+  - name: Checkout e ordini
+    description: pagamento simulato, ordini e annullamento del cliente
+  - name: Admin
+    description: area di amministrazione, solo ruolo `admin`
+
+paths:
+  # ---------------------------------------------------------------- Sistema
+  /health:
+    get:
+      tags: [Sistema]
+      operationId: getHealth
+      security: []
+      summary: Stato del servizio
+      responses:
+        '200':
+          description: Il servizio risponde.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------------------------------------------------------------- Negozio
+  /shop/settings:
+    get:
+      tags: [Negozio]
+      operationId: getShopSettings
+      security: []
+      summary: Costo e soglia della spedizione
+      description: Valori di `config/shop.php` per i testi del negozio. Il frontend non li scrive mai a mano.
+      responses:
+        '200':
+          description: Impostazioni pubbliche.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ShopSettings' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /shop/support:
+    get:
+      tags: [Negozio]
+      operationId: getShopSupport
+      security: []
+      summary: Sezioni della pagina Assistenza
+      description: Spedizioni, resi, garanzia e contatti, nell'ordine. Gli stessi testi arrivano all'assistente AI.
+      responses:
+        '200':
+          description: Sezioni.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SupportSection' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------------------------------------------------------------- Catalogo
+  /categories:
+    get:
+      tags: [Catalogo]
+      operationId: listCategories
+      security: []
+      summary: Elenco delle categorie
+      description: Tutte le categorie, anche senza prodotti, ordinate per `id`.
+      responses:
+        '200':
+          description: Categorie.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /categories/{category}:
+    get:
+      tags: [Catalogo]
+      operationId: getCategory
+      security: []
+      summary: Dettaglio di una categoria
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: slug della categoria
+          schema: { type: string, example: audio }
+      responses:
+        '200':
+          description: Categoria.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Category' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /products:
+    get:
+      tags: [Catalogo]
+      operationId: listProducts
+      security: []
+      summary: Elenco dei prodotti con filtri
+      description: Solo prodotti attivi e non eliminati. A parità di valore l'ordinamento usa `id`, così la paginazione è stabile. `meta.price_range` contiene il prezzo minimo e massimo dei prodotti attivi della categoria filtrata (o di tutto il catalogo) e non dipende dagli altri filtri.
+      parameters:
+        - { name: search, in: query, description: 'cerca in nome e descrizione breve', schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, description: 'slug di una categoria esistente, altrimenti 422', schema: { type: string } }
+        - { name: min_price, in: query, description: 'centesimi', schema: { type: integer, minimum: 0, maximum: 999999 } }
+        - { name: max_price, in: query, description: 'centesimi, non minore di `min_price`', schema: { type: integer, minimum: 0, maximum: 999999 } }
+        - { name: in_stock, in: query, description: '`1` o `true`: solo prodotti con stock maggiore di 0', schema: { type: string, enum: ['1', '0', 'true', 'false'] } }
+        - { name: new, in: query, description: '`1` o `true`: solo novità degli ultimi 30 giorni', schema: { type: string, enum: ['1', '0', 'true', 'false'] } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, price_asc, price_desc], default: newest } }
+        - { $ref: '#/components/parameters/Page' }
+        - { name: per_page, in: query, schema: { type: integer, enum: [4, 12, 24, 48], default: 12 } }
+      responses:
+        '200':
+          description: Pagina di prodotti.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Product' }
+                      meta:
+                        type: object
+                        properties:
+                          price_range:
+                            type: object
+                            properties:
+                              min: { type: [integer, 'null'] }
+                              max: { type: [integer, 'null'] }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /products/{product}:
+    get:
+      tags: [Catalogo]
+      operationId: getProduct
+      security: []
+      summary: Dettaglio di un prodotto
+      description: 404 anche per un prodotto disattivato o eliminato.
+      parameters:
+        - $ref: '#/components/parameters/ProductSlug'
+      responses:
+        '200':
+          description: Prodotto.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProductDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /products/{product}/related:
+    get:
+      tags: [Catalogo]
+      operationId: listRelatedProducts
+      security: []
+      summary: Prodotti correlati
+      description: Fino a 4 prodotti attivi e disponibili della stessa categoria, escluso il prodotto, dal più recente. Non si completa con altre categorie.
+      parameters:
+        - $ref: '#/components/parameters/ProductSlug'
+      responses:
+        '200':
+          description: Correlati.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    maxItems: 4
+                    items: { $ref: '#/components/schemas/Product' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------- Assistente
+  /assistant/status:
+    get:
+      tags: [Assistente]
+      operationId: getAssistantStatus
+      security: []
+      summary: Disponibilità dell'assistente
+      description: Controlla che Ollama risponda e che il modello del negozio esista; l'esito resta in cache 10 secondi. Senza il profilo Compose `ai` vale `false`.
+      responses:
+        '200':
+          description: Stato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      available: { type: boolean }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /assistant/messages:
+    post:
+      tags: [Assistente]
+      operationId: sendAssistantMessage
+      summary: Risposta dell'assistente in streaming
+      description: |
+        Accessibile a clienti e ospiti (l'ospite chiede prima `/sanctum/csrf-cookie`). La conversazione vive solo nel client, che invia gli ultimi 10 messaggi; il backend non salva nulla e non mette dati dell'utente nel contesto del modello.
+
+        La risposta 200 è **NDJSON** (`application/x-ndjson`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`): un oggetto JSON per riga, in quest'ordine:
+
+        1. zero o più eventi `text` con un frammento del testo (`delta`); il modello cita i prodotti con il marcatore `[[slug]]`, che il frontend toglie dal testo mostrato
+        2. un evento `products` con le card dei prodotti citati (al massimo 4, solo acquistabili, nell'ordine di citazione; `data` può essere vuoto)
+        3. un evento `done`
+
+        Se la generazione si interrompe a metà (timeout di 120 s o errore), dopo i `text` già inviati arriva un solo evento `error` e la risposta si chiude, senza `products` né `done`.
+
+        ```
+        {"type":"text","delta":"Ti consiglio "}
+        {"type":"text","delta":"le Cuffie Aria [[cuffie-aria]]."}
+        {"type":"products","data":[{"id":1,"name":"Cuffie Aria","slug":"cuffie-aria","price":34900,"is_new":true,"availability":{"status":"available","label":"Disponibile"},"category":{"name":"Audio","slug":"audio"},"cover":{"url":"http://localhost:8000/storage/products/….webp","alt":"Cuffie Aria"}}]}
+        {"type":"done"}
+        ```
+
+        L'assistente serve una risposta alla volta (`max_concurrent` 1): una richiesta mentre è occupato riceve subito 503 `assistant_busy`.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  description: l'ultimo messaggio deve avere ruolo `user`
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                        description: '`system` e `tool` sono rifiutati con 422'
+                      content:
+                        type: string
+                        description: massimo 500 caratteri per `user`, 4000 per `assistant`
+            example:
+              messages:
+                - { role: user, content: Cerco cuffie per l'ufficio sotto i 200 euro }
+      responses:
+        '200':
+          description: Stream NDJSON di eventi.
+          content:
+            application/x-ndjson:
+              schema: { $ref: '#/components/schemas/AssistantEvent' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503':
+          description: Assistente non disponibile (Ollama spento o irraggiungibile) oppure occupato.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainError' }
+              examples:
+                unavailable:
+                  value: { message: L'assistente non è disponibile in questo momento., code: assistant_unavailable }
+                busy:
+                  value: { message: 'L''assistente è occupato, riprova tra poco.', code: assistant_busy }
+
+  # ---------------------------------------------------------------- Autenticazione
+  /register:
+    post:
+      tags: [Autenticazione]
+      operationId: register
+      summary: Registrazione di un cliente
+      description: Crea un `customer`, invia l'email di verifica (link valido 24 ore) e avvia la sessione. Un indirizzo già registrato riceve 422 «Questo indirizzo email è già in uso» (eccezione motivata nella skill `account-security`); un indirizzo con dominio `.invalid` è rifiutato.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation]
+              properties:
+                name: { type: string, maxLength: 255 }
+                email: { type: string, format: email, maxLength: 255 }
+                password: { $ref: '#/components/schemas/NewPassword' }
+                password_confirmation: { type: string }
+      responses:
+        '201':
+          description: Utente registrato e autenticato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /login:
+    post:
+      tags: [Autenticazione]
+      operationId: login
+      summary: Accesso con email e password
+      description: |
+        Senza doppia autenticazione rigenera la sessione e restituisce l'utente. Con la doppia autenticazione attiva **non** autentica: salva in sessione una challenge valida 300 secondi e risponde `two_factor_required` con i metodi disponibili; il login si completa con `POST /login/two-factor`.
+
+        Credenziali sbagliate, email inesistente e account eliminato danno la stessa risposta, senza `errors`.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+            example: { email: giulia.ferri@esempio.it, password: Silicio2026 }
+      responses:
+        '200':
+          description: Utente autenticato, oppure secondo fattore richiesto.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/User' }
+                  - $ref: '#/components/schemas/TwoFactorRequired'
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422':
+          description: Dati non validi oppure credenziali errate (`invalid_credentials`).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/DomainError'
+              example: { message: Credenziali non valide, code: invalid_credentials }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /login/two-factor:
+    post:
+      tags: [Autenticazione]
+      operationId: completeTwoFactorLogin
+      summary: Secondo fattore del login
+      description: |
+        Completa la challenge di `POST /login` con un codice TOTP, un codice di recupero o una passkey (opzioni da `POST /login/two-factor/passkey-options`). Se riesce rigenera la sessione e restituisce l'utente; dopo un codice di recupero `meta` dice quanti ne restano.
+
+        Challenge assente o scaduta: 422 `two_factor_challenge_expired` (il frontend torna al login). Codice sbagliato: 422 con errore sul campo `code` (o `credential`) e senza `code` di primo livello.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecondFactorInput' }
+            examples:
+              totp: { value: { method: totp, code: '123456' } }
+              recovery_code: { value: { method: recovery_code, code: K7PM-2XQA } }
+      responses:
+        '200':
+          description: Utente autenticato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/RecoveryCodesMeta' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/SecondFactorError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /login/two-factor/passkey-options:
+    post:
+      tags: [Autenticazione]
+      operationId: getTwoFactorPasskeyOptions
+      summary: Opzioni passkey per il secondo fattore del login
+      description: Richiede la challenge di `POST /login`. Elenca solo le passkey dell'utente. Senza passkey 422 `passkey_unavailable`.
+      security:
+        - xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/DomainError422' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /logout:
+    post:
+      tags: [Autenticazione]
+      operationId: logout
+      summary: Uscita
+      description: Chiude la sessione e azzera la conferma dell'identità.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '204': { description: 'Sessione chiusa.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  /email/verify/{id}/{hash}:
+    post:
+      tags: [Autenticazione]
+      operationId: verifyEmail
+      summary: Conferma dell'indirizzo email dal link
+      description: |
+        Il link dell'email punta al frontend (`/verify-email?…`), che chiama questa rotta inoltrando `expires` e `signature`. **Non richiede l'autenticazione**: la protegge la firma, che copre id, hash dell'email e scadenza (24 ore). La verifica non avvia una sessione.
+
+        Firma non valida o scaduta, utente inesistente e hash che non corrisponde all'email attuale rispondono tutti 403 con lo stesso messaggio. Un utente già verificato riceve 200.
+      security:
+        - xsrfToken: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: hash, in: path, required: true, description: 'sha1 dell''email', schema: { type: string } }
+        - { name: expires, in: query, required: true, schema: { type: integer } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Email confermata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/EmailOnly' }
+        '403':
+          description: Link non valido o scaduto.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Il link di verifica non è valido o è scaduto. }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /email/verification-notification:
+    post:
+      tags: [Autenticazione]
+      operationId: resendVerificationEmail
+      summary: Nuovo invio dell'email di verifica
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200':
+          description: Indirizzo già confermato, nessun invio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Il tuo indirizzo email è già confermato. }
+        '202':
+          description: Link inviato.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Ti abbiamo inviato un nuovo link di conferma. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /forgot-password:
+    post:
+      tags: [Autenticazione]
+      operationId: forgotPassword
+      summary: Richiesta del link di reset della password
+      description: Risponde sempre lo stesso messaggio, che l'indirizzo esista o no. Il link punta al frontend (`/reset-password?token=…&email=…`) e vale 60 minuti.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Messaggio generico.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: 'Se l''indirizzo è registrato, riceverai un''email con il link per reimpostare la password.' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /reset-password/check:
+    post:
+      tags: [Autenticazione]
+      operationId: checkPasswordResetToken
+      summary: Controllo del link di reset
+      description: Dice se il token è valido e se il reset chiederà il secondo fattore.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetTokenInput' }
+      responses:
+        '200':
+          description: Token valido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requires_second_factor: { type: boolean }
+                  methods: { $ref: '#/components/schemas/SecondFactorMethods' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /reset-password:
+    post:
+      tags: [Autenticazione]
+      operationId: resetPassword
+      summary: Nuova password dal link di reset
+      description: Con la doppia autenticazione attiva richiede anche il secondo fattore. Dopo il reset tutte le sessioni dell'utente sono chiuse e non avviene nessun login automatico.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ResetTokenInput'
+                - type: object
+                  required: [password, password_confirmation]
+                  properties:
+                    password: { $ref: '#/components/schemas/NewPassword' }
+                    password_confirmation: { type: string }
+                - $ref: '#/components/schemas/OptionalSecondFactorInput'
+      responses:
+        '200':
+          description: Password reimpostata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: 'La password è stata reimpostata: accedi con la nuova password.' }
+                  meta: { $ref: '#/components/schemas/RecoveryCodesMeta' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/SecondFactorError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /reset-password/passkey-options:
+    post:
+      tags: [Autenticazione]
+      operationId: getResetPasswordPasskeyOptions
+      summary: Opzioni passkey per il secondo fattore del reset
+      description: Token ed email si controllano per primi (422 `invalid_reset_token`); poi senza doppia autenticazione o senza passkey 422 `passkey_unavailable`.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetTokenInput' }
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /email-change/confirm:
+    post:
+      tags: [Autenticazione]
+      operationId: confirmEmailChange
+      summary: Conferma del cambio email dal link
+      description: Il link arriva al **nuovo** indirizzo e vale 60 minuti, monouso. Funziona anche da ospite. Se nel frattempo l'indirizzo è stato registrato da un altro, 409 `email_change_unavailable` e la richiesta viene annullata.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenInput' }
+      responses:
+        '200':
+          description: Email aggiornata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/EmailOnly' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /email-change/cancel:
+    post:
+      tags: [Autenticazione]
+      operationId: cancelEmailChangeByToken
+      summary: Annullamento del cambio email dal link
+      description: Il link arriva al **vecchio** indirizzo e funziona anche da ospite. Una richiesta già confermata non si annulla da qui (422).
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenInput' }
+      responses:
+        '204': { description: 'Richiesta annullata.' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  # ---------------------------------------------------------------- Passkey
+  /passkeys/login/options:
+    post:
+      tags: [Passkey]
+      operationId: getPasskeyLoginOptions
+      summary: Opzioni per l'accesso senza password
+      description: Opzioni monouso, valide 300 secondi, per `startAuthentication()` di `@simplewebauthn/browser`.
+      security:
+        - xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /passkeys/login:
+    post:
+      tags: [Passkey]
+      operationId: loginWithPasskey
+      summary: Accesso senza password con una passkey
+      description: La passkey da sola basta, con o senza doppia autenticazione. Una `credential` con la forma sbagliata è un 422 di validazione sul campo, prima della libreria. Ogni fallimento della verifica (opzioni assenti o scadute, credenziale sconosciuta, contenuto non valido, firma, origine o verifica dell'utente non valide, account eliminato) dà invece 422 `invalid_passkey`, senza `errors`.
+      security:
+        - xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential: { $ref: '#/components/schemas/PasskeyCredential' }
+      responses:
+        '200':
+          description: Utente autenticato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/passkeys:
+    get:
+      tags: [Passkey]
+      operationId: listPasskeys
+      summary: Passkey dell'utente
+      description: Dalla più recente. La credenziale non esce mai dal backend.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Passkey.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Passkey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Passkey]
+      operationId: storePasskey
+      summary: Registrazione di una passkey
+      description: Con la risposta di `startRegistration()` alle opzioni di `POST /me/passkeys/options`. Richiede la conferma dell'identità (un 423 non consuma le opzioni). Opzioni scadute o già usate, risposta rifiutata o credenziale già registrata → 422 su `credential`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, credential]
+              properties:
+                name: { type: string, maxLength: 255, example: iPhone di Giulia }
+                credential: { $ref: '#/components/schemas/PasskeyCredential' }
+      responses:
+        '201':
+          description: Passkey registrata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Passkey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  /me/passkeys/options:
+    post:
+      tags: [Passkey]
+      operationId: getPasskeyRegistrationOptions
+      summary: Opzioni per registrare una passkey
+      description: Credenziale rilevabile e verifica dell'utente obbligatorie; relying party `localhost`, origine `http://localhost:5173`. Richiede la conferma dell'identità.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  /me/passkeys/{passkey}:
+    patch:
+      tags: [Passkey]
+      operationId: renamePasskey
+      summary: Rinomina di una passkey
+      description: Non è un'operazione sensibile, quindi senza conferma dell'identità, evento o notifica. La passkey di un altro utente risponde 404.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/PasskeyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 255 }
+      responses:
+        '200':
+          description: Passkey rinominata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Passkey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Passkey]
+      operationId: deletePasskey
+      summary: Rimozione di una passkey
+      description: Il controllo del proprietario (404) arriva prima della conferma dell'identità (423).
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/PasskeyId'
+      responses:
+        '204': { description: 'Passkey rimossa.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  # ---------------------------------------------------------------- Account e sicurezza
+  /me:
+    get:
+      tags: [Account e sicurezza]
+      operationId: getMe
+      summary: Utente autenticato
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Utente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Account e sicurezza]
+      operationId: updateProfile
+      summary: Modifica del nome
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 255 }
+      responses:
+        '200':
+          description: Utente aggiornato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Account e sicurezza]
+      operationId: deleteAccount
+      summary: Eliminazione dell'account
+      description: |
+        Solo per i clienti: un admin riceve 403 **prima** della conferma dell'identità. Con ordini aperti (`paid`, `shipped`, `pending` degli ultimi 15 minuti) 409 `account_has_open_orders`, senza effetti.
+
+        Altrimenti cancella indirizzi, carrello, eventi di sicurezza, richieste di cambio email, token di reset, passkey, doppia autenticazione e sessioni, e anonimizza l'utente; ordini e pagamenti restano per gli obblighi fiscali. Notifica all'indirizzo originale e logout.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '204': { description: 'Account eliminato e sessione chiusa.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: Un account di amministrazione non si elimina; il controllo arriva prima della conferma dell'identità.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Gli account di amministrazione non si possono eliminare. }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  /me/confirm-identity:
+    post:
+      tags: [Account e sicurezza]
+      operationId: confirmIdentity
+      summary: Conferma dell'identità
+      description: Password e, con la doppia autenticazione attiva, il secondo fattore. Vale 600 secondi per le rotte che rispondono 423; si azzera al logout e dopo ogni cambio password.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  required: [password]
+                  properties:
+                    password: { type: string }
+                - $ref: '#/components/schemas/OptionalSecondFactorInput'
+      responses:
+        '200':
+          description: Identità confermata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      confirmed_until: { type: string, format: date-time }
+                  meta: { $ref: '#/components/schemas/RecoveryCodesMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/SecondFactorError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/confirm-identity/passkey-options:
+    post:
+      tags: [Account e sicurezza]
+      operationId: getConfirmIdentityPasskeyOptions
+      summary: Opzioni passkey per la conferma dell'identità
+      description: Solo con la doppia autenticazione attiva e almeno una passkey, altrimenti 422 `passkey_unavailable`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/DomainError422' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/password:
+    put:
+      tags: [Account e sicurezza]
+      operationId: changePassword
+      summary: Cambio della password
+      description: Password attuale e, con la doppia autenticazione attiva, il secondo fattore **nel form stesso** (niente 423). Chiude le altre sessioni, rigenera quella corrente e azzera la conferma dell'identità. Secondo fattore mancante → 422 sul campo `code`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  required: [current_password, password, password_confirmation]
+                  properties:
+                    current_password: { type: string }
+                    password: { $ref: '#/components/schemas/NewPassword' }
+                    password_confirmation: { type: string }
+                - $ref: '#/components/schemas/OptionalSecondFactorInput'
+      responses:
+        '200':
+          description: Password cambiata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      password_changed_at: { type: string, format: date-time }
+                  meta: { $ref: '#/components/schemas/RecoveryCodesMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/SecondFactorError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/password/passkey-options:
+    post:
+      tags: [Account e sicurezza]
+      operationId: getPasswordPasskeyOptions
+      summary: Opzioni passkey per il cambio password
+      description: Solo con la doppia autenticazione attiva e almeno una passkey, altrimenti 422 `passkey_unavailable`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/PasskeyOptions' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/DomainError422' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/email:
+    post:
+      tags: [Account e sicurezza]
+      operationId: requestEmailChange
+      summary: Richiesta di cambio email
+      description: |
+        Richiede la conferma dell'identità. Invia il link di conferma al nuovo indirizzo e un avviso con il link di annullamento al vecchio; l'email dell'account cambia solo alla conferma. Annulla le richieste precedenti in sospeso.
+
+        Il limiter `email-change` gira prima della conferma dell'identità: anche un 423 o un 422 consumano uno dei 3 tentativi dell'ora.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 255
+                  description: diversa dall'attuale, non registrata, senza dominio `.invalid`
+      responses:
+        '201':
+          description: Richiesta creata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/PendingEmailChange' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/email-change:
+    delete:
+      tags: [Account e sicurezza]
+      operationId: cancelPendingEmailChange
+      summary: Annullamento del cambio email dal profilo
+      description: Senza conferma dell'identità. Senza una richiesta in sospeso 404.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '204': { description: 'Richiesta annullata.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/security:
+    get:
+      tags: [Account e sicurezza]
+      operationId: getSecurityOverview
+      summary: Panoramica della sicurezza
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Panoramica.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/SecurityOverview' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/security-events:
+    get:
+      tags: [Account e sicurezza]
+      operationId: listSecurityEvents
+      summary: Attività recente
+      description: Eventi di sicurezza dell'utente dal più recente, 10 per pagina.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Pagina di eventi.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SecurityEvent' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/two-factor:
+    post:
+      tags: [Account e sicurezza]
+      operationId: enableTwoFactor
+      summary: Avvio dell'attivazione del TOTP
+      description: Genera un segreto non ancora confermato e restituisce QR code SVG e chiave manuale. Risposta con `Cache-Control no-store`. Richiede la conferma dell'identità; con il TOTP già attivo 409 `two_factor_already_enabled`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200':
+          description: Dati per l'app di autenticazione.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      secret: { type: string, description: 'chiave base32 per l''inserimento manuale' }
+                      otpauth_url: { type: string, example: 'otpauth://totp/Casa%20del%20Silicio:giulia.ferri%40esempio.it?secret=…&issuer=Casa%20del%20Silicio' }
+                      qr_code_svg: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+    delete:
+      tags: [Account e sicurezza]
+      operationId: disableTwoFactor
+      summary: Disattivazione della doppia autenticazione
+      description: Cancella segreto e codici di recupero e chiude le altre sessioni; le passkey restano. Richiede la conferma dell'identità; senza TOTP attivo 409 `two_factor_not_enabled`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '204': { description: 'Doppia autenticazione disattivata.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  /me/two-factor/confirm:
+    post:
+      tags: [Account e sicurezza]
+      operationId: confirmTwoFactor
+      summary: Conferma del TOTP con un codice
+      description: Attiva la doppia autenticazione e restituisce gli 8 codici di recupero in chiaro, **una sola volta** (`Cache-Control no-store`). Senza un segreto da confermare 409 `two_factor_setup_missing`; già attiva 409 `two_factor_already_enabled`; codice sbagliato 422 sul campo `code`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, maxLength: 64, example: '123456' }
+      responses:
+        '200': { $ref: '#/components/responses/RecoveryCodes' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me/two-factor/recovery-codes:
+    post:
+      tags: [Account e sicurezza]
+      operationId: regenerateRecoveryCodes
+      summary: Rigenerazione dei codici di recupero
+      description: Invalida i precedenti e mostra i nuovi una sola volta. Richiede la conferma dell'identità; senza TOTP attivo 409 `two_factor_not_enabled`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/RecoveryCodes' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
+
+  # ---------------------------------------------------------------- Indirizzi
+  /addresses:
+    get:
+      tags: [Indirizzi]
+      operationId: listAddresses
+      summary: Indirizzi del cliente
+      description: Il predefinito per primo, poi per `id`. Riservato ai clienti (admin 403).
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Indirizzi.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+    post:
+      tags: [Indirizzi]
+      operationId: createAddress
+      summary: Nuovo indirizzo
+      description: Il primo indirizzo diventa predefinito; `is_default` true toglie il flag agli altri. `country` è sempre `IT`, impostato dal server.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody: { $ref: '#/components/requestBodies/AddressCreate' }
+      responses:
+        '201': { $ref: '#/components/responses/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /addresses/{address}:
+    get:
+      tags: [Indirizzi]
+      operationId: getAddress
+      summary: Dettaglio di un indirizzo
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AddressId'
+      responses:
+        '200': { $ref: '#/components/responses/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Indirizzi]
+      operationId: updateAddress
+      summary: Modifica parziale di un indirizzo
+      description: Si validano solo i campi inviati. `is_default` false sul predefinito è ignorato.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/AddressId'
+      requestBody: { $ref: '#/components/requestBodies/AddressUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    put:
+      tags: [Indirizzi]
+      operationId: replaceAddress
+      summary: Modifica di un indirizzo (alias di PATCH)
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/AddressId'
+      requestBody: { $ref: '#/components/requestBodies/AddressUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Indirizzi]
+      operationId: deleteAddress
+      summary: Eliminazione di un indirizzo
+      description: Eliminando il predefinito diventa predefinito l'indirizzo più recente tra quelli rimasti.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/AddressId'
+      responses:
+        '204': { description: 'Indirizzo eliminato.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  # ---------------------------------------------------------------- Carrello
+  /cart:
+    get:
+      tags: [Carrello]
+      operationId: getCart
+      summary: Carrello del cliente
+      description: Un utente senza carrello riceve il carrello vuoto, senza crearlo.
+      security:
+        - sessionCookie: []
+      responses:
+        '200': { $ref: '#/components/responses/Cart' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+    delete:
+      tags: [Carrello]
+      operationId: clearCart
+      summary: Svuotamento del carrello
+      description: Cancella le righe e lascia il carrello; risponde con il carrello aggiornato (200, non 204).
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      responses:
+        '200': { $ref: '#/components/responses/Cart' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  /cart/items:
+    post:
+      tags: [Carrello]
+      operationId: addCartItem
+      summary: Aggiunta di un prodotto
+      description: Un prodotto già presente somma la quantità. Oltre `max_quantity` del prodotto 422 con il massimo nel messaggio; prodotto disattivato, eliminato o esaurito 422 su `product_id`.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, quantity]
+              properties:
+                product_id: { type: integer }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '201': { $ref: '#/components/responses/Cart' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /cart/items/{cartItem}:
+    patch:
+      tags: [Carrello]
+      operationId: updateCartItem
+      summary: Modifica della quantità di una riga
+      description: 'Tra 1 e `max_quantity`. Una riga non più acquistabile non cambia quantità (422): si può solo rimuovere.'
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/CartItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/Cart' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Carrello]
+      operationId: removeCartItem
+      summary: Rimozione di una riga
+      description: Risponde con il carrello aggiornato (200, non 204).
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/CartItemId'
+      responses:
+        '200': { $ref: '#/components/responses/Cart' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  # ---------------------------------------------------------------- Checkout e ordini
+  /checkout:
+    post:
+      tags: [Checkout e ordini]
+      operationId: placeOrder
+      summary: Creazione dell'ordine e pagamento
+      description: |
+        Richiede l'email verificata (403 «Conferma il tuo indirizzo email per continuare.»). Prezzi, totali e disponibilità si ricalcolano dal database sotto lock. Il pagamento è simulato: `4242 4242 4242 4242` approvata, `4000 0000 0000 0002` rifiutata. Numero completo e CVC non si salvano mai: resta solo `card_last_four`.
+
+        Un secondo invio della stessa sessione aspetta il primo (`->block()`) e trova il carrello già svuotato (409 `cart_empty`).
+
+        Carta rifiutata: 402 `payment_failed`, l'ordine resta come tentativo fallito visibile solo all'admin, scorte ripristinate e carrello intatto.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address_id, payment, terms_accepted]
+              properties:
+                address_id: { type: integer, description: 'indirizzo del cliente, altrimenti 422' }
+                payment:
+                  type: object
+                  additionalProperties: false
+                  required: [holder, number, expiry, cvc]
+                  properties:
+                    holder: { type: string, maxLength: 255 }
+                    number: { type: string, description: 'da 13 a 19 cifre, spazi ammessi, controllo di Luhn' }
+                    expiry: { type: string, pattern: '^(0[1-9]|1[0-2])/\d{2}$', description: 'MM/AA, non passata; il mese corrente è valido' }
+                    cvc: { type: string, pattern: '^\d{3}$' }
+                terms_accepted: { type: boolean, const: true }
+            example:
+              address_id: 12
+              payment: { holder: Giulia Ferri, number: 4242 4242 4242 4242, expiry: 08/29, cvc: '123' }
+              terms_accepted: true
+      responses:
+        '201':
+          description: Ordine pagato.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '402':
+          description: Carta rifiutata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainError' }
+              example: { message: La carta è stata rifiutata e non ti è stato addebitato nulla. Controlla i dati della carta e riprova., code: payment_failed }
+        '403':
+          description: Admin (il controllo del ruolo arriva prima) oppure email da confermare.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                admin:
+                  value: { message: Gli account di amministrazione non possono fare acquisti. }
+                unverified:
+                  value: { message: Conferma il tuo indirizzo email per continuare. }
+        '409':
+          description: Carrello vuoto (`cart_empty`) oppure disponibilità cambiata (`insufficient_stock`, con l'elenco dei prodotti; `available` 0 per esauriti, disattivati o eliminati).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DomainError'
+                  - type: object
+                    properties:
+                      products:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            product: { type: string }
+                            requested: { type: integer }
+                            available: { type: integer }
+              example:
+                message: "La disponibilità di alcuni prodotti è cambiata: aggiorna il carrello per completare l'ordine."
+                code: insufficient_stock
+                products: [{ product: Radio Onda Portatile, requested: 1, available: 0 }]
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /orders:
+    get:
+      tags: [Checkout e ordini]
+      operationId: listOrders
+      summary: Ordini del cliente
+      description: Solo gli ordini pagati almeno una volta (`paid_at` valorizzato), compresi quelli annullati dopo il pagamento; 10 per pagina, dal più recente. Ogni elemento è senza `items`, `payment` e `status_history`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Pagina di ordini.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+
+  /orders/{order}:
+    get:
+      tags: [Checkout e ordini]
+      operationId: getOrder
+      summary: Dettaglio di un ordine
+      description: 404 per gli ordini di altri utenti, i tentativi falliti e gli ordini `pending`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200': { $ref: '#/components/responses/Order' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{order}/cancel:
+    post:
+      tags: [Checkout e ordini]
+      operationId: cancelOrder
+      summary: Annullamento di un ordine pagato
+      description: Solo per un ordine `paid` (`can_cancel`). Rimborso tramite il gateway e poi annullamento con ripristino delle scorte; un ordine non annullabile risponde 422 `invalid_order_transition` senza chiamare il gateway, un rimborso fallito 502 `refund_failed` senza nessun cambiamento.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200': { $ref: '#/components/responses/Order' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminCannotPurchase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/DomainError422' }
+        '502': { $ref: '#/components/responses/RefundFailed' }
+
+  # ---------------------------------------------------------------- Admin
+  /admin/settings:
+    get:
+      tags: [Admin]
+      operationId: getAdminSettings
+      summary: Impostazioni del negozio per l'admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Impostazioni con la soglia delle scorte basse.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/ShopSettings'
+                      - type: object
+                        properties:
+                          low_stock_threshold: { type: integer, example: 5 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      operationId: getDashboard
+      summary: Dashboard
+      description: Contano solo gli ordini pagati almeno una volta. Il mese corrente si calcola in ora italiana.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Indicatori.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Dashboard' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/products:
+    get:
+      tags: [Admin]
+      operationId: listAdminProducts
+      summary: Elenco dei prodotti
+      description: Comprende i disattivati, non gli eliminati. Ordine per SKU, poi `id`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - { name: search, in: query, description: 'cerca in nome e SKU', schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, description: 'slug', schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/AdminPerPage'
+      responses:
+        '200':
+          description: Pagina di prodotti.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminProduct' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Admin]
+      operationId: createProduct
+      summary: Nuovo prodotto
+      description: Lo slug si genera dal nome. Le immagini si aggiungono dopo, con la rotta dedicata.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '201': { $ref: '#/components/responses/AdminProduct' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/products/{product}:
+    get:
+      tags: [Admin]
+      operationId: getAdminProduct
+      summary: Dettaglio di un prodotto
+      description: Anche disattivato; un prodotto eliminato risponde 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Admin]
+      operationId: updateProduct
+      summary: Modifica di un prodotto
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody: { $ref: '#/components/requestBodies/ProductUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    put:
+      tags: [Admin]
+      operationId: replaceProduct
+      summary: Modifica di un prodotto (alias di PATCH)
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody: { $ref: '#/components/requestBodies/ProductUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      operationId: deleteProduct
+      summary: Eliminazione di un prodotto
+      description: Soft delete. Gli ordini che lo contengono restano invariati grazie allo snapshot.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204': { description: 'Prodotto eliminato.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  /admin/products/{product}/images:
+    post:
+      tags: [Admin]
+      operationId: uploadProductImages
+      summary: Caricamento di immagini
+      description: 'Da 1 a 10 file JPG, PNG o WebP, al massimo 5 MB e 8000 pixel per lato. Ogni file è ricodificato in WebP (orientamento EXIF applicato, lato lungo fino a 2000 pixel, metadati rimossi): l''originale non si salva mai. Le immagini si accodano con `alt` uguale al nome del prodotto. Oltre 64 MB di corpo 413.'
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: ['images[]']
+              properties:
+                'images[]':
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: Elenco aggiornato delle immagini del prodotto.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminProductImage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: Corpo oltre `post_max_size`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: I file inviati superano la dimensione massima consentita. }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/products/{product}/images/{image}:
+    delete:
+      tags: [Admin]
+      operationId: deleteProductImage
+      summary: Rimozione di un'immagine
+      description: Cancella file e riga e ricompatta le posizioni. Un'immagine di un altro prodotto risponde 404.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - { name: image, in: path, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: 'Immagine rimossa.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  /admin/categories:
+    get:
+      tags: [Admin]
+      operationId: listAdminCategories
+      summary: Elenco delle categorie
+      description: Tutte, per `id`, con `products_count` e `can_delete`.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Categorie.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminCategory' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      operationId: createCategory
+      summary: Nuova categoria
+      description: Lo slug si genera dal nome e non cambia più.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      requestBody: { $ref: '#/components/requestBodies/CategoryInput' }
+      responses:
+        '201': { $ref: '#/components/responses/AdminCategory' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/categories/{category}:
+    patch:
+      tags: [Admin]
+      operationId: updateCategory
+      summary: Modifica di una categoria
+      description: Un `slug` inviato è ignorato.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      requestBody: { $ref: '#/components/requestBodies/CategoryInput' }
+      responses:
+        '200': { $ref: '#/components/responses/AdminCategory' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    put:
+      tags: [Admin]
+      operationId: replaceCategory
+      summary: Modifica di una categoria (alias di PATCH)
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      requestBody: { $ref: '#/components/requestBodies/CategoryInput' }
+      responses:
+        '200': { $ref: '#/components/responses/AdminCategory' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      operationId: deleteCategory
+      summary: Eliminazione di una categoria
+      description: 409 `category_has_products` se esistono prodotti collegati, compresi gli eliminati con soft delete.
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      responses:
+        '204': { description: 'Categoria eliminata.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Categoria con prodotti.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainError' }
+              examples:
+                products:
+                  value: { message: 'Contiene prodotti: spostali prima di eliminarla.', code: category_has_products }
+                deleted_products:
+                  value: { message: 'È collegata a prodotti eliminati: non si può eliminare.', code: category_has_products }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+
+  /admin/orders:
+    get:
+      tags: [Admin]
+      operationId: listAdminOrders
+      summary: Elenco degli ordini
+      description: Tutti gli ordini, compresi i tentativi falliti, dal più recente. Filtri in AND.
+      security:
+        - sessionCookie: []
+      parameters:
+        - { name: search, in: query, description: 'parte del numero d''ordine o dell''email del cliente (gli account eliminati non si trovano per email)', schema: { type: string, maxLength: 100 } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatusValue' } }
+        - { name: failed_payment, in: query, description: 'solo i tentativi falliti (annullati senza `paid_at`)', schema: { type: string, enum: ['1'] } }
+        - { name: paid_month, in: query, description: 'mese di pagamento in ora italiana', schema: { type: string, pattern: '^\d{4}-\d{2}$', example: 2026-09 } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/AdminPerPage'
+      responses:
+        '200':
+          description: Pagina di ordini.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminOrderSummary' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/orders/{order}:
+    get:
+      tags: [Admin]
+      operationId: getAdminOrder
+      summary: Dettaglio di un ordine
+      description: Anche per i tentativi falliti.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200': { $ref: '#/components/responses/AdminOrder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/orders/{order}/status:
+    patch:
+      tags: [Admin]
+      operationId: updateOrderStatus
+      summary: Cambio di stato di un ordine
+      description: '`shipped` e `delivered` con l''admin come autore; `cancelled` passa dal rimborso (502 `refund_failed` se fallisce). Una transizione non consentita dallo stato attuale risponde 422 `invalid_order_transition`; `paid` e `pending` non sono valori ammessi (422 di validazione).'
+      security:
+        - sessionCookie: []
+          xsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [shipped, delivered, cancelled] }
+      responses:
+        '200': { $ref: '#/components/responses/AdminOrder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '502': { $ref: '#/components/responses/RefundFailed' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: e-commerce-session
+      description: cookie di sessione impostato dal login; nel browser si invia con `credentials include`
+    xsrfToken:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: valore decodificato del cookie `XSRF-TOKEN` di `GET /sanctum/csrf-cookie`; obbligatorio su POST, PUT, PATCH e DELETE
+
+  headers:
+    RetryAfter:
+      description: secondi da attendere
+      schema: { type: integer, example: 45 }
+    NoStore:
+      description: la risposta contiene segreti e non va salvata in cache
+      schema: { type: string, example: 'no-store, private' }
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    AdminPerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, enum: [10, 25, 50], default: 10 }
+    ProductSlug:
+      name: product
+      in: path
+      required: true
+      description: slug del prodotto
+      schema: { type: string, example: cuffie-aria }
+    ProductId:
+      name: product
+      in: path
+      required: true
+      description: id del prodotto
+      schema: { type: integer }
+    CategoryId:
+      name: category
+      in: path
+      required: true
+      description: id della categoria
+      schema: { type: integer }
+    OrderId:
+      name: order
+      in: path
+      required: true
+      schema: { type: integer }
+    AddressId:
+      name: address
+      in: path
+      required: true
+      schema: { type: integer }
+    CartItemId:
+      name: cartItem
+      in: path
+      required: true
+      schema: { type: integer }
+    PasskeyId:
+      name: passkey
+      in: path
+      required: true
+      schema: { type: integer }
+
+  requestBodies:
+    AddressCreate:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - type: object
+                required: [full_name, street, city, postal_code, province, phone]
+              - $ref: '#/components/schemas/AddressInput'
+    AddressUpdate:
+      required: true
+      description: parziale, si validano solo i campi inviati
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AddressInput' }
+    ProductUpdate:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProductInput'
+              - type: object
+                properties:
+                  images:
+                    type: array
+                    description: tutte le immagini del prodotto nell'ordine voluto; id mancanti, duplicati o di un altro prodotto → 422
+                    items:
+                      type: object
+                      required: [id, alt]
+                      properties:
+                        id: { type: integer }
+                        alt: { type: string, maxLength: 255 }
+    CategoryInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, maxLength: 50, description: 'unico; anche lo slug derivato non deve essere già usato' }
+              description: { type: [string, 'null'], maxLength: 255 }
+
+  responses:
+    Unauthenticated:
+      description: Sessione assente o scaduta.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: Devi accedere per continuare. }
+    Forbidden:
+      description: Permesso mancante (ruolo, email da confermare, admin che elimina il proprio account).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: Non hai i permessi per questa operazione. }
+    AdminCannotPurchase:
+      description: Indirizzi, carrello, checkout e ordini sono riservati ai clienti.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: Gli account di amministrazione non possono fare acquisti. }
+    NotFound:
+      description: Risorsa inesistente o di un altro utente.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: La risorsa richiesta non esiste. }
+    Conflict:
+      description: Conflitto con lo stato attuale, con `code`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/DomainError' }
+    CsrfMismatch:
+      description: Token CSRF mancante o scaduto. Il messaggio è quello predefinito di Laravel; il frontend non lo mostra, richiede di nuovo `/sanctum/csrf-cookie` e ripete la richiesta una volta.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: CSRF token mismatch. }
+    ValidationError:
+      description: Dati non validi, con gli errori per campo.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    UnprocessableEntity:
+      description: Dati non validi (`errors` sui campi, senza `code`) oppure errore di dominio con `code` e senza `errors` (vedi la tabella dei codici).
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationError'
+              - $ref: '#/components/schemas/DomainError'
+    DomainError422:
+      description: Errore di dominio con `code` (vedi la tabella dei codici).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/DomainError' }
+    SecondFactorError:
+      description: Dati non validi o secondo fattore sbagliato (errore sul campo `code` o `credential`), oppure errore di dominio con `code`.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationError'
+              - $ref: '#/components/schemas/DomainError'
+          example: { message: Codice non valido., errors: { code: [Codice non valido.] } }
+    IdentityNotConfirmed:
+      description: Conferma dell'identità mancante o scaduta. Il frontend apre il dialog di conferma (`POST /me/confirm-identity`) e ripete la richiesta.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: Conferma la tua identità per continuare. }
+              requires:
+                type: array
+                items: { type: string, enum: [password, second_factor] }
+                description: '`second_factor` solo con la doppia autenticazione attiva'
+    TooManyRequests:
+      description: Troppi tentativi. Il limiter `api` (120 al minuto) vale per tutte le rotte, anche quelle che non elencano il 429; le rotte con un limiter dedicato lo dichiarano.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: Troppi tentativi. Riprova tra 45 secondi. }
+    RefundFailed:
+      description: Il gateway ha rifiutato il rimborso; ordine, scorte e pagamento restano invariati.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/DomainError' }
+          example: { message: "Il rimborso non è riuscito: l'ordine non è stato annullato. Riprova tra poco.", code: refund_failed }
+    PasskeyOptions:
+      description: Opzioni della cerimonia, pronte per `@simplewebauthn/browser`, monouso e valide 300 secondi.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  options: { type: object, description: 'PublicKeyCredentialCreationOptions o PublicKeyCredentialRequestOptions in JSON' }
+    RecoveryCodes:
+      description: Codici di recupero in chiaro, mostrati una sola volta.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items: { type: string, pattern: '^[A-Z0-9]{4}-[A-Z0-9]{4}$' }
+                    example: [K7PM-2XQA, R4TD-9WNE]
+    Address:
+      description: Indirizzo.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Address' }
+    Cart:
+      description: Carrello aggiornato, che sostituisce quello in cache nel frontend.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Cart' }
+    Order:
+      description: Ordine.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Order' }
+    AdminProduct:
+      description: Prodotto con i dati di magazzino.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminProduct' }
+    AdminCategory:
+      description: Categoria con i conteggi.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminCategory' }
+    AdminOrder:
+      description: Ordine nella variante admin.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminOrder' }
+
+  schemas:
+    Message:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    DomainError:
+      type: object
+      required: [message, code]
+      properties:
+        message: { type: string }
+        code: { type: string, description: 'codice stabile in snake_case' }
+
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message: { type: string, description: 'primo errore, seguito dal numero degli altri' }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+      example:
+        message: Il campo email deve essere un indirizzo email valido. (and 1 more error)
+        errors:
+          email: [Il campo email deve essere un indirizzo email valido.]
+          password: [Il campo password è obbligatorio.]
+
+    Paginated:
+      type: object
+      properties:
+        links:
+          type: object
+          properties:
+            first: { type: [string, 'null'] }
+            last: { type: [string, 'null'] }
+            prev: { type: [string, 'null'] }
+            next: { type: [string, 'null'] }
+        meta:
+          type: object
+          properties:
+            current_page: { type: integer }
+            from: { type: [integer, 'null'] }
+            last_page: { type: integer }
+            per_page: { type: integer }
+            to: { type: [integer, 'null'] }
+            total: { type: integer }
+            path: { type: string }
+
+    EnumValue:
+      type: object
+      properties:
+        value: { type: string }
+        label: { type: string }
+
+    OrderStatusValue:
+      type: string
+      enum: [pending, paid, shipped, delivered, cancelled]
+      description: 'etichette: In attesa, Pagato, Spedito, Consegnato, Annullato'
+
+    OrderStatus:
+      type: object
+      properties:
+        value: { $ref: '#/components/schemas/OrderStatusValue' }
+        label: { type: string, example: Pagato }
+
+    Availability:
+      type: object
+      properties:
+        status: { type: string, enum: [available, low_stock, out_of_stock] }
+        label: { type: string, example: Ultimi 2 pezzi, description: 'Disponibile, Ultimo pezzo, Ultimi N pezzi, Esaurito' }
+
+    Image:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        alt: { type: string }
+
+    ShopSettings:
+      type: object
+      properties:
+        shipping_cost: { type: integer, example: 690 }
+        free_shipping_threshold: { type: integer, example: 9900 }
+
+    SupportSection:
+      type: object
+      properties:
+        id: { type: string, enum: [spedizioni, resi, garanzia, contatti] }
+        title: { type: string, example: Spedizioni e consegne }
+        paragraphs:
+          type: array
+          items: { type: string }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: Audio }
+        slug: { type: string, example: audio }
+        description: { type: [string, 'null'] }
+
+    AdminCategory:
+      allOf:
+        - $ref: '#/components/schemas/Category'
+        - type: object
+          properties:
+            products_count: { type: integer, description: 'prodotti non eliminati, attivi e disattivati' }
+            can_delete: { type: boolean, description: 'false se esistono prodotti collegati, compresi gli eliminati' }
+
+    Product:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: Diffusore Eco }
+        slug: { type: string, example: diffusore-eco }
+        price: { type: integer, example: 124900 }
+        is_new: { type: boolean }
+        availability: { $ref: '#/components/schemas/Availability' }
+        category:
+          type: object
+          properties:
+            name: { type: string }
+            slug: { type: string }
+        cover:
+          oneOf:
+            - $ref: '#/components/schemas/Image'
+            - type: 'null'
+
+    Specification:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string, maxLength: 64, example: Peso }
+        value: { type: string, maxLength: 255, example: '4,2 kg' }
+
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            short_description: { type: string }
+            description: { type: [string, 'null'] }
+            specifications:
+              type: array
+              items: { $ref: '#/components/schemas/Specification' }
+            images:
+              type: array
+              items: { $ref: '#/components/schemas/Image' }
+            max_quantity: { type: integer, description: 'min(stock, 10)' }
+
+    AdminProductImage:
+      type: object
+      properties:
+        id: { type: integer }
+        url: { type: string, format: uri }
+        alt: { type: string }
+        position: { type: integer }
+
+    AdminProduct:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        sku: { type: string, example: CDS-AUD-001 }
+        category:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            slug: { type: string }
+        short_description: { type: string }
+        description: { type: [string, 'null'] }
+        specifications:
+          type: array
+          items: { $ref: '#/components/schemas/Specification' }
+        price: { type: integer }
+        stock: { type: integer }
+        stock_status: { $ref: '#/components/schemas/Availability' }
+        is_active: { type: boolean }
+        cover:
+          oneOf:
+            - $ref: '#/components/schemas/Image'
+            - type: 'null'
+        images:
+          type: array
+          description: solo nel dettaglio
+          items: { $ref: '#/components/schemas/AdminProductImage' }
+        updated_at: { type: string, format: date-time }
+
+    ProductInput:
+      type: object
+      required: [category_id, name, sku, short_description, specifications, price, stock, is_active]
+      properties:
+        category_id: { type: integer }
+        name: { type: string, maxLength: 255 }
+        sku: { type: string, maxLength: 64, pattern: '^[A-Z0-9-]+$', description: 'unico tra tutti i prodotti, compresi gli eliminati: «Questo SKU è già in uso»' }
+        short_description: { type: string, maxLength: 160 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        specifications:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/Specification' }
+        price: { type: integer, minimum: 1, maximum: 999999, description: 'centesimi' }
+        stock: { type: integer, minimum: 0, maximum: 999999 }
+        is_active: { type: boolean }
+
+    Address:
+      type: object
+      properties:
+        id: { type: integer }
+        full_name: { type: string, example: Giulia Ferri }
+        street: { type: string, example: Via San Martino 42 }
+        city: { type: string, example: Pisa }
+        postal_code: { type: string, example: '56125' }
+        province: { type: string, example: PI }
+        country: { type: string, const: IT }
+        phone: { type: string, example: +39 333 123 4567 }
+        is_default: { type: boolean }
+
+    AddressInput:
+      type: object
+      properties:
+        full_name: { type: string, maxLength: 255 }
+        street: { type: string, maxLength: 255 }
+        city: { type: string, maxLength: 100 }
+        postal_code: { type: string, pattern: '^\d{5}$' }
+        province: { type: string, description: 'sigla di 2 lettere, convertita in maiuscolo («pi» → «PI»)' }
+        phone: { type: string, maxLength: 20, pattern: '^\+?[0-9 ]+$' }
+        is_default: { type: boolean }
+
+    CartItem:
+      type: object
+      properties:
+        id: { type: integer }
+        quantity: { type: integer }
+        max_quantity: { type: integer }
+        exceeds_stock: { type: boolean, description: 'quantità oltre lo stock attuale' }
+        is_purchasable: { type: boolean, description: 'prodotto attivo, non eliminato e disponibile' }
+        unit_price: { type: integer, description: 'prezzo attuale del prodotto' }
+        line_total: { type: [integer, 'null'], description: 'null per le righe non acquistabili' }
+        product:
+          type: object
+          properties:
+            name: { type: string }
+            slug: { type: string }
+            category:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+            cover:
+              oneOf:
+                - $ref: '#/components/schemas/Image'
+                - type: 'null'
+            availability: { $ref: '#/components/schemas/Availability' }
+
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        summary:
+          type: object
+          properties:
+            items_count: { type: integer, description: 'somma delle quantità di tutte le righe, anche non acquistabili' }
+            subtotal: { type: integer, description: 'solo righe acquistabili' }
+            shipping_cost: { type: integer, description: '690, 0 da 9900 di subtotale o senza righe acquistabili' }
+            total: { type: integer }
+            free_shipping_threshold: { type: integer }
+            free_shipping_remaining: { type: [integer, 'null'], description: 'null senza righe acquistabili' }
+        can_checkout: { type: boolean }
+
+    OrderItem:
+      type: object
+      properties:
+        product_name: { type: string }
+        product_sku: { type: string }
+        unit_price: { type: integer }
+        quantity: { type: integer }
+        line_total: { type: integer }
+        cover:
+          description: null se il prodotto è stato eliminato
+          oneOf:
+            - $ref: '#/components/schemas/Image'
+            - type: 'null'
+
+    ShippingAddress:
+      type: object
+      description: snapshot dell'indirizzo al momento dell'acquisto
+      properties:
+        full_name: { type: string }
+        street: { type: string }
+        postal_code: { type: string }
+        city: { type: string }
+        province: { type: string }
+        country: { type: string }
+        phone: { type: string }
+
+    StatusChange:
+      type: object
+      properties:
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        description: { type: string, example: Pagamento con carta riuscito }
+        created_at: { type: string, format: date-time }
+
+    Order:
+      type: object
+      properties:
+        id: { type: integer }
+        number: { type: string, example: ORD-2026-000042 }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        created_at: { type: string, format: date-time }
+        paid_at: { type: [string, 'null'], format: date-time }
+        subtotal: { type: integer }
+        shipping_cost: { type: integer }
+        total: { type: integer }
+        items_count: { type: integer, description: 'somma delle quantità' }
+        can_cancel: { type: boolean, description: 'true solo per lo stato `paid`' }
+        shipping_address: { $ref: '#/components/schemas/ShippingAddress' }
+        payment:
+          description: solo nel dettaglio; null senza un pagamento riuscito o rimborsato
+          oneOf:
+            - type: object
+              properties:
+                card_last_four: { type: string, example: '4242' }
+            - type: 'null'
+        items:
+          type: array
+          description: solo nel dettaglio
+          items: { $ref: '#/components/schemas/OrderItem' }
+        status_history:
+          type: array
+          description: solo nel dettaglio, senza autore né motivo
+          items: { $ref: '#/components/schemas/StatusChange' }
+
+    Customer:
+      type: object
+      description: «Cliente eliminato» ed email null per un account anonimizzato
+      properties:
+        name: { type: string }
+        email: { type: [string, 'null'] }
+
+    AdminOrderSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        number: { type: string }
+        customer: { $ref: '#/components/schemas/Customer' }
+        created_at: { type: string, format: date-time }
+        items_count: { type: integer }
+        total: { type: integer }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        failed_payment: { type: boolean }
+
+    AdminOrder:
+      allOf:
+        - $ref: '#/components/schemas/AdminOrderSummary'
+        - type: object
+          properties:
+            paid_at: { type: [string, 'null'], format: date-time }
+            subtotal: { type: integer }
+            shipping_cost: { type: integer }
+            can_cancel: { type: boolean }
+            allowed_transitions:
+              type: array
+              items: { type: string, enum: [shipped, delivered, cancelled] }
+              description: '`paid` → shipped, cancelled; `shipped` → delivered; altrimenti vuoto'
+            shipping_address: { $ref: '#/components/schemas/ShippingAddress' }
+            payment:
+              description: pagamento più recente, anche rifiutato
+              oneOf:
+                - type: object
+                  properties:
+                    card_last_four: { type: string }
+                    status: { $ref: '#/components/schemas/EnumValue' }
+                    amount: { type: integer }
+                    created_at: { type: string, format: date-time }
+                - type: 'null'
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/OrderItem' }
+            status_history:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/StatusChange'
+                  - type: object
+                    properties:
+                      changed_by:
+                        description: null = sistema
+                        oneOf:
+                          - type: object
+                            properties:
+                              id: { type: integer }
+                              name: { type: string }
+                          - type: 'null'
+                      reason: { type: [string, 'null'], example: Carta rifiutata dalla banca }
+
+    Dashboard:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            month: { type: string, example: 2026-09 }
+        revenue_month: { type: integer, description: 'totale degli ordini pagati nel mese, esclusi quelli ora annullati' }
+        orders_month: { type: integer }
+        orders_to_ship: { type: integer, description: 'ordini `paid`, senza limite di periodo' }
+        low_stock_count: { type: integer }
+        orders_by_status:
+          type: array
+          description: ordini pagati nel mese per stato attuale; somma uguale a `orders_month`
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/OrderStatus' }
+              count: { type: integer }
+        latest_orders:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              number: { type: string }
+              customer: { $ref: '#/components/schemas/Customer' }
+              created_at: { type: string, format: date-time }
+              total: { type: integer }
+              status: { $ref: '#/components/schemas/OrderStatus' }
+        low_stock_products:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              stock: { type: integer }
+              stock_status: { $ref: '#/components/schemas/Availability' }
+              cover:
+                oneOf:
+                  - $ref: '#/components/schemas/Image'
+                  - type: 'null'
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        email_verified_at: { type: [string, 'null'], format: date-time }
+        role:
+          type: object
+          properties:
+            value: { type: string, enum: [customer, admin] }
+            label: { type: string, example: Cliente }
+        pending_email_change:
+          oneOf:
+            - $ref: '#/components/schemas/PendingEmailChange'
+            - type: 'null'
+        created_at: { type: string, format: date-time }
+
+    PendingEmailChange:
+      type: object
+      properties:
+        new_email: { type: string, format: email }
+        expires_at: { type: string, format: date-time }
+
+    EmailOnly:
+      type: object
+      properties:
+        email: { type: string, format: email }
+
+    NewPassword:
+      type: string
+      minLength: 10
+      description: almeno 10 caratteri, maiuscole e minuscole, numeri; non presente in violazioni note
+
+    SecondFactorMethods:
+      type: array
+      items: { type: string, enum: [totp, recovery_code, passkey] }
+      description: '`passkey` solo se l''utente ne ha almeno una'
+
+    TwoFactorRequired:
+      type: object
+      properties:
+        two_factor_required: { type: boolean, const: true }
+        methods: { $ref: '#/components/schemas/SecondFactorMethods' }
+
+    SecondFactorInput:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, enum: [totp, recovery_code, passkey] }
+        code: { type: string, maxLength: 64, description: 'TOTP di 6 cifre o codice di recupero XXXX-XXXX; obbligatorio salvo con `passkey`' }
+        credential: { $ref: '#/components/schemas/PasskeyCredential' }
+
+    OptionalSecondFactorInput:
+      type: object
+      description: richiesto solo con la doppia autenticazione attiva
+      properties:
+        method: { type: string, enum: [totp, recovery_code, passkey] }
+        code: { type: string, maxLength: 64 }
+        credential: { $ref: '#/components/schemas/PasskeyCredential' }
+
+    RecoveryCodesMeta:
+      type: object
+      description: presente solo dopo l'uso di un codice di recupero
+      properties:
+        recovery_codes_remaining: { type: integer }
+        recovery_codes_low: { type: boolean, description: 'true con due codici o meno' }
+
+    ResetTokenInput:
+      type: object
+      required: [token, email]
+      properties:
+        token: { type: string }
+        email: { type: string, format: email }
+
+    TokenInput:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, maxLength: 255 }
+
+    PasskeyCredential:
+      type: object
+      description: risposta del browser di `startRegistration()` o `startAuthentication()`; una forma sbagliata è un 422 sul campo prima della libreria
+      required: [id, rawId, type, response]
+      properties:
+        id: { type: string, maxLength: 1364 }
+        rawId: { type: string, maxLength: 1364 }
+        type: { type: string, const: public-key }
+        response:
+          type: object
+          required: [clientDataJSON]
+          properties:
+            clientDataJSON: { type: string }
+            attestationObject: { type: string }
+            authenticatorData: { type: string }
+            signature: { type: string }
+            userHandle: { type: [string, 'null'] }
+            transports:
+              type: array
+              items: { type: string }
+        clientExtensionResults: { type: object }
+        authenticatorAttachment: { type: [string, 'null'] }
+
+    Passkey:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, 'null'], format: date-time }
+
+    SecurityOverview:
+      type: object
+      properties:
+        two_factor_enabled: { type: boolean }
+        two_factor_confirmed_at: { type: [string, 'null'], format: date-time }
+        recovery_codes_remaining: { type: integer }
+        recovery_codes_total: { type: integer }
+        passkeys_count: { type: integer }
+        email_verified: { type: boolean }
+        password_changed_at: { type: [string, 'null'], format: date-time }
+
+    SecurityEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string, example: passkey_added }
+        label: { type: string, example: Passkey aggiunta }
+        device: { type: string, example: Safari su macOS }
+        ip_address: { type: [string, 'null'] }
+        passkey_name: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    AssistantEvent:
+      description: una riga dello stream NDJSON
+      oneOf:
+        - type: object
+          title: text
+          required: [type]
+          properties:
+            type: { type: string, const: text }
+            delta: { type: string }
+        - type: object
+          title: products
+          required: [type]
+          properties:
+            type: { type: string, const: products }
+            data:
+              type: array
+              maxItems: 4
+              items: { $ref: '#/components/schemas/Product' }
+        - type: object
+          title: done
+          required: [type]
+          properties:
+            type: { type: string, const: done }
+        - type: object
+          title: error
+          required: [type]
+          properties:
+            type: { type: string, const: error }
+            message:
+              type: string
+              enum:
+                - "L'assistente non ha risposto in tempo. Riprova tra poco."
+                - "Si è verificato un problema con l'assistente. Riprova tra poco."

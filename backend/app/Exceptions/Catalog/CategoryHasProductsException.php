@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Catalog;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Deletion of a category linked to products, soft deleted ones included.
  * The two messages are the tooltips of the admin mockup: one for products
  * still in the catalog, one for a category linked only to deleted products.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class CategoryHasProductsException extends RuntimeException
+final class CategoryHasProductsException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'category_has_products';
 

@@ -340,7 +340,7 @@ L'etichetta arriva dall'API (`{ "value": "paid", "label": "Pagato" }`); il front
 | paid | cancelled | admin o cliente (rimborso e ripristino dello stock) |
 | shipped | delivered | admin |
 
-`delivered` e `cancelled` sono stati finali. Una transizione non consentita lancia `InvalidOrderTransitionException` (422). Ogni transizione passa da `ChangeOrderStatusAction` (skill `laravel-api`), che valorizza il timestamp corrispondente e scrive la riga di cronologia; l'unica riga scritta altrove è quella della creazione (`null → pending`), in `PlaceOrderAction`.
+`delivered` e `cancelled` sono stati finali. Una transizione non consentita lancia `InvalidOrderTransitionException`: 422 con `{ "message": "Lo stato attuale dell'ordine non consente questa operazione.", "code": "invalid_order_transition" }`. Ogni transizione passa da `ChangeOrderStatusAction` (skill `laravel-api`), che valorizza il timestamp corrispondente e scrive la riga di cronologia; l'unica riga scritta altrove è quella della creazione (`null → pending`), in `PlaceOrderAction`.
 
 `canTransitionTo()` dice solo se una coppia di stati è ammessa, non chi può farla: le transizioni del sistema (`pending → paid`, `pending → cancelled`) le esegue solo `PlaceOrderAction`. Cliente e admin agiscono solo sugli ordini `paid` o `shipped` secondo la colonna "Chi".
 
@@ -497,7 +497,7 @@ Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid
 
 | Parametro | Valori | Effetto |
 |---|---|---|
-| `search` | testo | cerca in nome e SKU |
+| `search` | testo, massimo 100 caratteri | cerca in nome e SKU |
 | `category` | slug | prodotti della categoria |
 | `status` | `active`, `inactive` | prodotti visibili o disattivati nel negozio |
 | `page`, `per_page` | `per_page` tra 10, 25 e 50 | paginazione |
@@ -545,7 +545,7 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 
 | Parametro | Valori | Effetto |
 |---|---|---|
-| `search` | testo | numero d'ordine o email del cliente che contengono il testo |
+| `search` | testo, massimo 100 caratteri | numero d'ordine o email del cliente che contengono il testo |
 | `status` | valore di `OrderStatus` | ordini nello stato |
 | `failed_payment` | `1` | solo i tentativi falliti (`cancelled` e `paid_at` nullo) |
 | `paid_month` | `AAAA-MM` (`date_format:Y-m`, es. `2026-09`) | solo ordini con `paid_at` in quel mese, con i limiti calcolati nel fuso dell'applicazione (regola 18), come nella dashboard |

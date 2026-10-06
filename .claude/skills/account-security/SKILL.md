@@ -93,6 +93,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 - `passkey_challenge_ttl`: 300 secondi (validità delle opzioni di una cerimonia passkey in sessione)
 - `email_change_ttl`: 60 minuti
 - `recovery_codes_count`: 8
+- `totp_issuer`: `Casa del Silicio` (emittente nell'URI `otpauth://` del QR code, mostrato dall'app di autenticazione)
 - `account_deletion_pending_window`: 15 minuti (un ordine `pending` più recente blocca l'eliminazione dell'account)
 - `security_events_per_page`: 10
 
@@ -150,7 +151,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 
 1. `POST /forgot-password` con l'email: risponde **sempre** lo stesso messaggio generico, che l'indirizzo esista o no.
 2. Il link nell'email punta al frontend: `/reset-password?token=...&email=...`. Scade dopo 60 minuti.
-3. `POST /reset-password/check` con token ed email: se il token è valido risponde `{ "requires_second_factor": bool, "methods": [...] }`; se non lo è, 422 e la pagina mostra "Il link è scaduto".
+3. `POST /reset-password/check` con token ed email: se il token è valido risponde `{ "requires_second_factor": bool, "methods": [...] }`; se non lo è, `InvalidPasswordResetTokenException`, 422 con `{ "message": "Il link per reimpostare la password non è valido o è scaduto.", "code": "invalid_reset_token" }`, e la pagina mostra "Il link è scaduto". Lo stesso controllo, con la stessa risposta, apre `POST /reset-password` e `POST /reset-password/passkey-options`.
 4. `POST /reset-password` con token, email, nuova password, conferma e, se la doppia autenticazione è attiva, il secondo fattore: codice TOTP, codice di recupero o passkey. Per la passkey le opzioni si ottengono da `POST /reset-password/passkey-options` con token ed email.
 5. Dopo il reset: `password_changed_at` aggiornata, tutte le sessioni dell'utente chiuse, notifica email, evento `password_reset`, nessun login automatico.
 
@@ -180,7 +181,8 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 3. `POST /me/two-factor/recovery-codes` (`identity.confirmed`): rigenera i codici, invalida i precedenti, li mostra una sola volta.
 4. `DELETE /me/two-factor` (`identity.confirmed`): disattiva la doppia autenticazione, cancella segreto e codici di recupero, chiude le altre sessioni, notifica, evento. Le passkey restano e continuano a permettere l'accesso senza password.
 5. Formato dei codici di recupero: `XXXX-XXXX`, salvati come hash e monouso.
-6. Le risposte che mostrano segreti in chiaro (attivazione con segreto, URI e QR code; conferma e rigenerazione con i codici di recupero) hanno l'header `Cache-Control: no-store`, così non restano nella cache del browser o di un proxy.
+6. Errori di stato, 409 con `code`: `two_factor_already_enabled` («La doppia autenticazione è già attiva.») su `POST /me/two-factor` e `POST /me/two-factor/confirm` quando il TOTP è già confermato; `two_factor_setup_missing` («Avvia di nuovo l'attivazione della doppia autenticazione.») su `POST /me/two-factor/confirm` senza un segreto da confermare; `two_factor_not_enabled` («La doppia autenticazione non è attiva.») su `DELETE /me/two-factor` e `POST /me/two-factor/recovery-codes` senza TOTP attivo.
+7. Le risposte che mostrano segreti in chiaro (attivazione con segreto, URI e QR code; conferma e rigenerazione con i codici di recupero) hanno l'header `Cache-Control: no-store`, così non restano nella cache del browser o di un proxy.
 
 ### Passkey
 

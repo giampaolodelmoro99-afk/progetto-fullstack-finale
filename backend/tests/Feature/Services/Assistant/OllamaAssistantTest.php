@@ -274,6 +274,33 @@ it('times out when the http client reports a stalled read', function () {
         ->toThrow(AssistantTimeoutException::class);
 });
 
+it('fails after the fragments already streamed when the connection drops', function () {
+    $inner = Utils::streamFor(json_encode(['message' => ['role' => 'assistant', 'content' => 'Ti consiglio '], 'done' => false])."\n");
+    $dropped = FnStream::decorate($inner, [
+        'eof' => fn () => false,
+        'read' => fn (int $length) => $inner->eof()
+            ? throw new RuntimeException('Connection reset by peer')
+            : $inner->read($length),
+    ]);
+
+    Http::fake(['ollama:11434/api/chat' => fn () => Create::promiseFor(new Psr7Response(200, [], $dropped))]);
+
+    $received = [];
+    $failure = null;
+
+    try {
+        foreach (app(OllamaAssistant::class)->stream([['role' => 'user', 'content' => 'Ciao']]) as $event) {
+            $received[] = $event;
+        }
+    } catch (AssistantFailedException $exception) {
+        $failure = $exception;
+    }
+
+    expect($received)->toEqual([new TextDelta('Ti consiglio ')])
+        ->and($failure?->getMessage())->toBe("Si è verificato un problema con l'assistente. Riprova tra poco.")
+        ->and($failure?->reason)->toBe('Connection reset by peer');
+});
+
 it('never writes the conversation to the logs', function () {
     Log::spy();
     Http::fake(['ollama:11434/*' => Http::failedConnection()]);

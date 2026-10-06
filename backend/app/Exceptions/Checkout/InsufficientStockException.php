@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Checkout;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * The cart cannot be bought as it is: a row above the stock, or a product
  * out of stock, deactivated or deleted (available 0). The list names every
  * problematic product, so the checkout page can explain what changed.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class InsufficientStockException extends RuntimeException
+final class InsufficientStockException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'insufficient_stock';
 

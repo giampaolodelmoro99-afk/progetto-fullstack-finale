@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,8 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
  * field errors, as for wrong credentials: the frontend shows a single
  * notice. No login_failed event: without a valid passkey the user is not
  * reliably identified.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class InvalidPasskeyException extends RuntimeException
+final class InvalidPasskeyException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'invalid_passkey';
 

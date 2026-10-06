@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Assistant;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -9,8 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * The model service cannot be reached, or the shop model is missing.
  * Raised before the answer starts streaming.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class AssistantUnavailableException extends RuntimeException
+final class AssistantUnavailableException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'assistant_unavailable';
 

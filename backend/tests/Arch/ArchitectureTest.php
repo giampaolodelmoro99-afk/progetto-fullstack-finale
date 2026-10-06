@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -76,6 +77,25 @@ arch('exceptions are final and suffixed')
     ->expect('App\Exceptions')
     ->toBeFinal()
     ->toHaveSuffix('Exception');
+
+arch('domain exceptions stay out of the error log')
+    ->expect('App\Exceptions')
+    ->toImplement(ShouldntReport::class)
+    ->ignoring([
+        'App\Exceptions\Orders\RefundFailedException',
+        'App\Exceptions\Auth\PasskeyCeremonyFailedException',
+        'App\Exceptions\Assistant\AssistantTimeoutException',
+        'App\Exceptions\Assistant\AssistantFailedException',
+    ]);
+
+arch('failures of external services and ceremonies are reported')
+    ->expect([
+        'App\Exceptions\Orders\RefundFailedException',
+        'App\Exceptions\Auth\PasskeyCeremonyFailedException',
+        'App\Exceptions\Assistant\AssistantTimeoutException',
+        'App\Exceptions\Assistant\AssistantFailedException',
+    ])
+    ->not->toImplement(ShouldntReport::class);
 
 arch('the assistant services implement the contract')
     ->expect(['App\Services\Assistant\OllamaAssistant', 'App\Services\Assistant\FakeAiAssistant'])

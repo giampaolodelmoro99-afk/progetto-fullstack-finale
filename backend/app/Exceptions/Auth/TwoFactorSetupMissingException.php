@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -9,8 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Confirmation of the activation without a secret waiting for it: the user
  * has to start the activation again.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class TwoFactorSetupMissingException extends RuntimeException
+final class TwoFactorSetupMissingException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'two_factor_setup_missing';
 
