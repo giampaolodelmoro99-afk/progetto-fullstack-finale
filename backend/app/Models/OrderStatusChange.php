@@ -48,7 +48,8 @@ class OrderStatusChange extends Model
     }
 
     /**
-     * Description of the transition. The admin variant adds " da {name}" when there is an author.
+     * Description of the transition. The admin variant adds " da {name}" when
+     * there is an author, with "Cliente eliminato" for an anonymized customer.
      */
     public function description(bool $withAuthor): string
     {
@@ -65,7 +66,7 @@ class OrderStatusChange extends Model
         };
 
         if ($withAuthor && $this->changed_by !== null) {
-            $description .= " da {$this->changedBy->name}";
+            $description .= " da {$this->changedBy->adminLabel()}";
         }
 
         return $description;

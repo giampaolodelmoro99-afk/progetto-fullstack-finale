@@ -50,3 +50,13 @@ it('searches by order number or customer email', function () {
         ->and(Order::search($other->number)->pluck('id')->all())->toBe([$other->id])
         ->and(Order::search('ORD-2026')->count())->toBe(2);
 });
+
+it('never finds an anonymized customer by email', function () {
+    $this->travelTo('2026-09-15 12:00');
+    $deleted = User::factory()->anonymized()->create();
+    $order = Order::factory()->for($deleted)->create();
+
+    expect(Order::search("deleted-{$deleted->id}")->exists())->toBeFalse()
+        ->and(Order::search('anonymized.invalid')->exists())->toBeFalse()
+        ->and(Order::search($order->number)->pluck('id')->all())->toBe([$order->id]);
+});

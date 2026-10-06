@@ -94,6 +94,7 @@ final class ProductController extends Controller
 - Se l'azione ha una Form Request, la Policy si invoca in `authorize()` della Form Request, così l'autorizzazione avviene prima della validazione.
 - Se l'azione non ha una Form Request (`index`, `show`, `destroy`), si usa `Gate::authorize()` come prima istruzione del controller.
 - Eccezione: le rotte pubbliche senza regole di visibilità (categorie, elenco prodotti, impostazioni e testi dell'assistenza del negozio) non hanno Policy; il dettaglio e i correlati di un prodotto passano da `ProductPolicy::viewInShop`, che risponde 404 per i prodotti disattivati anche all'admin; `view` resta per lo `show` dell'area admin, che vede anche i disattivati.
+- Eccezione: le rotte admin senza un modello (`/admin/settings`, `/admin/dashboard`) non hanno Policy e sono protette solo dal middleware `role:admin`.
 - Le azioni sulle sole risorse dell'utente autenticato, senza id nella rotta (elenco degli indirizzi e delle passkey, carrello, aggiunta al carrello, nuovo indirizzo), non hanno controlli di Policy oltre a `create`: la query è già limitata all'utente, quindi non c'è una risorsa altrui da negare.
 - Non usare `before()` per concedere tutto all'admin: ogni permesso è esplicito.
 - Il cliente accede solo alle proprie risorse (`$order->user_id === $user->id`).
@@ -150,7 +151,7 @@ final class StoreProductRequest extends FormRequest
 - Date in ISO 8601 (`toIso8601String()`).
 - Enum esposti come oggetto: `{ "value": "paid", "label": "Pagato" }`.
 - Elenchi paginati con `ProductResource::collection($paginator)`, che produce `data`, `links` e `meta`.
-- Resource distinte quando la forma cambia: `ProductResource` (pubblica) e `Admin\ProductResource` (con SKU, stock reale, `stock_status`, stato attivo), `OrderResource` e `Admin\OrderResource` (cliente, `allowed_transitions`, pagamento anche fallito), `OrderStatusChangeResource` (senza autore né `reason`) e `Admin\OrderStatusChangeResource` (con `changed_by`, `reason` e descrizione con l'autore), `CategoryResource` e `Admin\CategoryResource` (con `products_count` e `can_delete`). Le forme sono nella skill `ecommerce-domain`.
+- Resource distinte quando la forma cambia: `ProductResource` (pubblica) e `Admin\ProductResource` (con SKU, stock reale, `stock_status`, stato attivo), `OrderResource` e `Admin\OrderResource` (cliente, `allowed_transitions`, pagamento anche fallito; la riga dell'elenco admin è `Admin\OrderSummaryResource`, il cliente `Admin\CustomerResource`, unico punto di «Cliente eliminato»), `OrderStatusChangeResource` (senza autore né `reason`) e `Admin\OrderStatusChangeResource` (con `changed_by`, `reason` e descrizione con l'autore), `CategoryResource` e `Admin\CategoryResource` (con `products_count` e `can_delete`). Le forme sono nella skill `ecommerce-domain`.
 - La descrizione di una riga di cronologia si compone in un solo punto, il metodo `OrderStatusChange::description(bool $withAuthor)`, che le due Resource chiamano. La variante admin legge `changedBy`: il controller carica `statusChanges.changedBy` con l'eager loading, altrimenti `shouldBeStrict` segnala il lazy loading.
 - Nessun dato sensibile nelle Resource: mai password, segreti TOTP, codici di recupero o token.
 

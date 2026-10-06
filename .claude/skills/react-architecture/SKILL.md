@@ -335,6 +335,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 ### Ordini
 
 - Dettaglio da `GET /admin/orders/{id}` (`queryKeys.admin.orders.detail(id)`).
+- Card Cliente: nome ed email da `customer` (senza la riga dell'email quando è `null`, per «Cliente eliminato»), telefono da `shipping_address.phone`. Il telefono appartiene al destinatario della spedizione, quindi l'API non lo mette in `customer`.
 - Le azioni si ricavano solo da `allowed_transitions`: `shipped` → "Segna come spedito", `delivered` → "Segna come consegnato", `cancelled` → "Annulla l'ordine" con il dialog di conferma; lista vuota → «Nessuna azione disponibile per questo ordine.».
 - Mutation su `PATCH /admin/orders/{id}/status` che invalida `admin.orders` e `admin.dashboard`, e dopo un annullamento anche `admin.products` e `products` (scorte ripristinate). Un 502 con `code` `refund_failed` lascia il dialog aperto con l'`Alert` del messaggio ricevuto; l'ordine resta invariato.
 - Pagamento rifiutato (`failed_payment`): `Chip` "Annullato" dallo stato; `Alert` "Pagamento non riuscito" e riga "Motivo" della card Pagamento con il `reason` della riga di cronologia `cancelled`, più `payment.card_last_four`.

@@ -35,6 +35,33 @@ enum OrderStatus: string
     }
 
     /**
+     * The states the admin can set by hand; payment and creation belong to the system.
+     *
+     * @return list<self>
+     */
+    public static function adminTargets(): array
+    {
+        return [self::Shipped, self::Delivered, self::Cancelled];
+    }
+
+    /**
+     * The states the admin can bring the order to from this one: paid →
+     * shipped or cancelled, shipped → delivered, nothing otherwise. The admin
+     * acts only on paid or shipped orders: pending → cancelled belongs to
+     * the system.
+     *
+     * @return list<self>
+     */
+    public function adminTransitions(): array
+    {
+        if (! in_array($this, [self::Paid, self::Shipped], true)) {
+            return [];
+        }
+
+        return array_values(array_filter(self::adminTargets(), fn (self $to): bool => $this->canTransitionTo($to)));
+    }
+
+    /**
      * The orders column that records when the order entered this state.
      */
     public function timestampColumn(): ?string

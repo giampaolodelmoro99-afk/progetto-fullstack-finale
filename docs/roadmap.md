@@ -17,7 +17,7 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 4b | Backend dell'assistente AI: endpoint, ricerca nel catalogo, streaming, limiti, test | completata |
 | Fase 5a | Indirizzi del cliente e carrello: CRUD degli indirizzi con predefinito unico, carrello con `CartResource`, totali e `can_checkout` | completata |
 | Fase 5b | Checkout, pagamenti, ordini del cliente, annullamento con rimborso, email, riconciliazione degli ordini rimasti in attesa | completata |
-| Fase 5c | Ordini e dashboard admin | |
+| Fase 5c | Ordini e dashboard admin | completata |
 | Fase 6 | Revisione della copertura dei test e documentazione delle API | |
 | Design E | Chat dell'assistente e sezione "Elimina account" (in Claude Design, prima della Fase 7) | |
 | Fase 7 | Frontend base: tema dal design system, router, layout, httpClient, autenticazione, pagine raggiunte dai link email | |

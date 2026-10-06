@@ -465,7 +465,7 @@ Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid
 | `low_stock_count` | numero di prodotti con scorte basse (regola 13) |
 | `orders_by_status` | ordini con `paid_at` nel mese corrente raggruppati per stato attuale (`paid`, `shipped`, `delivered`, `cancelled`); la somma è uguale a `orders_month`. Non c'è `pending`: un ordine con `paid_at` non è mai in attesa. Il link di ogni stato apre l'elenco ordini con `status` e `paid_month` del mese mostrato, così i risultati coincidono con il conteggio |
 | `latest_orders` | tra gli ordini con `paid_at` valorizzato, i 5 più recenti per `created_at` decrescente, poi `id` |
-| `low_stock_products` | al massimo 5 prodotti con scorte basse, per stock crescente e poi nome, con `stock_status` e copertina |
+| `low_stock_products` | al massimo 5 prodotti con scorte basse, per stock crescente, poi nome e `id`, con `stock`, `stock_status` e copertina |
 
 ```json
 {
@@ -482,10 +482,10 @@ Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid
       { "status": { "value": "cancelled", "label": "Annullato" }, "count": 2 }
     ],
     "latest_orders": [
-      { "id": 47, "number": "ORD-2026-000047", "customer": { "name": "Marco Bellini" }, "created_at": "...", "total": 69800, "status": { "value": "paid", "label": "Pagato" } }
+      { "id": 47, "number": "ORD-2026-000047", "customer": { "name": "Marco Bellini", "email": "marco.bellini@esempio.it" }, "created_at": "...", "total": 69800, "status": { "value": "paid", "label": "Pagato" } }
     ],
     "low_stock_products": [
-      { "id": 31, "name": "Radio Onda Portatile", "stock_status": { "status": "out_of_stock", "label": "Esaurito" }, "cover": { "url": "...", "alt": "..." } }
+      { "id": 31, "name": "Radio Onda Portatile", "stock": 0, "stock_status": { "status": "out_of_stock", "label": "Esaurito" }, "cover": { "url": "...", "alt": "..." } }
     ]
   }
 }
@@ -555,7 +555,7 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 - Riga dell'elenco: `id`, `number`, `customer` (`name`, `email`), `created_at`, `items_count` (somma delle quantità, caricata con `withSum('items', 'quantity')`), `total`, `status`, `failed_payment` (booleano, stesso nome del filtro).
 
 `GET /admin/orders/{order}` restituisce `Admin\OrderResource`: i campi della `OrderResource` del cliente, più:
-- `customer`: `name` ed `email` dell'utente, oppure «Cliente eliminato» ed `email` null per un account anonimizzato (sezione "Clienti eliminati"); il telefono è quello dello snapshot dell'indirizzo
+- `customer`: `name` ed `email` dell'utente, oppure «Cliente eliminato» ed `email` null per un account anonimizzato (sezione "Clienti eliminati"); nessun telefono: appartiene al destinatario della spedizione e resta solo in `shipping_address.phone`
 - `items_count`
 - `failed_payment`
 - `allowed_transitions`: array di stringhe con i valori verso cui l'admin può portare l'ordine adesso (`paid` → `["shipped", "cancelled"]`, `shipped` → `["delivered"]`, altrimenti `[]`)

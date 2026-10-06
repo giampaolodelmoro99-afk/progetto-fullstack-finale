@@ -56,3 +56,17 @@ it('maps each status to its timestamp column', function (OrderStatus $status, ?s
     [OrderStatus::Delivered, 'delivered_at'],
     [OrderStatus::Cancelled, 'cancelled_at'],
 ]);
+
+it('offers the admin only shipped, delivered and cancelled', function () {
+    expect(OrderStatus::adminTargets())->toBe([OrderStatus::Shipped, OrderStatus::Delivered, OrderStatus::Cancelled]);
+});
+
+it('lists the transitions the admin can make from each status', function (OrderStatus $status, array $transitions) {
+    expect($status->adminTransitions())->toBe($transitions);
+})->with([
+    'pending' => [OrderStatus::Pending, []],
+    'paid' => [OrderStatus::Paid, [OrderStatus::Shipped, OrderStatus::Cancelled]],
+    'shipped' => [OrderStatus::Shipped, [OrderStatus::Delivered]],
+    'delivered' => [OrderStatus::Delivered, []],
+    'cancelled' => [OrderStatus::Cancelled, []],
+]);

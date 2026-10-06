@@ -32,6 +32,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public const ANONYMIZED_NAME = 'Utente eliminato';
 
     /**
+     * Label the admin area shows instead of an anonymized customer.
+     */
+    public const DELETED_CUSTOMER_LABEL = 'Cliente eliminato';
+
+    /**
      * @var array<string, mixed>
      */
     protected $attributes = [
@@ -123,6 +128,15 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function isAnonymized(): bool
     {
         return $this->anonymized_at !== null;
+    }
+
+    /**
+     * The name of the user in the admin area: the label "Cliente eliminato"
+     * for an anonymized account, never the stored name.
+     */
+    public function adminLabel(): string
+    {
+        return $this->isAnonymized() ? self::DELETED_CUSTOMER_LABEL : $this->name;
     }
 
     /**
