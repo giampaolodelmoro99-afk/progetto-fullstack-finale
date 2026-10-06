@@ -4,6 +4,7 @@ use App\Models\Address;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Support\Facades\Notification;
+use Tests\Support\ScriptedPaymentGateway;
 
 beforeEach(function () {
     $this->travelTo(Carbon\Carbon::parse('2026-09-28 18:42:00', 'Europe/Rome'));
@@ -91,3 +92,19 @@ it('rejects unexpected keys in the card data', function () {
 
     expect(Order::query()->count())->toBe(0);
 });
+
+it('rejects card data that is not an object without reaching the gateway', function (mixed $payment) {
+    [$user, $address] = checkoutCustomer();
+    cartRow($user, shopProduct(), 1);
+    $gateway = useGateway(new ScriptedPaymentGateway);
+
+    fromFrontend()->postJson('/api/v1/checkout', checkoutPayload($address->id, overrides: ['payment' => $payment]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['payment', 'payment.holder', 'payment.number', 'payment.expiry', 'payment.cvc']);
+
+    expect(Order::query()->count())->toBe(0)
+        ->and($gateway->charges)->toBe(0);
+})->with([
+    'a string' => '4242 4242 4242 4242',
+    'a number' => 4242424242424242,
+]);

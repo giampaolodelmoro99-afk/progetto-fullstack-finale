@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * The link is valid, but the new address was registered by someone else
  * after the request: a conflict with the current state, so 409. The
  * request is cancelled, so the link cannot be tried again.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class EmailChangeUnavailableException extends RuntimeException
+final class EmailChangeUnavailableException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'email_change_unavailable';
 

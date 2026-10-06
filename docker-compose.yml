@@ -11,6 +11,8 @@ services:
     image: ecommerce-app
     volumes:
       - ./backend:/var/www/html
+      # Read only: the alignment test of the backend reads the API specification.
+      - ./docs/api:/var/www/docs/api:ro
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:

@@ -27,7 +27,8 @@
         "nunomaduro/collision": "^8.6",
         "pestphp/pest": "^5.2",
         "pestphp/pest-plugin-laravel": "^5.0",
-        "spomky-labs/cbor-php": "^3.4"
+        "spomky-labs/cbor-php": "^3.4",
+        "symfony/yaml": "^8.1"
     },
     "autoload": {
         "psr-4": {

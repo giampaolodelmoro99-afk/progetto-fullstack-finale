@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Testing\TestResponse;
+use Laravel\Passkeys\Actions\StorePasskey;
 use Laravel\Passkeys\Actions\VerifyPasskey;
 use Tests\Support\SoftwareAuthenticator;
 
@@ -411,4 +412,35 @@ it('reports an unexpected error of the library without the content of the creden
         ->and($written)->not->toContain($answer['response']['signature'])
         ->and($written)->not->toContain($answer['response']['userHandle'])
         ->and($written)->not->toContain(substr($options['challenge'], 0, 10));
+});
+
+it('reports an unexpected error of the library during the registration', function () {
+    $user = actingAsVerifiedCustomer();
+    $authenticator = new SoftwareAuthenticator;
+    confirmIdentity();
+    $options = fromFrontend()->postJson('/api/v1/me/passkeys/options')->assertOk()->json('data.options');
+    $answer = $authenticator->register($options);
+
+    $storePasskey = Mockery::mock(StorePasskey::class);
+    $storePasskey->shouldReceive('__invoke')->andThrow(new TypeError('StorePasskey::__invoke(): Argument #4 ($options) must be of type PublicKeyCredentialCreationOptions, array given'));
+    app()->instance(StorePasskey::class, $storePasskey);
+
+    $logged = [];
+    Event::listen(MessageLogged::class, function (MessageLogged $message) use (&$logged) {
+        $logged[] = $message;
+    });
+
+    fromFrontend()->postJson('/api/v1/me/passkeys', ['name' => 'iPhone di Giulia', 'credential' => $answer])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['credential' => 'Non è stato possibile registrare la passkey: riprova.']);
+
+    $reported = array_values(array_filter($logged, fn (MessageLogged $message) => ($message->context['exception'] ?? null) instanceof PasskeyCeremonyFailedException));
+    $written = implode(' ', array_map(fn (MessageLogged $message) => $message->message.' '.($message->context['exception'] ?? ''), $logged));
+
+    expect($reported)->toHaveCount(1)
+        ->and($reported[0]->level)->toBe('error')
+        ->and($written)->toContain('Passkey ceremony failed with TypeError: StorePasskey::__invoke(): Argument #4')
+        ->and($written)->not->toContain($answer['response']['attestationObject'])
+        ->and($written)->not->toContain($answer['response']['clientDataJSON'])
+        ->and(Passkey::query()->whereBelongsTo($user)->count())->toBe(0);
 });

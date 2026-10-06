@@ -43,7 +43,9 @@ function slotIsFree(): bool
  * Starts an answer and sends its body as production does, without the
  * kernel: in an HTTP test the application terminates before
  * streamedContent() runs the callback, so the terminating callback would
- * release the slot first and hide whether the stream releases it.
+ * release the slot first and hide whether the stream releases it. The body
+ * goes into a buffer with a callback, as streamedContent() uses, so the
+ * stream flushes after every line.
  *
  * @return list<array<string, mixed>>
  */
@@ -52,8 +54,6 @@ function streamAnswerDirectly(string $question, ?AssistantAnswer &$answer = null
     $answer = app(StartAssistantAnswerAction::class)->execute([['role' => 'user', 'content' => $question]]);
     $response = app(AssistantAnswerStream::class)->toResponse($answer);
 
-    // A buffer with a callback, as streamedContent() uses: the stream
-    // flushes after every line.
     $body = '';
     ob_start(function (string $buffer) use (&$body): string {
         $body .= $buffer;
@@ -450,6 +450,10 @@ it('stops the answer when the client disconnects', function () {
         ->and(collect($logged)->firstWhere('message', 'Assistant answer')->context['outcome'])->toBe('aborted');
 });
 
+/*
+| $answer is still alive when the body is checked: the body was closed by
+| finish(), not by the end of the request, after reading only the first line.
+*/
 it('closes the connection to ollama as soon as the client disconnects', function () {
     config(['assistant.driver' => 'ollama']);
     app()->instance(ClientConnection::class, (new FakeClientConnection)->abortAfter(1));
@@ -469,8 +473,6 @@ it('closes the connection to ollama as soon as the client disconnects', function
 
     $events = streamAnswerDirectly('Un caricatore?', $answer);
 
-    // $answer is still alive: the body was closed by finish(), not by the
-    // end of the request, after reading only the first line.
     expect($answer)->toBeInstanceOf(AssistantAnswer::class)
         ->and($events)->toBe([['type' => 'text', 'delta' => 'Ti consiglio ']])
         ->and($closedAt)->toBe(strlen(json_encode(['message' => ['role' => 'assistant', 'content' => 'Ti consiglio '], 'done' => false])) + 1);

@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,8 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Passkey options asked as second factor by a user who cannot use one: no
  * passkey registered, or two-factor authentication not active (then the
  * passkey is never asked as second factor).
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class PasskeyUnavailableException extends RuntimeException
+final class PasskeyUnavailableException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'passkey_unavailable';
 

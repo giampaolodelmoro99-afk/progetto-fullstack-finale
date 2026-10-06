@@ -2,6 +2,7 @@
 
 namespace App\Exceptions\Auth;
 
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -9,8 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Email change token that is wrong, expired, already used or of a request
  * already cancelled. The code lets the frontend show "Il link è scaduto".
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class InvalidEmailChangeTokenException extends RuntimeException
+final class InvalidEmailChangeTokenException extends RuntimeException implements ShouldntReport
 {
     public const CODE = 'invalid_email_change_token';
 

@@ -2,18 +2,16 @@
 
 Schema del database di Casa del Silicio: tabelle di Laravel usate dal progetto, tabelle del negozio e tabelle della sicurezza dell'account.
 
-Fonti:
-- skill `ecommerce-domain`, `account-security`, `laravel-api`, `testing`, `react-architecture`, `mui-design-system`
-- migration già committate in `backend/database/migrations/` (`users`, `password_reset_tokens`, `sessions`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`)
-- `docs/backlog.md`
+Fonte: le migration di `backend/database/migrations/` (regola 11 di `CLAUDE.md`). Le decisioni in fondo al documento sono nate dal confronto tra le skill nella Fase 1 e restano come motivazione delle scelte.
+
+Ultimo controllo: 6 ottobre 2026 (Fase 6), sulle 18 migration e sullo schema reale del database (`information_schema`): tabelle, colonne con tipo, nullabilità e default, indici, unicità e chiavi esterne con il comportamento in cancellazione coincidono con questo documento.
 
 Convenzioni del documento:
 - I tipi sono i metodi di `Blueprint` usati nelle migration (`unsignedInteger`, `string(64)`, `json`…). `id` è `bigIncrements`, `foreignId` è `unsignedBigInteger`.
 - "Nullable" vale **no** se non indicato diversamente; "—" nella colonna Default significa nessun default.
 - `created_at` e `updated_at` creati da `timestamps()` sono nullable in tutte le tabelle, anche dove il diagramma non lo indica.
-- Lo schema descrive lo stato finale. Le tabelle annotate come provvisorie o con una fase sono previste e non ancora migrate.
-- Le tabelle e le colonne che non esistono ancora nascono da **nuove** migration: quelle già committate non si modificano (CLAUDE.md, "Modo di lavorare").
-- Fino alla Fase 2 (migration e modelli) questo documento si allinea alle skill; dalla Fase 2 la fonte sono le migration, e il documento si aggiorna nello stesso task di ogni migration che cambia il database.
+- Lo schema descrive lo stato attuale del database, dopo tutte le migration.
+- Le nuove tabelle e colonne nascono da **nuove** migration: quelle già committate non si modificano (`CLAUDE.md`, "Modo di lavorare"). Il documento si aggiorna nello stesso task di ogni migration che cambia il database.
 
 ## Diagramma
 

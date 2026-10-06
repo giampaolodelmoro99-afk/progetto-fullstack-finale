@@ -3,6 +3,7 @@
 namespace App\Exceptions\Auth;
 
 use App\Enums\SecondFactorMethod;
+use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,8 +13,10 @@ use Symfony\Component\HttpFoundation\Response;
  * the method (code, or credential for a passkey) and there is no top level
  * code: the frontend stays on the page and shows the message under the
  * field, or asks for the passkey again.
+ *
+ * Foreseen answer to the client, not a fault: kept out of the error log.
  */
-final class InvalidSecondFactorException extends RuntimeException
+final class InvalidSecondFactorException extends RuntimeException implements ShouldntReport
 {
     public const MESSAGE = 'Codice non valido.';
 
