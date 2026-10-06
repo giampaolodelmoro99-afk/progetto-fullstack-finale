@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Account\AddressController;
 use App\Http\Controllers\Api\V1\Account\ConfirmIdentityController;
 use App\Http\Controllers\Api\V1\Account\ConfirmIdentityPasskeyOptionsController;
 use App\Http\Controllers\Api\V1\Account\ConfirmTwoFactorController;
@@ -14,6 +15,8 @@ use App\Http\Controllers\Api\V1\Account\SecurityOverviewController;
 use App\Http\Controllers\Api\V1\Account\TwoFactorController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\SendVerificationEmailController;
+use App\Http\Controllers\Api\V1\Cart\CartController;
+use App\Http\Controllers\Api\V1\Cart\CartItemController;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -121,3 +124,19 @@ Route::delete('me/email-change', [EmailChangeController::class, 'destroy'])
 Route::get('me/security', SecurityOverviewController::class)->name('security.show');
 
 Route::get('me/security-events', [SecurityEventController::class, 'index'])->name('security-events.index');
+
+/*
+| Addresses and cart: customers only (UserPolicy::purchase, 403 for an
+| administrator, checked before the policies of the single resources). No
+| email verification needed, only the checkout asks for it. Every write of
+| the cart answers with the updated cart.
+*/
+Route::middleware('can:purchase,'.User::class)->group(function (): void {
+    Route::apiResource('addresses', AddressController::class);
+
+    Route::get('cart', [CartController::class, 'show'])->name('cart.show');
+    Route::delete('cart', [CartController::class, 'destroy'])->name('cart.destroy');
+    Route::post('cart/items', [CartItemController::class, 'store'])->name('cart.items.store');
+    Route::patch('cart/items/{cartItem}', [CartItemController::class, 'update'])->name('cart.items.update');
+    Route::delete('cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('cart.items.destroy');
+});

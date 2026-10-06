@@ -138,14 +138,15 @@ I testi della pagina `/assistenza` hanno una sola fonte nel backend, perché li 
 8. **Spedizione:** solo in Italia. Costo fisso `shipping_cost` (6,90 €), gratuita quando il subtotale raggiunge `free_shipping_threshold` (99,00 €).
 9. **Numero d'ordine** leggibile e univoco nel formato `ORD-{anno}-{id a 6 cifre}`, es. `ORD-2026-000042`. Dipende dall'id, quindi `orders.number` è nullable e unico, e `PlaceOrderAction` lo scrive subito dopo l'insert, nella stessa transazione.
 10. **Ruoli:** la registrazione crea solo `customer`; l'admin nasce dal seeder.
-11. **Categorie:** gestite dall'admin, senza sottocategorie. Ogni prodotto appartiene a una sola categoria. Lo slug si genera dal nome alla creazione e non si modifica più. Una categoria collegata a prodotti, **compresi quelli eliminati con soft delete**, non si elimina (409): la FK `restrictOnDelete` lo impedirebbe comunque, ma con un errore 500.
-12. **Scorte basse:** prodotti attivi e non eliminati con stock minore o uguale a `low_stock_threshold`, esauriti compresi.
-13. **Novità:** un prodotto è nuovo se creato negli ultimi `new_arrival_days` giorni; lo stesso criterio vale per `is_new` e per il filtro `new=1`.
-14. **Disponibilità:** status ed etichetta seguono la tabella dei valori calcolati, con le parole fisse di `voice-and-content.md`.
-15. **Visibilità degli ordini:** il cliente vede solo i propri ordini con `paid_at` valorizzato; l'admin li vede tutti (sezione "Ordini").
-16. **Cronologia:** ogni cambio di stato, compresa la creazione dell'ordine, scrive una riga in `order_status_changes` (sezione "Cronologia degli stati").
-17. **Periodo "mese corrente":** si calcola nel fuso dell'applicazione (`Europe/Rome`), dal primo giorno del mese alle 00:00 all'ultimo alle 23:59:59.
-18. **Conservazione:** ordini, righe, cronologia e pagamenti non si cancellano mai, nemmeno quando il cliente elimina l'account: l'utente viene anonimizzato e i suoi ordini restano per l'obbligo di conservazione di 10 anni (motivazione nella skill `account-security`, "Eliminazione dell'account").
+11. **Acquisti solo per i clienti:** indirizzi, carrello e checkout (dalla 5b) sono riservati ai `customer`. Per un admin le loro rotte rispondono **403** «Gli account di amministrazione non possono fare acquisti.» (`UserPolicy::purchase`, middleware `can:purchase` sul gruppo di rotte, controllato prima delle Policy delle singole risorse): è un permesso di ruolo, quindi 403 e non 404. **Motivi:** coerenza con l'esclusione degli admin dall'eliminazione dell'account; gli ordini dell'admin falserebbero fatturato e dashboard; separazione tra gestione del negozio e acquisti.
+12. **Categorie:** gestite dall'admin, senza sottocategorie. Ogni prodotto appartiene a una sola categoria. Lo slug si genera dal nome alla creazione e non si modifica più. Una categoria collegata a prodotti, **compresi quelli eliminati con soft delete**, non si elimina (409): la FK `restrictOnDelete` lo impedirebbe comunque, ma con un errore 500.
+13. **Scorte basse:** prodotti attivi e non eliminati con stock minore o uguale a `low_stock_threshold`, esauriti compresi.
+14. **Novità:** un prodotto è nuovo se creato negli ultimi `new_arrival_days` giorni; lo stesso criterio vale per `is_new` e per il filtro `new=1`.
+15. **Disponibilità:** status ed etichetta seguono la tabella dei valori calcolati, con le parole fisse di `voice-and-content.md`.
+16. **Visibilità degli ordini:** il cliente vede solo i propri ordini con `paid_at` valorizzato; l'admin li vede tutti (sezione "Ordini").
+17. **Cronologia:** ogni cambio di stato, compresa la creazione dell'ordine, scrive una riga in `order_status_changes` (sezione "Cronologia degli stati").
+18. **Periodo "mese corrente":** si calcola nel fuso dell'applicazione (`Europe/Rome`), dal primo giorno del mese alle 00:00 all'ultimo alle 23:59:59.
+19. **Conservazione:** ordini, righe, cronologia e pagamenti non si cancellano mai, nemmeno quando il cliente elimina l'account: l'utente viene anonimizzato e i suoi ordini restano per l'obbligo di conservazione di 10 anni (motivazione nella skill `account-security`, "Eliminazione dell'account").
 
 ## Catalogo
 
@@ -159,7 +160,7 @@ Parametri, validati da `IndexProductRequest`:
 | `category` | slug di una categoria esistente; uno slug inesistente → 422 «Questa categoria non esiste.» | prodotti della categoria |
 | `min_price`, `max_price` | centesimi, interi da 0 a 999999; `max_price` minore di `min_price` → 422 | fascia di prezzo |
 | `in_stock` | `1`, `0`, `true`, `false` | con `1` o `true`: solo prodotti con stock maggiore di 0 |
-| `new` | `1`, `0`, `true`, `false` | con `1` o `true`: solo novità (regola 13) |
+| `new` | `1`, `0`, `true`, `false` | con `1` o `true`: solo novità (regola 14) |
 | `sort` | `newest` (predefinito), `price_asc`, `price_desc` | ordinamento |
 | `page` | intero da 1 | pagina |
 | `per_page` | `4`, `12` (predefinito), `24`, `48` | prodotti per pagina |
@@ -190,8 +191,13 @@ Parametri, validati da `IndexProductRequest`:
 - **Prezzi attuali:** il carrello mostra e somma sempre il prezzo attuale del prodotto. `cart_items` non salva prezzi; lo snapshot avviene solo alla creazione dell'ordine.
 - **Conteggio articoli** (titolo "Il tuo carrello" e badge nell'AppBar): somma delle quantità di tutte le righe, righe non acquistabili comprese.
 - **Totali:** subtotale, spedizione e totale si calcolano solo sulle righe acquistabili. Una riga acquistabile con quantità superiore allo stock resta nei totali con la sua quantità, ma blocca il checkout.
-- **Quantità:** tra 1 e `max_quantity` del prodotto. Aggiungere un prodotto già presente somma la quantità; se la somma supera `max_quantity` la richiesta risponde 422 con un messaggio che indica il massimo, senza ridurre la quantità in silenzio.
+- **Quantità:** tra 1 e `max_quantity` del prodotto. Il massimo si controlla solo nelle Action (`AddCartItemAction`, `UpdateCartItemAction`) sullo stock attuale: le Form Request validano solo `integer|min:1`, perché un limite fisso di `max_quantity_per_item` indicherebbe nel messaggio un massimo diverso da quello del prodotto (es. «10 pezzi» con stock 3). Aggiungere un prodotto già presente somma la quantità; se la somma supera `max_quantity` la richiesta risponde 422 con un messaggio che indica il massimo, senza ridurre la quantità in silenzio.
 - **Checkout bloccato** quando il carrello è vuoto, quando contiene righe non acquistabili o righe con quantità superiore allo stock.
+- **Niente da spedire:** con subtotale 0 (carrello vuoto o solo righe non acquistabili) `shipping_cost` e `total` valgono 0 e `free_shipping_remaining` vale `null`, così il riepilogo non mostra «Ti mancano 99,00 €» accanto a una spedizione di 0 €; il frontend nasconde la barra quando il valore è `null`.
+- **Prodotti non aggiungibili:** disattivati, eliminati o esauriti → 422 su `product_id` «Questo prodotto non è disponibile.». Una riga non più acquistabile non cambia quantità (422 su `quantity` «Questo prodotto non è più disponibile: rimuovilo dal carrello.»): si può solo rimuovere. Oltre il massimo: «Puoi avere al massimo N pezzi di questo prodotto nel carrello.» («1 pezzo» con N = 1).
+- **Carrello creato al primo inserimento:** `GET /cart` di un utente senza carrello risponde con il carrello vuoto senza crearlo; `DELETE /cart` cancella le righe e lascia il carrello.
+- **Risposte delle scritture:** `POST /cart/items` (201), `PATCH` e `DELETE /cart/items/{cartItem}` e `DELETE /cart` (200) rispondono tutte con la `CartResource` aggiornata, comprese le eliminazioni, in eccezione alla convenzione del 204. **Motivo:** il frontend applica un'unica regola (la risposta sostituisce il carrello in cache) e non serve una seconda richiesta per rileggere totali e `can_checkout` dopo ogni modifica.
+- **Calcolo:** in `App\Support\CartSummary`, la classe del carrello che `PlaceOrderAction` riusa per i totali dell'ordine.
 
 ### Forma della `CartResource`
 
@@ -229,7 +235,8 @@ Parametri, validati da `IndexProductRequest`:
 
 - `exceeds_stock`: `quantity` maggiore dello stock attuale.
 - `is_purchasable`: vedi "Riga acquistabile"; per le righe non acquistabili `line_total` è `null`.
-- `free_shipping_remaining`: quanto manca alla spedizione gratuita, 0 se raggiunta; alimenta la barra "Ti mancano … per la spedizione gratuita".
+- `free_shipping_remaining`: quanto manca alla spedizione gratuita, 0 se raggiunta, `null` senza righe acquistabili; alimenta la barra "Ti mancano … per la spedizione gratuita".
+- La risposta è avvolta in `data`, come ogni Resource; `can_checkout` è al primo livello, accanto a `items` e `summary`.
 - `can_checkout`: calcolato dal backend; il frontend lo usa per disabilitare "Procedi al checkout" e "Paga", ma il backend ricontrolla sempre al checkout.
 
 ## Indirizzi
@@ -243,9 +250,13 @@ Parametri, validati da `IndexProductRequest`:
 | `street` | obbligatorio, massimo 255 caratteri |
 | `city` | obbligatorio, massimo 100 caratteri |
 | `postal_code` | obbligatorio, esattamente 5 cifre (`^\d{5}$`) |
-| `province` | obbligatoria, sigla di 2 lettere maiuscole (`^[A-Z]{2}$`) |
+| `province` | obbligatoria, sigla di 2 lettere (`^[A-Z]{2}$` dopo la normalizzazione); `prepareForValidation()` fa il trim e la converte in maiuscolo, così «pi» si salva come «PI»; messaggio per una sigla non valida: «Usa la sigla di due lettere della provincia, per esempio PI.» |
 | `phone` | obbligatorio, massimo 20 caratteri, solo cifre, spazi e un `+` iniziale (`^\+?[0-9 ]+$`) |
 | `is_default` | booleano facoltativo |
+
+- `PATCH /addresses/{address}` è parziale: si validano solo i campi inviati, con le stesse regole («Imposta come predefinito» invia solo `is_default`).
+- **Indirizzo predefinito:** uno solo per utente, garantito da `CreateAddressAction`, `UpdateAddressAction` e `DeleteAddressAction` con il lock sull'utente. Il primo indirizzo diventa predefinito anche senza `is_default`; `is_default: true` toglie il flag agli altri indirizzi dello stesso utente; `is_default: false` sul predefinito viene ignorato, perché il predefinito cambia solo scegliendone un altro; eliminando il predefinito diventa predefinito l'indirizzo più recente (id più alto) tra quelli rimasti. Chi ha indirizzi ha sempre un predefinito.
+- Elenco: predefinito per primo, poi per `id`. L'indirizzo di un altro utente → 404 (skill `laravel-api`, "Autorizzazione").
 
 ## Checkout (`POST /checkout`)
 
@@ -437,7 +448,7 @@ Indicatori ed elenchi contano solo gli ordini **pagati almeno una volta** (`paid
 | `revenue_month` | somma di `total` degli ordini con `paid_at` nel mese corrente, esclusi quelli ora `cancelled` |
 | `orders_month` | numero di ordini con `paid_at` nel mese corrente, in qualunque stato attuale |
 | `orders_to_ship` | numero di ordini in stato `paid`, senza limite di periodo |
-| `low_stock_count` | numero di prodotti con scorte basse (regola 12) |
+| `low_stock_count` | numero di prodotti con scorte basse (regola 13) |
 | `orders_by_status` | ordini con `paid_at` nel mese corrente raggruppati per stato attuale (`paid`, `shipped`, `delivered`, `cancelled`); la somma è uguale a `orders_month`. Non c'è `pending`: un ordine con `paid_at` non è mai in attesa. Il link di ogni stato apre l'elenco ordini con `status` e `paid_month` del mese mostrato, così i risultati coincidono con il conteggio |
 | `latest_orders` | tra gli ordini con `paid_at` valorizzato, i 5 più recenti per `created_at` decrescente, poi `id` |
 | `low_stock_products` | al massimo 5 prodotti con scorte basse, per stock crescente e poi nome, con `stock_status` e copertina |
@@ -523,7 +534,7 @@ Validazione di `StoreProductRequest` e `UpdateProductRequest`:
 | `search` | testo | numero d'ordine o email del cliente che contengono il testo |
 | `status` | valore di `OrderStatus` | ordini nello stato |
 | `failed_payment` | `1` | solo i tentativi falliti (`cancelled` e `paid_at` nullo) |
-| `paid_month` | `AAAA-MM` (`date_format:Y-m`, es. `2026-09`) | solo ordini con `paid_at` in quel mese, con i limiti calcolati nel fuso dell'applicazione (regola 17), come nella dashboard |
+| `paid_month` | `AAAA-MM` (`date_format:Y-m`, es. `2026-09`) | solo ordini con `paid_at` in quel mese, con i limiti calcolati nel fuso dell'applicazione (regola 18), come nella dashboard |
 | `page`, `per_page` | `per_page` tra 10, 25 e 50 | paginazione |
 
 - Filtri combinati in AND: `paid_month` insieme a `failed_payment=1` non restituisce nulla, perché i tentativi falliti non hanno `paid_at`. Il criterio del mese di pagamento è uno scope (`paidInMonth`) condiviso da `GetDashboardStatsAction` e dall'elenco, così dashboard ed elenco non possono divergere. Ordine per `created_at` decrescente, poi `id`. `meta.total` alimenta «N ordini».
