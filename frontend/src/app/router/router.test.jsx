@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router/router';
@@ -67,20 +68,90 @@ describe('router', () => {
   );
 
   it.each([
-    ['/verify-email', 'Conferma la tua email'],
-    ['/reset-password?token=abc&email=a%40b.it', 'Scegli una nuova password'],
-    ['/confirm-email-change?token=abc', 'Conferma della nuova email'],
-    ['/cancel-email-change?token=abc', 'Annulla il cambio email'],
-  ])('opens %s for guests and authenticated users', async (route, title) => {
-    renderRoute(route);
-    await expectPage(title);
+    ['a guest', null],
+    ['an authenticated user', buildUser({ email: 'sara.galli@esempio.it' })],
+  ])('opens the email link pages for %s', async (label, user) => {
+    server.use(
+      http.post(apiUrl('/api/v1/reset-password/check'), () =>
+        HttpResponse.json({ requires_second_factor: false, methods: [] }),
+      ),
+      http.post(apiUrl('/api/v1/email-change/confirm'), () =>
+        HttpResponse.json({ data: { email: 'nuova@esempio.it' } }),
+      ),
+      http.post(
+        apiUrl('/api/v1/email-change/cancel'),
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
+
+    const pages = [
+      ['/reset-password?token=abc&email=a%40b.it', 'Scegli una nuova password'],
+      ['/confirm-email-change?token=abc', 'Email aggiornata'],
+      ['/cancel-email-change?token=abc', 'Richiesta annullata'],
+    ];
+
+    for (const [route, title] of pages) {
+      const { unmount } = renderRoute(route, user);
+      await expectPage(title);
+      unmount();
+    }
   });
 
-  it('opens the email link pages for an authenticated user too', async () => {
-    renderRoute('/verify-email', buildUser());
+  it('asks a guest to log in before showing the email to verify', async () => {
+    const { router } = renderRoute('/verify-email');
 
-    await expectPage('Conferma la tua email');
+    await expectPage('Accedi');
+    expect(router.state.location.state.from).toMatchObject({ pathname: '/verify-email' });
   });
+
+  it('shows the email to verify to an authenticated user', async () => {
+    renderRoute('/verify-email', buildUser({ email_verified_at: null }));
+
+    await expectPage('Controlla la tua email');
+  });
+
+  it('honours the page the guest came from when an authenticated user opens the login', async () => {
+    const { router } = renderWithProviders(null, {
+      routes,
+      route: { pathname: '/login', state: { from: { pathname: '/account/security' } } },
+      user: buildUser(),
+    });
+
+    await expectPage('Sicurezza', 2);
+    expect(router.state.location.pathname).toBe('/account/security');
+  });
+
+  it.each(['/account/profile', '/cart', '/admin'])(
+    'shows an error with a retry instead of the login when the user cannot be loaded on %s',
+    async (route) => {
+      const user = userEvent.setup();
+      let attempts = 0;
+      server.use(
+        http.get(apiUrl('/api/v1/me'), () => {
+          attempts += 1;
+          return attempts === 1
+            ? HttpResponse.json({ message: 'Errore.' }, { status: 500 })
+            : HttpResponse.json({ data: buildAdmin() });
+        }),
+      );
+
+      const { router } = renderWithProviders(null, { routes, route });
+
+      expect(
+        await screen.findByText('Non è stato possibile caricare il tuo account.'),
+      ).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(route);
+
+      await user.click(screen.getByRole('button', { name: 'Riprova' }));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByText('Non è stato possibile caricare il tuo account.'),
+        ).not.toBeInTheDocument(),
+      );
+      expect(router.state.location.pathname).not.toBe('/login');
+    },
+  );
 
   it('redirects /account to the profile', async () => {
     const { router } = renderRoute('/account', buildUser());

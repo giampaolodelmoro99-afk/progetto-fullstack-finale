@@ -1,6 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { render, renderHook } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider } from 'react-router';
+import { StrictMode } from 'react';
+import { createMemoryRouter } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
 import { queryKeys } from '@/api/queryKeys';
 import { AppProviders } from '@/app/providers/AppProviders';
 
@@ -28,17 +30,18 @@ function prepareClient(user) {
   return queryClient;
 }
 
-export function renderWithProviders(ui, { route = '/', user, routes } = {}) {
+export function renderWithProviders(ui, { route = '/', user, routes, strict = false } = {}) {
   const queryClient = prepareClient(user);
   const router = createMemoryRouter(routes ?? [{ path: '*', element: ui }], {
     initialEntries: [route],
   });
 
-  const utils = render(
+  const tree = (
     <AppProviders client={queryClient}>
       <RouterProvider router={router} />
-    </AppProviders>,
+    </AppProviders>
   );
+  const utils = render(strict ? <StrictMode>{tree}</StrictMode> : tree);
 
   return { ...utils, queryClient, router };
 }

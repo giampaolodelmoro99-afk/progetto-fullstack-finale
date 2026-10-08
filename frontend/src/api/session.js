@@ -15,3 +15,8 @@ export function endUserSession(client) {
 
   client.setQueryData(queryKeys.me, null);
 }
+
+export function startUserSession(client, user) {
+  client.setQueryData(queryKeys.me, user);
+  client.invalidateQueries({ queryKey: queryKeys.cart });
+}

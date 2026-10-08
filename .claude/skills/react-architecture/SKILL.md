@@ -455,7 +455,7 @@ export function useProducts(filters) {
 ## Autenticazione
 
 - `AuthProvider` basato sulla query `me` (`GET /api/v1/me`, `staleTime: Infinity`); un 401 significa ospite, non errore. `AppProviders` registra il `QueryClient` in uso nel client HTTP (`setActiveQueryClient`), così l'interceptor del 401 imposta `me` a `null` nella cache giusta, anche nei test.
-- Hook `useAuth()` che restituisce `{ user, isAuthenticated, isAdmin, isEmailVerified, isLoading, login, logout, register }`.
+- Hook `useAuth()` che restituisce `{ user, isAuthenticated, isAdmin, isEmailVerified, isLoading, isError, refetch, logout }`. Login, verifica in due passaggi, accesso con passkey e registrazione sono mutation degli hook di `features/auth/hooks` (`useLogin`, `useTwoFactorLogin`, `usePasskeyLogin`, `useRegister`), che impostano `me` con `startUserSession()` di `api/session.js` e invalidano `cart`. Dopo l'accesso il ritorno a `state.from` lo fa `GuestRoute`, che reindirizza un utente autenticato a `location.state.from` o alla home.
 - Il login può rispondere con la richiesta del secondo fattore: in quel caso si naviga a `/login/two-factor` (dettagli nella skill `account-security`).
 - Durante il caricamento iniziale dell'utente le rotte protette mostrano un indicatore, non un redirect.
 - Dopo il login si invalidano `me` e `cart`.

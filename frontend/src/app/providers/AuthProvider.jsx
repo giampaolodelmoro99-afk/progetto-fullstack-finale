@@ -22,6 +22,8 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => logoutAsync(), [logoutAsync]);
 
+  const { refetch: refetchMe } = meQuery;
+  const refetch = useCallback(() => refetchMe(), [refetchMe]);
   const user = meQuery.data ?? null;
 
   const value = useMemo(
@@ -31,9 +33,11 @@ export function AuthProvider({ children }) {
       isAdmin: user?.role?.value === 'admin',
       isEmailVerified: Boolean(user?.email_verified_at),
       isLoading: meQuery.isPending,
+      isError: meQuery.isError,
+      refetch,
       logout,
     }),
-    [user, meQuery.isPending, logout],
+    [user, meQuery.isPending, meQuery.isError, refetch, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

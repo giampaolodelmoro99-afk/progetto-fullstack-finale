@@ -5,6 +5,14 @@ import { CustomerRoute } from '@/app/router/CustomerRoute';
 import { GuestRoute } from '@/app/router/GuestRoute';
 import { paths } from '@/app/router/paths';
 import { ProtectedRoute } from '@/app/router/ProtectedRoute';
+import CancelEmailChangePage from '@/features/auth/pages/CancelEmailChangePage';
+import ConfirmEmailChangePage from '@/features/auth/pages/ConfirmEmailChangePage';
+import ForgotPasswordPage from '@/features/auth/pages/ForgotPasswordPage';
+import LoginPage from '@/features/auth/pages/LoginPage';
+import LoginTwoFactorPage from '@/features/auth/pages/LoginTwoFactorPage';
+import RegisterPage from '@/features/auth/pages/RegisterPage';
+import ResetPasswordPage from '@/features/auth/pages/ResetPasswordPage';
+import VerifyEmailPage from '@/features/auth/pages/VerifyEmailPage';
 import { AccountLayout } from '@/layouts/AccountLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -16,7 +24,6 @@ import PlaceholderPage from '@/pages/PlaceholderPage';
 const AdminPlaceholderPage = lazy(() => import('@/pages/PlaceholderPage'));
 
 const storePage = <PlaceholderPage contained />;
-const authPage = <PlaceholderPage />;
 const accountPage = <PlaceholderPage headingComponent="h2" />;
 const adminPage = <AdminPlaceholderPage headingComponent={null} />;
 
@@ -46,20 +53,25 @@ export const routes = [
           },
           {
             element: <AuthLayout />,
+            handle: { hideEmailBanner: true },
             children: [
               {
                 element: <GuestRoute />,
                 children: [
-                  page(paths.login, 'Accedi', authPage),
-                  page(paths.loginTwoFactor, 'Verifica in due passaggi', authPage),
-                  page(paths.register, 'Crea il tuo account', authPage),
-                  page(paths.forgotPassword, 'Password dimenticata', authPage),
+                  page(paths.login, 'Accedi', <LoginPage />),
+                  page(paths.loginTwoFactor, 'Verifica in due passaggi', <LoginTwoFactorPage />),
+                  page(paths.register, 'Crea il tuo account', <RegisterPage />),
+                  page(paths.forgotPassword, 'Password dimenticata', <ForgotPasswordPage />),
                 ],
               },
-              page(paths.resetPassword, 'Scegli una nuova password', authPage),
-              page(paths.verifyEmail, 'Conferma la tua email', authPage),
-              page(paths.confirmEmailChange, 'Conferma della nuova email', authPage),
-              page(paths.cancelEmailChange, 'Annulla il cambio email', authPage),
+              page(paths.resetPassword, 'Scegli una nuova password', <ResetPasswordPage />),
+              page(paths.verifyEmail, 'Conferma la tua email', <VerifyEmailPage />),
+              page(
+                paths.confirmEmailChange,
+                'Conferma della nuova email',
+                <ConfirmEmailChangePage />,
+              ),
+              page(paths.cancelEmailChange, 'Annulla il cambio email', <CancelEmailChangePage />),
             ],
           },
           {
