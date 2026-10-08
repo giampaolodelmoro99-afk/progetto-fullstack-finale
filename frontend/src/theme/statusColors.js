@@ -11,3 +11,9 @@ export const availabilityColors = {
   low_stock: 'warning.main',
   out_of_stock: 'text.secondary',
 };
+
+export const availabilityChipColors = {
+  available: { color: 'success.main', bgcolor: 'success.light' },
+  low_stock: { color: 'warning.main', bgcolor: 'warning.light' },
+  out_of_stock: { color: 'text.secondary', bgcolor: 'background.media' },
+};

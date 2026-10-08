@@ -13,6 +13,11 @@ import LoginTwoFactorPage from '@/features/auth/pages/LoginTwoFactorPage';
 import RegisterPage from '@/features/auth/pages/RegisterPage';
 import ResetPasswordPage from '@/features/auth/pages/ResetPasswordPage';
 import VerifyEmailPage from '@/features/auth/pages/VerifyEmailPage';
+import CatalogPage from '@/features/catalog/pages/CatalogPage';
+import ProductPage from '@/features/catalog/pages/ProductPage';
+import HomePage from '@/features/home/pages/HomePage';
+import LegalPage from '@/features/info/pages/LegalPage';
+import SupportPage from '@/features/info/pages/SupportPage';
 import { AccountLayout } from '@/layouts/AccountLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -27,8 +32,8 @@ const storePage = <PlaceholderPage contained />;
 const accountPage = <PlaceholderPage headingComponent="h2" />;
 const adminPage = <AdminPlaceholderPage headingComponent={null} />;
 
-function page(path, title, element) {
-  return { path, element, handle: { title } };
+function page(path, title, element, handle = {}) {
+  return { path, element, handle: { title, ...handle } };
 }
 
 export const routes = [
@@ -38,11 +43,11 @@ export const routes = [
       {
         element: <StoreLayout />,
         children: [
-          page(paths.home, 'Casa del Silicio', storePage),
-          page(paths.products, 'Catalogo', storePage),
-          page('/products/:slug', 'Prodotto', storePage),
-          page(paths.support, 'Assistenza', storePage),
-          page(paths.legal, 'Note legali', storePage),
+          page(paths.home, 'Casa del Silicio', <HomePage />),
+          page(paths.products, 'Catalogo', <CatalogPage />),
+          page('/products/:slug', 'Prodotto', <ProductPage />, { pageTitle: true }),
+          page(paths.support, 'Assistenza', <SupportPage />),
+          page(paths.legal, 'Note legali', <LegalPage />),
           {
             element: <CustomerRoute adminRedirect={paths.home} />,
             children: [

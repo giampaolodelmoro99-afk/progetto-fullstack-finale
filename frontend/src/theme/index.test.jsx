@@ -26,6 +26,7 @@ describe('theme', () => {
     expect(theme.typography.h1.fontFamily).toMatch(/^"Bodoni Moda Variable"/);
     expect(theme.typography.price.fontFamily).toMatch(/^"Bodoni Moda Variable"/);
     expect(theme.typography.body1.fontFamily).toMatch(/^"Manrope Variable"/);
+    expect(theme.typography.captionStrong.fontWeight).toBe(600);
   });
 
   it('defines the layout tokens', () => {
@@ -36,6 +37,8 @@ describe('theme', () => {
     expect(theme.layout.emptyStateTextMaxWidth).toBe('48ch');
     expect(theme.layout.footerTaglineMaxWidth).toBe('32ch');
     expect(theme.layout.navigationUnderlineOffset).toBe(6);
+    expect(theme.layout.heroTextMaxWidth).toBe('48ch');
+    expect(theme.layout.anchorScrollOffset).toBe(160);
     expect(theme.shape.borderRadius).toBe(4);
   });
 

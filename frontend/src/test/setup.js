@@ -7,6 +7,9 @@ import { installMatchMedia, resetViewport } from '@/test/viewport';
 
 installMatchMedia();
 
+window.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
 });

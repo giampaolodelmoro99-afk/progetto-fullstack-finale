@@ -22,6 +22,7 @@ export const components = {
         body1: 'p',
         body2: 'p',
         caption: 'span',
+        captionStrong: 'span',
         overline: 'span',
         inherit: 'p',
         price: 'p',
