@@ -37,6 +37,16 @@ class Category extends Model
     }
 
     /**
+     * Categories with at least one active product that is not soft deleted:
+     * the public menu hides the empty ones.
+     */
+    #[Scope]
+    protected function withActiveProducts(Builder $query): void
+    {
+        $query->whereHas('products', fn (Builder $products) => $products->where('is_active', true));
+    }
+
+    /**
      * Counts of the admin area: products_count (not deleted, active and
      * deactivated) and all_products_count (soft deleted included), which
      * decides whether the category can be deleted.

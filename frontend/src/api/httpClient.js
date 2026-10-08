@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { queryClient } from '@/api/queryClient';
-import { queryKeys } from '@/api/queryKeys';
+import { endUserSession } from '@/api/session';
+
+let activeQueryClient = queryClient;
+
+export function setActiveQueryClient(client) {
+  activeQueryClient = client;
+}
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -20,7 +26,7 @@ async function handleResponseError(error) {
   const config = error.config;
 
   if (status === 401) {
-    queryClient.removeQueries({ queryKey: queryKeys.me });
+    endUserSession(activeQueryClient);
   }
 
   if (status === 419 && config && !config.csrfRetried) {

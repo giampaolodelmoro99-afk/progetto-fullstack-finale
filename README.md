@@ -295,7 +295,7 @@ Oltre a questi, il seeder crea 20 clienti casuali (`nome.cognome@esempio.it`, st
 
 - **Carrello di Giulia**: Cuffie Aria, Caricatore Brezza 65 W ×2, Cavo Seta USB-C 1 m e la Radio Onda Portatile esaurita: 5 articoli e checkout bloccato finché non si rimuove la riga esaurita.
 - **Ordini di Giulia**: consegnati, annullato con rimborso, spedito, pagato (da spedire) e un tentativo di pagamento rifiutato, visibile solo all'admin.
-- **Catalogo**: 50 prodotti su cinque categorie, "Viaggio" senza prodotti (si può eliminare dall'admin), alcuni esauriti, negli ultimi pezzi o disattivati, e sei novità degli ultimi 30 giorni, tra cui le Cuffie Aria dell'hero della home.
+- **Catalogo**: 50 prodotti su cinque categorie, "Viaggio" senza prodotti (non compare nel menu del negozio e si può eliminare dall'admin), alcuni esauriti, negli ultimi pezzi o disattivati, e sei novità degli ultimi 30 giorni, tra cui le Cuffie Aria dell'hero della home.
 - **Account eliminato**: un cliente che ha eliminato l'account, anonimizzato come fa `DELETE /api/v1/me` (nome, email fittizia, nessun indirizzo, carrello o attività), con il suo ordine consegnato conservato.
 - **Dashboard admin**: ordini pagati anche nel mese corrente, ordini da spedire, scorte basse e un ordine "In attesa" con il pagamento in corso.
 
@@ -346,6 +346,15 @@ docker compose exec app php artisan orders:reconcile-pending
 ```
 
 cerca gli ordini in attesa creati da più di 15 minuti, chiede di nuovo l'esito dell'addebito al gateway con la stessa chiave di idempotenza (nessun secondo addebito) e completa l'ordine come farebbe il checkout: pagato, con carrello svuotato ed email di conferma, oppure annullato con le scorte ripristinate. Si può rilanciare senza effetti doppi; un errore del gateway lascia l'ordine in attesa per l'esecuzione successiva. Il progetto non ha uno scheduler: il comando si lancia a mano (in produzione andrebbe pianificato). Sui dati demo, passati 15 minuti dal seeding, annulla l'ordine «In attesa» creato dal seeder, perché il gateway finto non ha mai ricevuto il suo addebito, e restituisce i 2 pezzi di Cavo Seta USB-C 1 m che quell'ordine aveva scalato: le scorte tornano quelle del catalogo e le etichette di disponibilità dei prodotti scelti per la demo non cambiano.
+
+## Licenze di terze parti
+
+| Componente | Uso | Licenza | Fonte ufficiale |
+|---|---|---|---|
+| Bodoni Moda (pacchetto `@fontsource-variable/bodoni-moda` 5.3.0) | titoli e prezzi del frontend, self-hosted | SIL Open Font License 1.1 | https://github.com/indestructible-type/Bodoni |
+| Manrope (pacchetto `@fontsource-variable/manrope` 5.3.0) | interfaccia e testi del frontend, self-hosted | SIL Open Font License 1.1 | https://github.com/sharanda/manrope |
+
+La licenza è quella dichiarata nel `package.json` (`OFL-1.1`) e nel file `LICENSE` di ciascun pacchetto installato. I font sono serviti da Vite insieme al frontend: nessuna richiesta a Google Fonts o ad altri CDN.
 
 ## Sviluppi futuri
 

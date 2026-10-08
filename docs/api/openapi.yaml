@@ -187,7 +187,7 @@ paths:
       operationId: listCategories
       security: []
       summary: Elenco delle categorie
-      description: Tutte le categorie, anche senza prodotti, ordinate per `id`.
+      description: Solo le categorie con almeno un prodotto attivo e non eliminato, ordinate per `id`. Le categorie vuote o con soli prodotti disattivati o eliminati non compaiono; l'elenco admin (`GET /admin/categories`) resta completo.
       responses:
         '200':
           description: Categorie.

@@ -86,6 +86,7 @@ Una feature contiene tutto ciò che le appartiene, compresi i suoi test. Un elem
 export const paths = {
   home: '/',
   products: '/products',
+  productSearch: (query) => `/products?${new URLSearchParams({ search: query })}`,
   product: (slug) => `/products/${slug}`,
   category: (slug) => `/products?category=${slug}`,
   newArrivals: '/products?new=1',
@@ -138,8 +139,9 @@ Due pagine in `StoreLayout`, con un'ancora (`id`) su ogni sezione. Le note legal
 
 Dal mockup `01-negozio.pdf`:
 
-- Le categorie non sono un elenco fisso: menu principale, `Drawer` mobile e footer le leggono con `useCategories()` da `GET /categories`, nell'ordine ricevuto. Durante il caricamento, Skeleton al posto delle voci; in caso di errore restano solo "Novità" e le altre voci fisse, senza messaggio.
+- Le categorie non sono un elenco fisso: menu principale, `Drawer` mobile e footer le leggono con `useCategories()` da `GET /categories`, nell'ordine ricevuto. L'API restituisce solo le categorie con almeno un prodotto attivo (nei dati demo cinque: "Viaggio" non compare); il frontend non filtra. Durante il caricamento, Skeleton al posto delle voci; in caso di errore restano solo "Novità" e le altre voci fisse, senza messaggio.
 - Menu principale: "Novità" porta a `paths.newArrivals`; ogni categoria porta a `paths.category(slug)`.
+- Campo di ricerca dell'header: l'invio porta a `paths.productSearch(testo)` (`/products?search=…`, parametro `search` di `GET /products`); il catalogo della Fase 8 legge `search` dalla query string insieme agli altri filtri.
 - Footer, colonna **Categorie**: le categorie ricevute, con `paths.category(slug)`.
 - Footer, colonna **Assistenza**:
   - "Spedizioni e consegne" → `/assistenza#spedizioni`
@@ -298,7 +300,7 @@ Dal mockup `03-account.pdf`.
 
 - **Menu account nell'header:** per l'ospite l'icona porta a `paths.login`; per l'utente autenticato apre un menu con nome ed email e le voci Profilo, Indirizzi, I miei ordini, Sicurezza ed Esci. Le stesse voci formano la navigazione di `AccountLayout` (lista laterale su desktop, tab su mobile), definite una sola volta in un array condiviso con etichetta, icona e percorso. La voce attiva si ricava dalla rotta corrente.
 - **Voci per un admin:** nel menu account dell'header e nella navigazione di `AccountLayout` (lista laterale e `Tabs`) le voci «Indirizzi» e «I miei ordini» sono nascoste, perché un admin non può fare acquisti e non ha ordini propri; compare invece la voce «Amministrazione», che porta al pannello admin (`paths.admin`). L'array condiviso delle voci indica per ognuna a chi è visibile (clienti, admin o tutti), così menu e layout filtrano allo stesso modo. Le rotte `/account/addresses`, `/account/orders` e `/account/orders/:orderId` restano protette da `CustomerRoute`, che per un admin reindirizza a `/account/profile`.
-- **Esci:** `logout()` di `useAuth`, poi navigazione alla home.
+- **Esci:** `useLogoutToHome()` di `features/auth/hooks` porta prima alla home e poi chiama `logout()` di `useAuth`. L'ordine evita che, in una pagina protetta, il redirect al login di `ProtectedRoute` (che scatta appena l'utente diventa ospite) prevalga sulla navigazione alla home. Se il logout fallisce l'utente resta autenticato.
 - **Profilo:**
   - "Dati personali": form del nome.
   - Email con lo stato di verifica da `user.email_verified_at`.
@@ -319,7 +321,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 
 ### Layout e navigazione
 
-- `AdminLayout` fuori da `StoreLayout`, dentro `AdminRoute`. Le voci Dashboard, Prodotti, Categorie e Ordini sono definite una sola volta in `features/admin/navigation.js` con etichetta, icona e percorso; la voce attiva si ricava dalla rotta corrente (Prodotti resta attiva anche su nuovo e modifica prodotto). In fondo "Vai al negozio" (`paths.home`) ed "Esci" (`logout()` e poi la home).
+- `AdminLayout` fuori da `StoreLayout`, dentro `AdminRoute`. Le voci Dashboard, Prodotti, Categorie e Ordini sono definite una sola volta in `features/admin/navigation.js` con etichetta, icona e percorso; la voce attiva si ricava dalla rotta corrente (Prodotti resta attiva anche su nuovo e modifica prodotto). In fondo "Vai al negozio" (`paths.home`) ed "Esci" (`useLogoutToHome()`, come nel negozio).
 - Il titolo della pagina nell'`AppBar` arriva dalla rotta (`handle.title` letto con `useMatches()`): Dashboard, Prodotti, Nuovo prodotto, Modifica prodotto, Categorie, Ordini, Dettaglio ordine.
 - Il Drawer mobile si chiude dopo la navigazione.
 
@@ -347,7 +349,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 - **Salvataggio:**
   - nuovo: `POST /admin/products`, poi `reset()` con i valori salvati, Snackbar «Prodotto creato» e navigazione a `paths.adminProductEdit(id)` con `replace`, così il blocker non scatta e le immagini diventano disponibili
   - modifica: `PATCH /admin/products/{id}` con i campi e `images` (id e `alt` nell'ordine del form), poi `reset()` con la risposta e Snackbar «Modifiche salvate»
-  - entrambi invalidano `admin.products`, `admin.dashboard`, `admin.categories` (cambiano `products_count` e `can_delete`) e `products`; lo stesso vale per l'eliminazione di un prodotto
+  - entrambi invalidano `admin.products`, `admin.dashboard`, `admin.categories` (cambiano `products_count` e `can_delete`), `products` e `categories` (`GET /categories` elenca solo le categorie con almeno un prodotto attivo: una categoria può comparire o sparire dal menu del negozio quando un prodotto viene creato, attivato, disattivato o spostato); lo stesso vale per l'eliminazione di un prodotto
 - **Annulla:** nella modifica riporta il form ai valori salvati (`reset()`) ed è disabilitato senza modifiche; nel nuovo prodotto torna a `paths.adminProducts`.
 - **Modifiche non salvate:** `useBlocker` di React Router, attivo quando `isDirty` e non è in corso un salvataggio, apre il Dialog di conferma; "Esci senza salvare" chiama `blocker.proceed()`, "Resta sulla pagina" `blocker.reset()`. `useBeforeUnload` copre chiusura e ricarica della scheda. Vale per le pagine di form, non per i dialog delle categorie.
 - **Immagini** (solo in modifica; nel nuovo prodotto la sezione mostra «Potrai aggiungere le immagini dopo il primo salvataggio»):
@@ -440,7 +442,7 @@ export function useProducts(filters) {
 - `axios.create` con `baseURL: import.meta.env.VITE_API_URL`, `withCredentials: true`, `withXSRFToken: true` e header `Accept: application/json`.
 - Funzione `ensureCsrfCookie()` che chiama `GET /sanctum/csrf-cookie` prima di login, registrazione e recupero password.
 - Interceptor di risposta:
-  - 401: rimuove l'utente dalla cache (`queryKeys.me`); il redirect lo gestiscono le rotte protette.
+  - 401: chiama `endUserSession()` sul `QueryClient` registrato (sezione "Autenticazione"): `me` diventa `null`, `AuthProvider` vede subito un ospite e il redirect lo gestiscono le rotte protette.
   - 419: richiede di nuovo il cookie CSRF e ripete la richiesta una sola volta.
   - 423: il backend chiede di confermare l'identità. L'interceptor apre il `ConfirmIdentityDialog` tramite `IdentityConfirmationProvider`, attende l'esito e ripete la richiesta originale; se l'utente annulla, la richiesta fallisce con un errore gestito. La descrizione mostrata nel dialog arriva da una proprietà personalizzata della configurazione della richiesta (`identityPrompt`), con un testo generico come ripiego.
 - `IdentityConfirmationProvider` espone anche `confirmIdentity({ prompt })`, che apre il dialog senza una richiesta fallita e restituisce una Promise risolta alla conferma e rifiutata all'annullamento.
@@ -452,11 +454,12 @@ export function useProducts(filters) {
 
 ## Autenticazione
 
-- `AuthProvider` basato sulla query `me` (`GET /api/v1/me`); un 401 significa ospite, non errore.
+- `AuthProvider` basato sulla query `me` (`GET /api/v1/me`, `staleTime: Infinity`); un 401 significa ospite, non errore. `AppProviders` registra il `QueryClient` in uso nel client HTTP (`setActiveQueryClient`), così l'interceptor del 401 imposta `me` a `null` nella cache giusta, anche nei test.
 - Hook `useAuth()` che restituisce `{ user, isAuthenticated, isAdmin, isEmailVerified, isLoading, login, logout, register }`.
 - Il login può rispondere con la richiesta del secondo fattore: in quel caso si naviga a `/login/two-factor` (dettagli nella skill `account-security`).
 - Durante il caricamento iniziale dell'utente le rotte protette mostrano un indicatore, non un redirect.
-- Dopo login e logout si invalidano `me` e `cart`.
+- Dopo il login si invalidano `me` e `cart`.
+- Fine della sessione: quando un utente autenticato diventa ospite (logout riuscito, oppure un 401 mentre `me` contiene un utente, cioè sessione scaduta) `endUserSession()` di `api/session.js` svuota tutta la cache tranne `me` (query e mutation, comprese quelle pubbliche) e imposta `me` a `null`, così su un dispositivo condiviso chi accede dopo non vede per un attimo ordini, sicurezza o dati admin del precedente. Un 401 ricevuto da un ospite (`me` già `null` o non ancora caricato) imposta solo `me` a `null` e conserva la cache, così le query pubbliche (categorie, impostazioni) non vengono rilette.
 
 ## Form
 

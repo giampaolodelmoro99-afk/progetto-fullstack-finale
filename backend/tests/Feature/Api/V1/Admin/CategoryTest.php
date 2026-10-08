@@ -153,10 +153,15 @@ it('answers 404 for a missing category', function () {
     $this->deleteJson('/api/v1/admin/categories/999999')->assertNotFound();
 });
 
-it('lists the new category in the public menu, last', function () {
-    Category::factory()->create(['name' => 'Audio']);
+it('lists the new category in the public menu, last, once it has an active product', function () {
+    $audio = Category::factory()->create(['name' => 'Audio']);
+    Product::factory()->for($audio)->create();
 
-    $this->postJson('/api/v1/admin/categories', ['name' => 'Viaggio'])->assertCreated();
+    $id = $this->postJson('/api/v1/admin/categories', ['name' => 'Viaggio'])->assertCreated()->json('data.id');
+
+    expect(collect($this->getJson('/api/v1/categories')->json('data'))->pluck('slug')->all())->toBe(['audio']);
+
+    Product::factory()->for(Category::findOrFail($id))->create();
 
     expect(collect($this->getJson('/api/v1/categories')->json('data'))->pluck('slug')->all())->toBe(['audio', 'viaggio']);
 });

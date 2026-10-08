@@ -1,10 +1,10 @@
 import { http, HttpResponse } from 'msw';
-import { afterEach, describe, expect, it } from 'vitest';
-import { httpClient } from '@/api/httpClient';
-import { queryClient } from '@/api/queryClient';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { httpClient, setActiveQueryClient } from '@/api/httpClient';
 import { queryKeys } from '@/api/queryKeys';
 import { apiUrl } from '@/test/mocks/handlers';
 import { server } from '@/test/mocks/server';
+import { createTestQueryClient } from '@/test/renderWithProviders';
 
 function countingCsrfHandler(counter) {
   return http.get(apiUrl('/sanctum/csrf-cookie'), () => {
@@ -14,6 +14,13 @@ function countingCsrfHandler(counter) {
 }
 
 describe('httpClient', () => {
+  let queryClient;
+
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+    setActiveQueryClient(queryClient);
+  });
+
   afterEach(() => {
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
   });
@@ -73,7 +80,7 @@ describe('httpClient', () => {
     expect(attempts).toBe(2);
   });
 
-  it('removes the current user from the cache after a 401', async () => {
+  it('marks the user as a guest in the active query client after a 401', async () => {
     queryClient.setQueryData(queryKeys.me, { id: 1, name: 'Mario Rossi' });
     server.use(
       http.get(apiUrl('/api/v1/me'), () =>
@@ -84,7 +91,26 @@ describe('httpClient', () => {
     await expect(httpClient.get('/api/v1/me')).rejects.toMatchObject({
       response: { status: 401 },
     });
-    expect(queryClient.getQueryData(queryKeys.me)).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.me)).toBeNull();
+  });
+
+  it('only touches the query client registered last', async () => {
+    const previousClient = queryClient;
+    previousClient.setQueryData(queryKeys.me, { id: 1, name: 'Mario Rossi' });
+    const currentClient = createTestQueryClient();
+    currentClient.setQueryData(queryKeys.me, { id: 2, name: 'Sara Galli' });
+    setActiveQueryClient(currentClient);
+    server.use(
+      http.get(apiUrl('/api/v1/cart'), () =>
+        HttpResponse.json({ message: 'Unauthenticated.' }, { status: 401 }),
+      ),
+    );
+
+    await expect(httpClient.get('/api/v1/cart')).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+    expect(currentClient.getQueryData(queryKeys.me)).toBeNull();
+    expect(previousClient.getQueryData(queryKeys.me)).toEqual({ id: 1, name: 'Mario Rossi' });
   });
 
   it('passes other errors through unchanged', async () => {

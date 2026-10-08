@@ -6,8 +6,8 @@ use App\Models\Category;
 use Illuminate\Database\Seeder;
 
 /**
- * The six demo categories, in menu order. "Viaggio" has no products: it shows
- * the empty category in the shop and the allowed deletion in the admin area.
+ * The six demo categories, in menu order. "Viaggio" has no products: the shop
+ * menu hides it and the admin area shows the allowed deletion.
  */
 class CategorySeeder extends Seeder
 {
