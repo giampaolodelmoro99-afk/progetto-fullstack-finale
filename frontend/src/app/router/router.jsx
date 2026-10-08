@@ -13,8 +13,11 @@ import LoginTwoFactorPage from '@/features/auth/pages/LoginTwoFactorPage';
 import RegisterPage from '@/features/auth/pages/RegisterPage';
 import ResetPasswordPage from '@/features/auth/pages/ResetPasswordPage';
 import VerifyEmailPage from '@/features/auth/pages/VerifyEmailPage';
+import CartPage from '@/features/cart/pages/CartPage';
 import CatalogPage from '@/features/catalog/pages/CatalogPage';
 import ProductPage from '@/features/catalog/pages/ProductPage';
+import CheckoutPage from '@/features/checkout/pages/CheckoutPage';
+import CheckoutSuccessPage from '@/features/checkout/pages/CheckoutSuccessPage';
 import HomePage from '@/features/home/pages/HomePage';
 import LegalPage from '@/features/info/pages/LegalPage';
 import SupportPage from '@/features/info/pages/SupportPage';
@@ -28,7 +31,6 @@ import PlaceholderPage from '@/pages/PlaceholderPage';
 
 const AdminPlaceholderPage = lazy(() => import('@/pages/PlaceholderPage'));
 
-const storePage = <PlaceholderPage contained />;
 const accountPage = <PlaceholderPage headingComponent="h2" />;
 const adminPage = <AdminPlaceholderPage headingComponent={null} />;
 
@@ -51,9 +53,13 @@ export const routes = [
           {
             element: <CustomerRoute adminRedirect={paths.home} />,
             children: [
-              page(paths.cart, 'Il tuo carrello', storePage),
-              page(paths.checkout, 'Checkout', storePage),
-              page('/checkout/success/:orderId', 'Grazie per il tuo ordine', storePage),
+              page(paths.cart, 'Il tuo carrello', <CartPage />),
+              page(paths.checkout, 'Checkout', <CheckoutPage />),
+              page(
+                '/checkout/success/:orderId',
+                'Grazie per il tuo ordine',
+                <CheckoutSuccessPage />,
+              ),
             ],
           },
           {

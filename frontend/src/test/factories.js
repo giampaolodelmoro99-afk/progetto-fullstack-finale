@@ -75,6 +75,84 @@ export function buildCart(overrides = {}) {
   };
 }
 
+export function buildCartItem(overrides = {}) {
+  const { product, ...rest } = overrides;
+  const id = nextId();
+  const quantity = rest.quantity ?? 1;
+  const unitPrice = rest.unit_price ?? 34900;
+
+  return {
+    id,
+    quantity,
+    max_quantity: 10,
+    exceeds_stock: false,
+    is_purchasable: true,
+    unit_price: unitPrice,
+    line_total: unitPrice * quantity,
+    product: {
+      name: 'Cuffie Aria',
+      slug: `cuffie-aria-${id}`,
+      category: { name: 'Audio', slug: 'audio' },
+      cover: { url: `https://cdn.esempio.it/products/${id}.webp`, alt: 'Cuffie Aria grafite' },
+      availability: { status: 'available', label: 'Disponibile' },
+      ...product,
+    },
+    ...rest,
+  };
+}
+
+export function buildAddress(overrides = {}) {
+  return {
+    id: nextId(),
+    full_name: 'Giulia Ferri',
+    street: 'Via San Martino 42',
+    city: 'Pisa',
+    postal_code: '56125',
+    province: 'PI',
+    country: 'IT',
+    phone: '+39 333 123 4567',
+    is_default: true,
+    ...overrides,
+  };
+}
+
+export function buildOrder(overrides = {}) {
+  return {
+    id: 42,
+    number: 'ORD-2026-000042',
+    status: { value: 'paid', label: 'Pagato' },
+    created_at: '2026-09-28T18:41:00+02:00',
+    paid_at: '2026-09-28T18:42:00+02:00',
+    subtotal: 49600,
+    shipping_cost: 0,
+    total: 49600,
+    items_count: 4,
+    can_cancel: true,
+    shipping_address: {
+      full_name: 'Giulia Ferri',
+      street: 'Via San Martino 42',
+      postal_code: '56125',
+      city: 'Pisa',
+      province: 'PI',
+      country: 'IT',
+      phone: '+39 333 123 4567',
+    },
+    payment: { card_last_four: '4242' },
+    items: [
+      {
+        product_name: 'Cuffie Aria',
+        product_sku: 'CDS-AUD-001',
+        unit_price: 34900,
+        quantity: 1,
+        line_total: 34900,
+        cover: { url: 'https://cdn.esempio.it/products/cuffie-aria.webp', alt: 'Cuffie Aria' },
+      },
+    ],
+    status_history: [],
+    ...overrides,
+  };
+}
+
 export function buildProduct(overrides = {}) {
   const id = nextId();
 

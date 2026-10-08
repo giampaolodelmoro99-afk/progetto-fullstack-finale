@@ -1,8 +1,10 @@
 import { http, HttpResponse } from 'msw';
 import {
+  buildAddress,
   buildAdminSettings,
   buildCart,
   buildCategories,
+  buildOrder,
   buildProductDetail,
   buildProductPage,
   buildShopSettings,
@@ -28,6 +30,10 @@ export const handlers = [
   ),
   http.get(apiUrl('/api/v1/products/:slug/related'), () => HttpResponse.json({ data: [] })),
   http.get(apiUrl('/api/v1/cart'), () => HttpResponse.json({ data: buildCart() })),
+  http.get(apiUrl('/api/v1/addresses'), () => HttpResponse.json({ data: [buildAddress()] })),
+  http.get(apiUrl('/api/v1/orders/:orderId'), ({ params }) =>
+    HttpResponse.json({ data: buildOrder({ id: Number(params.orderId) }) }),
+  ),
   http.get(apiUrl('/api/v1/shop/settings'), () => HttpResponse.json({ data: buildShopSettings() })),
   http.get(apiUrl('/api/v1/shop/support'), () =>
     HttpResponse.json({ data: buildSupportSections() }),

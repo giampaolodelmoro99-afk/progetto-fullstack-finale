@@ -1,6 +1,7 @@
 export const queryKeys = {
   me: ['me'],
   cart: ['cart'],
+  addresses: ['addresses'],
   categories: ['categories'],
   products: {
     all: ['products'],

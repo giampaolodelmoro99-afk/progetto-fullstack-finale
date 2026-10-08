@@ -15,6 +15,9 @@ export function StoreLayout() {
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.default',
+        '&:has([data-mobile-action-bar])': {
+          pb: (theme) => `${theme.layout.mobileActionBarHeight}px`,
+        },
       }}
     >
       <StoreHeader />

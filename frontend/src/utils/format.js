@@ -72,3 +72,11 @@ export function formatMonthYear(month) {
 
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+export function formatItemCount(count) {
+  return `${count} ${count === 1 ? 'articolo' : 'articoli'}`;
+}
+
+export function formatPostalLine(address) {
+  return `${address.postal_code} ${address.city} (${address.province}), Italia`;
+}

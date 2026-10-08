@@ -25,6 +25,8 @@ export const layout = {
   assistantPanelMaxHeight: 'calc(100vh - 160px)',
   heroTextMaxWidth: '48ch',
   anchorScrollOffset: 160,
+  mobileActionBarHeight: 80,
+  stickySummaryTop: 120,
 };
 
 const mixins = {

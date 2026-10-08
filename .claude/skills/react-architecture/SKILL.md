@@ -35,7 +35,7 @@ src/
 │   ├── settings/             # api/ hooks/: useShopSettings, useAdminSettings, useSupportContent
 │   ├── assistant/            # widget dell'assistente AI: api/ hooks/ components/ utils/ (sezione "Assistente AI")
 │   └── admin/                # navigation.js; dashboard/ products/ categories/ orders/, ognuna con api/ hooks/ components/ pages/
-├── components/               # condivisi: feedback/, form/, data-display/, navigation/
+├── components/               # condivisi: feedback/, form/, data-display/, layout/, navigation/
 ├── layouts/                  # StoreLayout, AuthLayout, AccountLayout, AdminLayout
 ├── hooks/                    # hook condivisi, es. useDebouncedValue
 ├── theme/
@@ -239,25 +239,30 @@ features/assistant/
 Dal mockup `02-acquisto.pdf`. Tutti i valori arrivano dalla `CartResource` (skill `ecommerce-domain`): il frontend non ricalcola totali, conteggi o disponibilità.
 
 - Titolo "Il tuo carrello" con "N articoli" da `summary.items_count`; lo stesso valore alimenta il badge dell'AppBar.
-- Ogni riga: selettore di quantità da 1 a `max_quantity`, prezzo unitario "cad." e `line_total`. Le righe non acquistabili (`is_purchasable: false`) mostrano l'etichetta di disponibilità al posto del selettore, "—" al posto del totale e un avviso con "Rimuovi dal carrello".
+- Ogni riga: selettore di quantità da 1 a `max_quantity`, prezzo unitario "cad." e `line_total`. Le righe non acquistabili (`is_purchasable: false`) mostrano l'etichetta di disponibilità al posto del selettore, "—" al posto del totale e un avviso con titolo «Prodotto esaurito» quando `availability.status` è `out_of_stock`, «Prodotto non disponibile» negli altri casi (prodotto disattivato o eliminato), testo «Questo prodotto non è più disponibile. Rimuovilo dal carrello per procedere al checkout.» e "Rimuovi dal carrello". Le righe acquistabili oltre la disponibilità (`exceeds_stock`) mostrano l'etichetta di disponibilità e l'avviso «È disponibile solo 1 pezzo: riduci la quantità per procedere al checkout.» oppure «Sono disponibili solo N pezzi: …»; il selettore mostra comunque la quantità attuale. Nessun testo mette un articolo davanti al nome del prodotto.
 - Riepilogo con subtotale, spedizione ("Gratuita" quando è 0), totale e, se `free_shipping_remaining` è maggiore di 0, la barra "Ti mancano … per la spedizione gratuita".
-- "Procedi al checkout" disabilitato quando `can_checkout` è false, con il motivo accanto ("Rimuovi i prodotti esauriti per procedere al checkout").
+- "Procedi al checkout" disabilitato quando `can_checkout` è false, con il motivo accanto: «Rimuovi i prodotti esauriti per procedere al checkout.» se c'è una riga non acquistabile, altrimenti «Riduci le quantità indicate per procedere al checkout.».
 - Carrello vuoto: messaggio con "Scopri il negozio" e sezione "Potrebbero piacerti" con `GET /products?in_stock=1&sort=newest&per_page=4`.
 - Modifica della quantità e rimozione sono mutation che aggiornano `cart` con `setQueryData` dalla `CartResource` della risposta, senza invalidare.
 
 ## Checkout (`/checkout`)
 
 - Tre passi: Indirizzo, Pagamento, Riepilogo. Il riepilogo dell'ordine a lato (a scomparsa su mobile) legge `cart`.
+- **Ingresso:** solo all'apertura della pagina (primo carrello disponibile), un carrello vuoto o con `can_checkout` falso porta a `paths.cart` con `replace`. Dopo l'ingresso il controllo non scatta più: un carrello che cambia durante il checkout mostra gli avvisi del passo 3, e un ordine riuscito porta sempre alla conferma anche se il carrello riletto è vuoto.
+- **Mobile:** la barra fissa in fondo (`components/layout/MobileActionBar`, condivisa con il carrello) contiene il pulsante principale del passo, che sotto `md` non si ripete nella card; "Indietro" resta nella card.
+- Gli indirizzi si leggono con `useAddresses()` (`queryKeys.addresses`) e il nuovo indirizzo si salva con `POST /addresses` tramite `AddressForm` di `features/account`, che lo riuserà la Fase 9.
 - Email non verificata: al posto del passo 1 compare l'invito a confermarla con "Invia di nuovo l'email".
 - **Stato del checkout:** passo corrente, indirizzo scelto, dati della carta e accettazione delle condizioni vivono in un `useReducer` di `CheckoutPage`, solo in memoria. Ricaricando la pagina il checkout riparte dal passo 1 con i campi vuoti.
 - **Passo 1, indirizzo:** card selezionabili degli indirizzi dell'utente (predefinito preselezionato) e form "Nuovo indirizzo" con le regole della skill `ecommerce-domain` replicate nello schema Zod. Il campo "Paese" mostra "Italia" e non è modificabile.
 - **Passo 2, pagamento:** intestatario, numero, scadenza `MM/AA` e CVC, con validazione Zod dello stesso formato del backend; nota "Ambiente dimostrativo: nessun addebito reale."
-- **Passo 3, riepilogo:** indirizzo e carta ("Carta che termina con 4242") con "Modifica", prodotti, totali, checkbox "Ho letto e accetto le condizioni di vendita" (link a `paths.legalSection('condizioni-di-vendita')`) e pulsante "Paga {totale}". "Paga" è disabilitato senza accettazione o quando `can_checkout` è false; in quel caso compare l'avviso "Disponibilità cambiata" con "Torna al carrello".
+- **Passo 3, riepilogo:** indirizzo e carta ("Carta che termina con 4242") con "Modifica", prodotti, totali, checkbox "Ho letto e accetto le condizioni di vendita" (link a `paths.legalSection('condizioni-di-vendita')`) e pulsante "Paga {totale}". "Paga" è disabilitato senza accettazione o quando `can_checkout` è false; in quel caso compare l'avviso "Disponibilità cambiata" con «Aggiorna il carrello per completare l'ordine.» e "Torna al carrello".
 - **Esiti di `POST /checkout`:**
   - 201: si svuota lo stato della carta, si invalidano `cart` e `orders` e si naviga a `paths.checkoutSuccess(order.id)`
   - 402: `Alert` "Pagamento non riuscito" con "Modifica la carta", che torna al passo 2 conservando i dati in memoria
-  - 409: si invalida `cart` e compare "Disponibilità cambiata" con "Torna al carrello"
-  - 422: errori mappati sui campi del passo corrispondente
+  - 409 `insufficient_stock`: si invalida `cart` e compare "Disponibilità cambiata" con il messaggio ricevuto, l'elenco dei prodotti da `products` («{nome}: disponibile 1 su M richiesti», «{nome}: disponibili N su M richiesti», «{nome}: non più disponibile») e "Torna al carrello"; 409 `cart_empty`: il messaggio ricevuto con "Torna al carrello"
+  - 403 (email non verificata): si rilegge `me` e compare l'invito a confermare l'email
+  - 422: errori mappati sui campi del passo corrispondente (`payment.*` sul passo 2, `terms_accepted` sotto la checkbox); un 422 su `address_id` torna al passo 1 con il messaggio e rilegge gli indirizzi
+  - altri errori (500, rete): `Alert` con il messaggio normalizzato, restando al passo 3
 
 ### Dati della carta
 
@@ -271,7 +276,7 @@ Dal mockup `02-acquisto.pdf`. Tutti i valori arrivano dalla `CartResource` (skil
 
 - Legge `GET /orders/{orderId}` con l'hook del dettaglio ordine: la pagina funziona anche ricaricandola e non dipende dallo stato del checkout.
 - Mostra "Grazie per il tuo ordine" con l'email dell'utente, numero, data, stato, "Carta che termina con {card_last_four}", indirizzo, prodotti e totali; pulsanti "Vedi il tuo ordine" (`paths.accountOrder(id)`) e "Continua lo shopping".
-- 404 (ordine non pagato o di un altro utente): stato d'errore con link agli ordini.
+- 404 (ordine non pagato o di un altro utente): stato vuoto «Non abbiamo trovato questo ordine», «Controlla il link oppure cerca l'ordine tra i tuoi ordini.» e "I miei ordini" (`paths.accountOrders`).
 
 ## Accesso (`features/auth`)
 
@@ -386,6 +391,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 export const queryKeys = {
   me: ['me'],
   cart: ['cart'],
+  addresses: ['addresses'],
   categories: ['categories'],
   products: {
     all: ['products'],
