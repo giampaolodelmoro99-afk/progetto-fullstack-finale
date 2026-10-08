@@ -10,11 +10,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 final class CategoryController extends Controller
 {
     /**
-     * Every category, empty ones included, by id: new ones come last.
+     * The categories with at least one active product, by id: new ones come
+     * last. The admin list keeps every category.
      */
     public function index(): AnonymousResourceCollection
     {
-        return CategoryResource::collection(Category::query()->orderBy('id')->get());
+        return CategoryResource::collection(Category::query()->withActiveProducts()->orderBy('id')->get());
     }
 
     public function show(Category $category): CategoryResource

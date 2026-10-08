@@ -24,6 +24,24 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='style']",
+          message: "Usa la prop sx con i token del tema invece dell'attributo style.",
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['./**/*.css', '../**/*.css', '@/**/*.css'],
+              message: 'Niente file CSS del progetto: lo stile passa dal tema e dalla prop sx.',
+            },
+          ],
+        },
+      ],
     },
   },
   {
@@ -33,7 +51,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/test/**/*.{js,jsx}', 'src/**/*.test.{js,jsx}'],
+    files: ['src/test/**/*.{js,jsx}', 'src/**/*.test.{js,jsx}', 'src/app/router/router.jsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

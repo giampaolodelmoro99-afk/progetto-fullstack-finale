@@ -173,7 +173,7 @@ Parametri, validati da `IndexProductRequest`:
 
 ### Categorie (`GET /categories`)
 
-- Tutte le categorie, anche quelle senza prodotti (es. "Viaggio" nei dati demo), ordinate per `id`: le nuove compaiono in fondo.
+- Solo le categorie con almeno un prodotto attivo e non eliminato, ordinate per `id`: le nuove compaiono in fondo. Una categoria vuota o con soli prodotti disattivati o eliminati (es. "Viaggio" nei dati demo) non compare nel negozio; l'elenco admin `GET /admin/categories` resta completo. Una categoria nascosta dal menu esiste ancora: `GET /categories/{slug}` risponde 200 e `GET /products?category={slug}` restituisce un elenco vuoto, non 422 (il 422 vale solo per uno slug inesistente).
 - Menu, footer e categorie in evidenza del negozio le leggono da qui, non da un elenco fisso.
 - L'indirizzo del catalogo di una categoria è `/products?category={slug}`.
 
@@ -579,7 +579,7 @@ Il negozio è **Casa del Silicio**: elettronica e accessori tech della propria l
 | `casa-smart` | Casa smart | Luci e clima |
 | `viaggio` | Viaggio | Custodie e adattatori per chi viaggia |
 
-"Viaggio" non ha prodotti: mostra la categoria vuota nel negozio e l'eliminazione consentita nell'admin.
+"Viaggio" non ha prodotti: non compare nel menu del negozio (`GET /categories` restituisce solo le categorie con prodotti attivi) e mostra l'eliminazione consentita nell'admin.
 
 ### Prodotti
 

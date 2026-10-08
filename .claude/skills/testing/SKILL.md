@@ -193,7 +193,7 @@ Regole nella skill `ai-assistant`. `AiAssistant` sostituito con `FakeAiAssistant
   - slug generato dal nome alla creazione (`Casa smart` → `casa-smart`) e invariato dopo un `PATCH` che cambia il nome o invia `slug`
   - 422 per nome duplicato, per un nome che genera uno slug già usato, per un nome di 51 caratteri e una descrizione di 256; rinominare una categoria con la sola differenza di maiuscole è valido
   - `DELETE`: 204 senza prodotti; 409 con un prodotto; 409 con un solo prodotto eliminato con soft delete; `can_delete` e `products_count` coerenti con questi casi
-  - `GET /categories` pubblico: comprende una categoria senza prodotti, ordinate per `id`
+  - `GET /categories` pubblico: solo le categorie con almeno un prodotto attivo, ordinate per `id`; escluse una categoria vuota, una con soli prodotti disattivati e una con soli prodotti eliminati; `GET /admin/categories` le comprende tutte
 - Prodotti, con un dataset di 422: SKU `cds-aud-001`, `CDS AUD 001`, `CDS_AUD`, SKU già usato da un prodotto attivo e da un prodotto eliminato; `short_description` mancante e di 161 caratteri (160 valida); `price` 0, `12.5` e 1000000 (999999 valido); `stock` -1 e 1000000; il 422 dello SKU già usato ha il messaggio «Questo SKU è già in uso». Nell'update lo SKU del prodotto stesso è valido.
 - Filtri di `GET /admin/products`: `search` per nome e per SKU, `category`, `status`; include i disattivati, esclude gli eliminati; `stock_status` con un dataset di stock 0, 1, 4, 5 e 6.
 - Immagini, con `Storage::fake('public')`: caricamento di JPG, PNG e WebP con `alt` uguale al nome del prodotto e posizioni accodate; 422 per GIF, per un file di 5121 KB e per più di 10 file; `DELETE` con file rimosso e posizioni ricompattate; `PATCH` del prodotto con `images` riordinate e `alt` modificati; 422 per `images` con un id di un altro prodotto, con un id mancante o duplicato.
@@ -245,7 +245,8 @@ In `tests/Arch/ArchitectureTest.php`, con `arch()` di Pest:
 src/
 ├── test/
 │   ├── setup.js                 # jest-dom, avvio e reset del server MSW
-│   ├── renderWithProviders.jsx  # tema, QueryClient nuovo per ogni test, router in memoria, AuthProvider
+│   ├── renderWithProviders.jsx  # tema, QueryClient nuovo per ogni test, router in memoria, AuthProvider; renderHookWithProviders
+│   ├── viewport.js              # window.matchMedia finto con larghezza impostabile (setViewportWidth)
 │   ├── factories.js             # buildUser, buildProduct, buildCart, buildOrder, buildCategory, buildAdminProduct, buildAdminOrder, buildDashboard
 │   └── mocks/
 │       ├── server.js
@@ -257,7 +258,8 @@ src/
 - `setup.js` avvia MSW con `onUnhandledRequest: 'error'`: una chiamata non prevista fa fallire il test.
 - Ogni test personalizza le risposte con `server.use(...)` per i casi di errore.
 - Le factory producono oggetti con la stessa forma delle API Resource del backend.
-- `renderWithProviders(ui, { route, user })` accetta la rotta iniziale e l'utente autenticato (o nessuno).
+- `renderWithProviders(ui, { route, user, routes })` accetta la rotta iniziale, l'utente (`null` per un ospite già noto, omesso per far partire `GET /me`, che di default risponde 401) e, con `routes`, l'albero reale del router invece di `ui`. `renderHookWithProviders(hook, { user })` fa lo stesso per gli hook.
+- Desktop e mobile: i layout scelgono la struttura con `useMediaQuery`; `setup.js` installa un `window.matchMedia` finto a 1280 px, e `setViewportWidth(MOBILE_WIDTH)` di `test/viewport.js` passa a 390 px. La larghezza torna desktop dopo ogni test.
 - `QueryClient` dei test con `retry: false`.
 
 ### Come si scrive un test

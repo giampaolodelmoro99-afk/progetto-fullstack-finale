@@ -28,15 +28,15 @@ src/theme/
 ```
 
 - `ThemeProvider` e `CssBaseline` sono in `AppProviders`.
-- `design/design-system/theme.js` è un riferimento, non si importa così com'è: si divide nei quattro moduli di `src/theme/`. Fino alla Fase 7 il tema contiene valori provvisori.
-- Font self-hosted con i pacchetti `@fontsource-variable` (dipendenze da installare nella Fase 7):
+- `design/design-system/theme.js` è un riferimento, non si importa così com'è: dalla Fase 7a è diviso nei quattro moduli di `src/theme/`, più `statusColors.js` con le mappe dei colori semantici. Colori senza ruolo MUI (es. `background.inverse`, `text.inverse`, `text.inverseAccent`, `inverseDivider` per il footer scuro) sono chiavi della palette, usate come token negli `sx`.
+- Font self-hosted con i pacchetti `@fontsource-variable`, importati in `src/main.jsx` (installati nella Fase 7a; licenze nel README):
   - Bodoni Moda per titoli e prezzi
   - Manrope per interfaccia e testi
 
   Niente Google Fonts da CDN.
 - L'ombra in hover di `MuiCard` si applica solo alle card cliccabili, cioè quelle che contengono una `CardActionArea`; le card informative restano ferme.
 - Localizzazione: `createTheme(..., itIT)` con `itIT` di `@mui/material/locale` (parte di MUI, nessuna dipendenza nuova), così `TablePagination` e gli altri componenti hanno i testi italiani. "Righe per pagina" e «1–10 di 42» si impostano comunque in `components.js` (`labelRowsPerPage`, `labelDisplayedRows`) come valori attesi dai test.
-- La larghezza del Drawer admin è un token del tema (es. `theme.layout.adminDrawerWidth`), non un valore negli `sx`.
+- La larghezza del Drawer admin è un token del tema (es. `theme.layout.adminDrawerWidth`), non un valore negli `sx`. Lo stesso vale per le altre misure di layout della 7a: `minPageHeight` (`100vh`), `storeDrawerWidth`, `drawerMaxWidth` (`85vw`), `authCardMaxWidth`, `accountNavigationWidth`, `emptyStateTextMaxWidth` (`48ch`), `footerTaglineMaxWidth` (`32ch`) e `navigationUnderlineOffset`; negli `sx` si leggono con una funzione, es. `maxWidth: (theme) => theme.layout.drawerMaxWidth`.
 - Anche le misure del pannello dell'assistente su desktop sono token del tema: `theme.layout.assistantPanelWidth` (440 px) e `theme.layout.assistantPanelMaxHeight` (altezza massima relativa alla finestra).
 
 ## Regole di stile (vincolanti)

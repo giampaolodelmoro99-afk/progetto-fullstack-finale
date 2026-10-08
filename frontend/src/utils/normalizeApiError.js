@@ -10,12 +10,17 @@ const LOCAL_MESSAGES = {
   419: 'La sessione è scaduta. Ricarica la pagina e riprova.',
   422: 'Alcuni dati non sono validi.',
   423: 'Per continuare devi confermare la tua identità.',
-  429: 'Troppe richieste. Attendi qualche istante e riprova.',
+  503: 'Il servizio non è disponibile in questo momento. Riprova più tardi.',
 };
 
 const DEFAULT_MESSAGE = 'Si è verificato un errore imprevisto. Riprova più tardi.';
 
 const STATUSES_WITH_SERVER_MESSAGE = new Set([402, 409, 422]);
+
+const CODES_WITH_SERVER_MESSAGE = {
+  502: new Set(['refund_failed']),
+  503: new Set(['assistant_busy', 'assistant_unavailable']),
+};
 
 function firstMessages(errors) {
   return Object.fromEntries(
@@ -26,8 +31,31 @@ function firstMessages(errors) {
   );
 }
 
-function resolveMessage(status, serverMessage) {
-  if (STATUSES_WITH_SERVER_MESSAGE.has(status) && serverMessage) {
+function parseRetryAfter(headers) {
+  const value =
+    typeof headers?.get === 'function' ? headers.get('retry-after') : headers?.['retry-after'];
+
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return null;
+  }
+
+  const seconds = Number(value);
+
+  return Number.isInteger(seconds) && seconds >= 0 ? seconds : null;
+}
+
+function usesServerMessage(status, code) {
+  return STATUSES_WITH_SERVER_MESSAGE.has(status) || CODES_WITH_SERVER_MESSAGE[status]?.has(code);
+}
+
+function resolveMessage(status, code, serverMessage, retryAfter) {
+  if (status === 429) {
+    return retryAfter === null
+      ? 'Troppi tentativi. Riprova tra poco'
+      : `Troppi tentativi. Riprova tra ${retryAfter} secondi`;
+  }
+
+  if (serverMessage && usesServerMessage(status, code)) {
     return serverMessage;
   }
 
@@ -38,14 +66,24 @@ export function normalizeApiError(error) {
   const response = error?.response;
 
   if (!response) {
-    return { status: null, message: NETWORK_ERROR_MESSAGE, fieldErrors: {} };
+    return {
+      status: null,
+      message: NETWORK_ERROR_MESSAGE,
+      fieldErrors: {},
+      retryAfter: null,
+      code: null,
+    };
   }
 
-  const { status, data } = response;
+  const { status, data, headers } = response;
+  const code = typeof data?.code === 'string' ? data.code : null;
+  const retryAfter = status === 429 ? parseRetryAfter(headers) : null;
 
   return {
     status,
-    message: resolveMessage(status, data?.message),
+    message: resolveMessage(status, code, data?.message, retryAfter),
     fieldErrors: status === 422 ? firstMessages(data?.errors) : {},
+    retryAfter,
+    code,
   };
 }
