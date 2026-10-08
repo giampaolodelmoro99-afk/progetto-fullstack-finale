@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { httpClient, setActiveQueryClient } from '@/api/httpClient';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { httpClient, setActiveQueryClient, setIdentityConfirmationHandler } from '@/api/httpClient';
 import { queryKeys } from '@/api/queryKeys';
 import { apiUrl } from '@/test/mocks/handlers';
 import { server } from '@/test/mocks/server';
@@ -125,5 +125,70 @@ describe('httpClient', () => {
       response: { status: 500 },
     });
     expect(queryClient.getQueryData(queryKeys.me)).toEqual({ id: 1, name: 'Mario Rossi' });
+  });
+
+  describe('identity confirmation', () => {
+    afterEach(() => {
+      setIdentityConfirmationHandler(null);
+    });
+
+    function lockedUntilConfirmed() {
+      let attempts = 0;
+      server.use(
+        http.delete(apiUrl('/api/v1/me/two-factor'), () => {
+          attempts += 1;
+          return attempts === 1
+            ? HttpResponse.json(
+                { message: 'Conferma la tua identità per continuare.', requires: ['password'] },
+                { status: 423 },
+              )
+            : new HttpResponse(null, { status: 204 });
+        }),
+      );
+
+      return () => attempts;
+    }
+
+    it('asks to confirm the identity with the prompt of the request and retries once', async () => {
+      const attempts = lockedUntilConfirmed();
+      const handler = vi.fn().mockResolvedValue(undefined);
+      setIdentityConfirmationHandler(handler);
+
+      const response = await httpClient.delete('/api/v1/me/two-factor', {
+        identityPrompt: 'Per disattivare la doppia autenticazione, conferma che sei tu.',
+      });
+
+      expect(response.status).toBe(204);
+      expect(handler).toHaveBeenCalledWith({
+        prompt: 'Per disattivare la doppia autenticazione, conferma che sei tu.',
+      });
+      expect(attempts()).toBe(2);
+    });
+
+    it('fails with a marked error when the user cancels the confirmation', async () => {
+      const attempts = lockedUntilConfirmed();
+      setIdentityConfirmationHandler(vi.fn().mockRejectedValue(new Error('cancelled')));
+
+      await expect(httpClient.delete('/api/v1/me/two-factor')).rejects.toMatchObject({
+        identityConfirmationCancelled: true,
+        response: { status: 423 },
+      });
+      expect(attempts()).toBe(1);
+    });
+
+    it('does not ask twice for the same request', async () => {
+      server.use(
+        http.delete(apiUrl('/api/v1/me/two-factor'), () =>
+          HttpResponse.json({ message: 'Conferma.' }, { status: 423 }),
+        ),
+      );
+      const handler = vi.fn().mockResolvedValue(undefined);
+      setIdentityConfirmationHandler(handler);
+
+      await expect(httpClient.delete('/api/v1/me/two-factor')).rejects.toMatchObject({
+        response: { status: 423 },
+      });
+      expect(handler).toHaveBeenCalledOnce();
+    });
   });
 });

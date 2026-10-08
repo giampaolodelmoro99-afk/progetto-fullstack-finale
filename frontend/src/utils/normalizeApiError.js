@@ -22,6 +22,16 @@ const CODES_WITH_SERVER_MESSAGE = {
   503: new Set(['assistant_busy', 'assistant_unavailable']),
 };
 
+export const IDENTITY_CONFIRMATION_CANCELLED = 'identity_confirmation_cancelled';
+
+const NORMALIZED = Symbol('normalizedApiError');
+
+function markNormalized(error) {
+  Object.defineProperty(error, NORMALIZED, { value: true });
+
+  return error;
+}
+
 function firstMessages(errors) {
   return Object.fromEntries(
     Object.entries(errors ?? {}).map(([field, messages]) => [
@@ -62,28 +72,52 @@ function resolveMessage(status, code, serverMessage, retryAfter) {
   return LOCAL_MESSAGES[status] ?? DEFAULT_MESSAGE;
 }
 
+export function createClientError(code, message) {
+  return markNormalized({ status: null, message, fieldErrors: {}, retryAfter: null, code });
+}
+
+export function isNormalizedApiError(error) {
+  return Boolean(error?.[NORMALIZED]);
+}
+
 export function normalizeApiError(error) {
+  if (isNormalizedApiError(error)) {
+    return error;
+  }
+
   const response = error?.response;
 
   if (!response) {
-    return {
+    return markNormalized({
       status: null,
       message: NETWORK_ERROR_MESSAGE,
       fieldErrors: {},
       retryAfter: null,
       code: null,
-    };
+    });
   }
 
   const { status, data, headers } = response;
-  const code = typeof data?.code === 'string' ? data.code : null;
+  const code = error.identityConfirmationCancelled
+    ? IDENTITY_CONFIRMATION_CANCELLED
+    : typeof data?.code === 'string'
+      ? data.code
+      : null;
   const retryAfter = status === 429 ? parseRetryAfter(headers) : null;
 
-  return {
+  return markNormalized({
     status,
     message: resolveMessage(status, code, data?.message, retryAfter),
     fieldErrors: status === 422 ? firstMessages(data?.errors) : {},
     retryAfter,
     code,
-  };
+  });
+}
+
+export async function withNormalizedError(request) {
+  try {
+    return await request();
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
 }

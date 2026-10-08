@@ -20,8 +20,8 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 5c | Ordini e dashboard admin | completata |
 | Fase 6 | Revisione della copertura dei test e documentazione delle API | completata |
 | Design E | Chat dell'assistente e sezione "Elimina account" (in Claude Design, prima della Fase 7), `design/mockups/05-assistente-account.pdf`, e allineamento delle skill | completata |
-| Fase 7a | Fondamenta del frontend: tema dal design system con i font, router con layout e rotte protette, httpClient e `AuthProvider`, header, footer e Drawer del negozio, layout account e admin, componenti di stato e utility di formato, infrastruttura dei test | |
-| Fase 7b | Autenticazione: login con secondo fattore, registrazione, password dimenticata e reset, pagine raggiunte dai link email, banner dell'email non verificata, conferma dell'identità (423) | |
+| Fase 7a | Fondamenta del frontend: tema dal design system con i font, router con layout e rotte protette, httpClient e `AuthProvider`, header, footer e Drawer del negozio, layout account e admin, componenti di stato e utility di formato, infrastruttura dei test | completata |
+| Fase 7b | Autenticazione: login con secondo fattore, registrazione, password dimenticata e reset, pagine raggiunte dai link email, banner dell'email non verificata, conferma dell'identità (423) | completata |
 | Fase 8 | Negozio: home, catalogo, prodotto, carrello, checkout, conferma d'ordine, widget dell'assistente | |
 | Fase 9 | Area account (profilo, indirizzi, ordini, sicurezza, eliminazione dell'account) e pannello admin | |
 | Fase 10 | Rifinitura, README, verifica dei dati demo, preparazione della presentazione; test end-to-end con Playwright facoltativi | |

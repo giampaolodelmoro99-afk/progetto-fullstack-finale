@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeApiError } from '@/utils/normalizeApiError';
+import {
+  createClientError,
+  normalizeApiError,
+  withNormalizedError,
+} from '@/utils/normalizeApiError';
 
 function httpError(status, data, headers = {}) {
   return { response: { status, data, headers } };
@@ -164,5 +168,55 @@ describe('normalizeApiError', () => {
     const error = httpError(409, { message: 'Conflitto.', errors: { stock: ['Esaurito.'] } });
 
     expect(normalizeApiError(error).fieldErrors).toEqual({});
+  });
+});
+
+describe('normalizeApiError with already normalized errors', () => {
+  it('returns an already normalized error unchanged', () => {
+    const normalized = normalizeApiError({
+      response: {
+        status: 422,
+        data: { message: 'Credenziali non valide', code: 'invalid_credentials' },
+      },
+    });
+
+    expect(normalizeApiError(normalized)).toBe(normalized);
+  });
+
+  it('marks a cancelled identity confirmation', () => {
+    const error = { identityConfirmationCancelled: true, response: { status: 423, data: {} } };
+
+    expect(normalizeApiError(error)).toMatchObject({
+      status: 423,
+      code: 'identity_confirmation_cancelled',
+    });
+  });
+
+  it('builds client errors with the same shape', () => {
+    expect(createClientError('passkey_failed', 'Riprova.')).toEqual({
+      status: null,
+      message: 'Riprova.',
+      fieldErrors: {},
+      retryAfter: null,
+      code: 'passkey_failed',
+    });
+  });
+
+  it('rethrows the normalized error without the original request', async () => {
+    const rejected = withNormalizedError(() =>
+      Promise.reject({
+        config: { data: '{"password":"Silicio2026"}' },
+        response: { status: 422, data: { message: 'Credenziali non valide' } },
+      }),
+    );
+
+    await expect(rejected).rejects.toEqual({
+      status: 422,
+      message: 'Credenziali non valide',
+      fieldErrors: {},
+      retryAfter: null,
+      code: null,
+    });
+    await expect(rejected).rejects.not.toHaveProperty('config');
   });
 });

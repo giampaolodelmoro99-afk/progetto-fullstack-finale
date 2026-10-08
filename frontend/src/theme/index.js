@@ -25,9 +25,24 @@ export const layout = {
   assistantPanelMaxHeight: 'calc(100vh - 160px)',
 };
 
+const mixins = {
+  visuallyHidden: {
+    border: 0,
+    clip: 'rect(0 0 0 0)',
+    height: '1px',
+    margin: '-1px',
+    overflow: 'hidden',
+    padding: 0,
+    position: 'absolute',
+    whiteSpace: 'nowrap',
+    width: '1px',
+  },
+};
+
 export const theme = createTheme(
   {
     spacing: 8,
+    mixins,
     shape: { borderRadius: 4 },
     shadows,
     palette,

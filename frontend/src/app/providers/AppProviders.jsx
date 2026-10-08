@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { setActiveQueryClient } from '@/api/httpClient';
 import { queryClient } from '@/api/queryClient';
 import { AuthProvider } from '@/app/providers/AuthProvider';
+import { IdentityConfirmationProvider } from '@/app/providers/IdentityConfirmationProvider';
+import { NotificationProvider } from '@/app/providers/NotificationProvider';
 import { theme } from '@/theme';
 
 export function AppProviders({ children, client = queryClient }) {
@@ -14,7 +16,11 @@ export function AppProviders({ children, client = queryClient }) {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <QueryClientProvider client={client}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <IdentityConfirmationProvider>{children}</IdentityConfirmationProvider>
+          </NotificationProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

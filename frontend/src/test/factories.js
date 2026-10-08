@@ -102,3 +102,26 @@ export function buildSupportSections() {
     { id: 'contatti', title: 'Contatti', paragraphs: ['Scrivici quando vuoi.'] },
   ];
 }
+
+export function buildSecurityOverview(overrides = {}) {
+  return {
+    two_factor_enabled: false,
+    two_factor_confirmed_at: null,
+    recovery_codes_remaining: 0,
+    recovery_codes_total: 0,
+    passkeys_count: 0,
+    email_verified: true,
+    password_changed_at: '2026-09-12T21:31:00+02:00',
+    ...overrides,
+  };
+}
+
+export function buildTwoFactorOverview(overrides = {}) {
+  return buildSecurityOverview({
+    two_factor_enabled: true,
+    two_factor_confirmed_at: '2026-09-12T21:40:00+02:00',
+    recovery_codes_remaining: 6,
+    recovery_codes_total: 8,
+    ...overrides,
+  });
+}
