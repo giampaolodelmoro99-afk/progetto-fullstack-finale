@@ -5,13 +5,13 @@ description: Assistente AI per i clienti del negozio con un modello locale Ollam
 
 # Assistente AI
 
-Assistente per i clienti di Casa del Silicio, basato su un modello locale servito da Ollama. Si realizza in tre fasi: 2c (infrastruttura e scelta del modello), 4b (backend) e 8 (widget), più il Design E per l'interfaccia (`docs/roadmap.md`).
+Assistente per i clienti di Casa del Silicio, basato su un modello locale servito da Ollama. Si realizza in tre fasi: 2c (infrastruttura e scelta del modello), 4b (backend) e 8 (widget), con l'interfaccia del Design E, `design/mockups/05-assistente-account.pdf` (`docs/roadmap.md`).
 
 ## Perimetro
 
 - **Cosa fa:** aiuta a scegliere i prodotti, risponde su caratteristiche e confronti, spiega le regole del negozio (spedizione, resi, garanzia, contatti) con gli stessi testi della pagina `/assistenza`, letti dalla stessa fonte (`GET /shop/support`, skill `ecommerce-domain`, sezione "Testi dell'assistenza").
 - **Cosa non fa:** non accede a ordini, carrello, indirizzi, profilo o altri dati personali, nemmeno quando l'utente è autenticato. Il backend non inserisce mai dati dell'utente nel contesto del modello: l'autenticazione serve solo come chiave del limiter. Per lo stato di un ordine l'assistente rimanda a "I miei ordini".
-- **Chi lo usa:** clienti autenticati e ospiti.
+- **Chi lo usa:** clienti autenticati e ospiti. Per un admin il widget non compare nel negozio (Design E); l'API non lo vieta, perché non espone dati.
 - **Domande fuori tema:** rifiuto garbato con una frase fissa, «Posso aiutarti solo con i prodotti e i servizi di Casa del Silicio.», e un invito a chiedere di un prodotto.
 - **Fonte di prezzi e disponibilità:** il database, non il modello. Il modello può citare prezzo e disponibilità solo come li riceve dai tool; le card mostrate all'utente arrivano dalla `ProductResource`.
 
@@ -133,6 +133,7 @@ Risposta: `200` con `Content-Type: application/x-ndjson`, `Cache-Control: no-cac
 ```
 
 - In caso di timeout durante lo streaming: `{"type":"error","message":"L'assistente non ha risposto in tempo. Riprova tra poco."}`; per un altro errore: `{"type":"error","message":"Si è verificato un problema con l'assistente. Riprova tra poco."}`. Poi la risposta si chiude. Gli eventi `text` già inviati restano visibili.
+- **Dalla Fase 8** (decisione del Design E, `docs/backlog.md`): un solo messaggio per entrambi i casi, `{"type":"error","message":"La risposta si è interrotta prima della fine."}`, quello del mockup, perché l'evento arriva dopo l'inizio della risposta. Il testo fisso sta solo in `AssistantAnswerStream`, che lo scrive al posto del messaggio dell'eccezione; `AssistantTimeoutException`, `AssistantFailedException` e il comando `assistant:ask` mantengono i loro messaggi. La distinzione tra timeout ed errore resta nel log (`AssistantLog`, esito `timeout` o `failed`). Se il timeout scatta durante i giri dei tool, prima di qualsiasi testo, la frase compare da sola: è accettato.
 - Errori prima dello streaming, con la forma uniforme della skill `laravel-api`:
 
 | Caso | Status | `code` | Messaggio |
@@ -164,6 +165,7 @@ Limiter `assistant` in `AppServiceProvider`, per utente se autenticato e per IP 
   - se la callback non parte mai (per esempio un middleware fallisce dopo il controller), con un `app()->terminating()` registrato da `AssistantAnswerStream::toResponse()`, che rilascia lo slot se non è già stato rilasciato. In produzione l'applicazione termina dopo l'invio del corpo; nei test HTTP termina prima di `streamedContent()`, quindi i test sul rilascio nel `finally` eseguono lo stream direttamente (helper `streamAnswerDirectly()`)
 - Nessuno slot libero: 503 immediato con `code` `assistant_busy`, senza attesa e senza chiamare Ollama.
 - Rischio residuo accettato: con `max_concurrent` a 1, un solo utente che resta entro il limite del limiter può tenere occupato l'assistente per gli altri. Il resto del negozio non ne risente, perché gli altri worker restano liberi.
+- Rischio residuo accettato, «Interrompi» del widget: il backend si accorge della disconnessione solo dopo aver scritto una riga. Se l'utente interrompe durante l'attesa (giri dei tool, prima del primo frammento), lo slot resta occupato fino al primo frammento o alla scadenza, e una domanda inviata subito dopo riceve il 503 `assistant_busy` («L'assistente è occupato, riprova tra poco.»). È il comportamento previsto, non un difetto.
 
 ## Nessuna persistenza
 
@@ -204,11 +206,16 @@ In `docs/assistant/model-evaluation.md` si scrivono:
 
 ## Frontend (Fase 8)
 
-Aspetto e testi dal Design E; qui le regole di architettura (skill `react-architecture`).
+Aspetto e testi dal Design E, `design/mockups/05-assistente-account.pdf`: pattern visivi nella skill `mui-design-system` ("Assistente AI"), stato della conversazione, interruzione, errori e parser nella skill `react-architecture` ("Assistente AI"). Qui le regole che legano widget e API.
 
-- Feature `features/assistant/` con `api/`, `hooks/` e `components/`.
-- Pulsante fisso in basso a destra, in `StoreLayout`, che apre il pannello della chat. Non compare nell'area admin.
-- Pannello con suggerimenti di domande quando la conversazione è vuota e la nota «Le risposte sono generate da un'AI: prezzi e disponibilità sono quelli delle schede dei prodotti.»
+- Feature `features/assistant/` con `api/`, `hooks/`, `components/` e `utils/`.
+- Pulsante fisso in basso a destra, in `StoreLayout`, «Chiedi all'assistente», che apre il pannello della chat. Non compare nell'area admin né per un utente admin che naviga il negozio.
+- Pannello: su desktop una card fluttuante **non modale** di 440 px (token `theme.layout.assistantPanelWidth`) sopra il pulsante, che diventa «Chiudi l'assistente»; su mobile a schermo intero. Titolo «Assistente di Casa del Silicio» e «Nuova conversazione».
+- Conversazione vuota: «Ciao, come posso aiutarti?», «Chiedimi dei prodotti, della spedizione o dei resi.» e quattro suggerimenti: «Cerco cuffie per viaggiare», «Un regalo sotto i 100 €», «Quanto costa la spedizione?», «Come funzionano i resi?». Gli stessi suggerimenti ricompaiono sotto il rifiuto fisso delle domande fuori tema.
+- Nota sotto il campo: «Le risposte sono generate da un'AI: prezzi e disponibilità sono quelli delle schede.»
+- **Formato delle risposte (deciso nel Design E):** Markdown leggero, solo grassetto ed elenchi puntati e numerati; niente titoli, link, immagini né HTML. Il widget lo mostra con un parser scritto a mano (`parseLightMarkdown`), senza dipendenze e senza HTML: tutto ciò che non è grassetto o elenco resta testo semplice. Nella Fase 8 il `SYSTEM` del Modelfile chiede esplicitamente questo formato, e le domande fisse si riprovano con `make ask`.
+- **Attesa:** fino al primo frammento «Sto preparando la risposta…» con una barra indeterminata e «Di solito servono 15–20 secondi.» (con qwen3.5 gli header arrivano solo con il primo frammento, `docs/assistant/model-evaluation.md`). Il testo non parla di catalogo, perché l'NDJSON non dice se il modello usa un tool.
+- **Interrompi:** visibile durante l'attesa e durante la scrittura, nella stessa posizione; annulla la richiesta con l'`AbortController`, senza errore. Il testo arrivato resta con «Risposta interrotta.» e non entra nella cronologia inviata.
 - Stato della conversazione in un `AssistantProvider` sotto `StoreLayout`, così resta aperta mentre si naviga nel negozio. Solo in memoria: niente `localStorage`, `sessionStorage`, URL o cache di TanStack Query. Ricaricando la pagina riparte vuota.
 - Il campo del messaggio accetta al massimo 500 caratteri e mostra il conteggio; si inviano gli ultimi 10 messaggi.
 - Streaming con `fetch` e `ReadableStream` (axios nel browser non legge una risposta a frammenti), in una funzione di `features/assistant/api/`. È l'unica eccezione alla regola che le funzioni API usano `httpClient` (skill `react-architecture`), quindi replica a mano ciò che fa l'interceptor:
@@ -218,9 +225,14 @@ Aspetto e testi dal Design E; qui le regole di architettura (skill `react-archit
   - le risposte non 200 si normalizzano con `normalizeApiError`, così messaggi, `code` e `retryAfter` hanno la stessa forma del resto dell'app
   - un `AbortController` interrompe la richiesta alla chiusura del pannello, senza mostrare errori
 - Il parser legge le righe NDJSON, accumula i `delta`, toglie i marcatori `[[slug]]` e mostra le card dall'evento `products`.
-- `useAssistantStatus()` legge `GET /assistant/status` con TanStack Query. Con `available: false` o in caso di errore, il pulsante mostra «Assistente non disponibile» ed è disabilitato; il resto del negozio funziona normalmente.
-- Errori: 503 `assistant_busy` e `assistant_unavailable`, 429 ed evento `error` si mostrano nel pannello con il messaggio in italiano, senza perdere la conversazione e senza bloccare il resto del negozio.
-- Le card riusano il componente del catalogo. "Aggiungi al carrello" segue le regole del catalogo: un ospite passa dal login.
+- `useAssistantStatus()` legge `GET /assistant/status` con TanStack Query. Con `available: false` o in caso di errore, il pulsante è disabilitato con il tooltip «Assistente non disponibile»; il resto del negozio funziona normalmente.
+- Errori, nel pannello con «Riprova», senza perdere la conversazione e senza bloccare il resto del negozio:
+  - 503 `assistant_busy` («L'assistente è occupato, riprova tra poco.») e `assistant_unavailable` («L'assistente non è disponibile in questo momento.»): messaggio ricevuto dall'API
+  - evento `error`: messaggio ricevuto, sotto il testo parziale
+  - 429: testo locale del widget «Hai fatto troppe domande, riprova tra N secondi.», con N da `Retry-After`; «Riprova» resta disabilitato fino alla fine di `Retry-After` e il campo mostra «Potrai scrivere tra N secondi.», con il conto alla rovescia; senza `Retry-After` «Hai fatto troppe domande, riprova tra poco.», senza blocco (dettagli nella skill `react-architecture`)
+  - stream chiuso senza `done` né `error`: come l'evento `error`
+- La conversazione si svuota quando cambia l'utente (login e logout), come gli altri dati dell'utente.
+- Le card dei prodotti citati sono un componente compatto della feature (`AssistantProductCard`: miniatura, nome, prezzo, disponibilità, "Vedi prodotto", "Aggiungi al carrello"), che riusa etichetta e colori della disponibilità e la mutation di aggiunta al carrello del catalogo. "Aggiungi al carrello" segue le regole del catalogo: un ospite passa dal login.
 
 ## Test
 

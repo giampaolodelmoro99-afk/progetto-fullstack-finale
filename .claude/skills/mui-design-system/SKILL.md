@@ -1,6 +1,6 @@
 ---
 name: mui-design-system
-description: Design system MUI del progetto — organizzazione del tema, font, regole vincolanti di stile con la prop sx e i token del tema, voce e contenuti, layout di negozio, accesso, area account e pannello admin, pattern dei componenti per negozio, acquisto, account, sicurezza e admin (dashboard, tabelle, form prodotto con immagini, categorie, dettaglio ordine), dialog di conferma, accessibilità e traduzione dei mockup di Claude Design in componenti MUI. Usala per qualsiasi lavoro visivo in frontend/.
+description: Design system MUI del progetto — organizzazione del tema, font, regole vincolanti di stile con la prop sx e i token del tema, voce e contenuti, layout di negozio, accesso, area account e pannello admin, pattern dei componenti per negozio, acquisto, assistente AI, account, sicurezza (compresa l'eliminazione dell'account) e admin (dashboard, tabelle, form prodotto con immagini, categorie, dettaglio ordine), dialog di conferma, accessibilità e traduzione dei mockup di Claude Design in componenti MUI. Usala per qualsiasi lavoro visivo in frontend/.
 ---
 
 # MUI — design system del progetto
@@ -15,7 +15,7 @@ Fonti:
 | `design/mockups/02-acquisto.pdf` | mockup dell'acquisto: carrello (pieno, vuoto, con righe esaurite, caricamento), checkout in tre passi con errori, email da verificare, conferma d'ordine, desktop e mobile |
 | `design/mockups/03-account.pdf` | mockup dell'account: accesso (errore, troppi tentativi, verifica in due passaggi), registrazione, pagine raggiunte dai link email, menu account, profilo con cambio email, indirizzi, ordini e dettaglio, sicurezza (doppia autenticazione, passkey, attività recente), dialog di conferma, desktop e mobile |
 | `design/mockups/04-admin.pdf` | mockup del pannello admin: layout con Drawer, dashboard (desktop e mobile), elenco prodotti (caricamento, vuoto, eliminazione), nuovo e modifica prodotto (errori, modifiche non salvate), categorie con dialog di modifica ed eliminazione, elenco ordini (filtri, pagamenti non riusciti, vuoto, mobile), dettaglio ordine (pagato, spedito, annullamento, pagamento rifiutato) |
-| Design E (da produrre) | chat dell'assistente AI e sezione "Elimina account", in Claude Design prima della Fase 7 (`docs/roadmap.md`). Fino ad allora non ci sono pattern visivi per queste due parti: regole di comportamento nelle skill `ai-assistant` e `account-security` |
+| `design/mockups/05-assistente-account.pdf` | Design E: assistente AI nel negozio (pulsante, pannello vuoto con suggerimenti, risposta con card, attesa, scrittura, quattro errori, domanda fuori tema, desktop e mobile, assistente non disponibile), sezione "Elimina account" in Sicurezza con il dialog di conferma e il dialog degli ordini in corso, categoria inesistente, amministratrice nel negozio (menu account e pagina prodotto) |
 
 ## Tema
 
@@ -37,6 +37,7 @@ src/theme/
 - L'ombra in hover di `MuiCard` si applica solo alle card cliccabili, cioè quelle che contengono una `CardActionArea`; le card informative restano ferme.
 - Localizzazione: `createTheme(..., itIT)` con `itIT` di `@mui/material/locale` (parte di MUI, nessuna dipendenza nuova), così `TablePagination` e gli altri componenti hanno i testi italiani. "Righe per pagina" e «1–10 di 42» si impostano comunque in `components.js` (`labelRowsPerPage`, `labelDisplayedRows`) come valori attesi dai test.
 - La larghezza del Drawer admin è un token del tema (es. `theme.layout.adminDrawerWidth`), non un valore negli `sx`.
+- Anche le misure del pannello dell'assistente su desktop sono token del tema: `theme.layout.assistantPanelWidth` (440 px) e `theme.layout.assistantPanelMaxHeight` (altezza massima relativa alla finestra).
 
 ## Regole di stile (vincolanti)
 
@@ -103,7 +104,8 @@ Riassunto delle regole di `design/design-system/voice-and-content.md`, che resta
 - Menu account nell'header, dal mockup `03-account.pdf`:
   - ospite: l'`IconButton` account (`aria-label` "Accedi") porta a `/login`
   - autenticato: l'`IconButton` (`aria-label` "Il tuo account") apre un `Menu` ancorato a destra, con in testa nome (`subtitle2`) ed email (`caption`, `text.secondary`), un `Divider`, le voci Profilo, Indirizzi, I miei ordini, Sicurezza con `ListItemIcon`, un `Divider` e la voce Esci
-  - icone outlined: `PersonOutline` (Profilo), `PlaceOutlined` (Indirizzi), `Inventory2Outlined` (I miei ordini), `ShieldOutlined` (Sicurezza), `Logout` (Esci)
+  - admin, dal mockup `05-assistente-account.pdf`: le voci sono Profilo, Sicurezza e Amministrazione, poi il `Divider` ed Esci; l'icona del carrello non compare nell'header, né su desktop né su mobile
+  - icone outlined: `PersonOutline` (Profilo), `PlaceOutlined` (Indirizzi), `Inventory2Outlined` (I miei ordini), `ShieldOutlined` (Sicurezza), `SpaceDashboardOutlined` (Amministrazione), `Logout` (Esci)
 - Area account, dal mockup `03-account.pdf`:
   - resta dentro il layout del negozio (header, navigazione e footer)
   - intestazione con `h1` "Il tuo account" e sotto «Nome · email» in `body2` `text.secondary`
@@ -136,6 +138,8 @@ Riassunto delle regole di `design/design-system/voice-and-content.md`, che resta
 | Catalogo senza risultati | card con icona di ricerca, titolo "Nessun prodotto corrisponde ai filtri", suggerimento e pulsante "Azzera filtri" |
 | Dettaglio prodotto | galleria con miniature, categoria in `overline`, nome, descrizione breve, prezzo con «IVA inclusa», `Chip` di disponibilità, selettore di quantità, `Button` "Aggiungi al carrello"; sotto, "Descrizione" e "Scheda tecnica" (tabella etichetta/valore) affiancate su desktop |
 | Prodotto esaurito | quantità e pulsante disabilitati, `Alert` informativo "Prodotto esaurito" che rimanda ai correlati |
+| Prodotto visto da un admin | dal mockup `05-assistente-account.pdf`: niente selettore di quantità né "Aggiungi al carrello"; al loro posto un `Alert` `info` «Gli account di amministrazione non possono fare acquisti.»; prezzo, `Chip` di disponibilità e rassicurazioni restano |
+| Categoria inesistente | dal mockup `05-assistente-account.pdf`: breadcrumb «Home › Categoria non trovata», senza filtri né ordinamento; `Card` informativa a tutta larghezza con contenuto centrato: icona `CategoryOutlined` in un `Avatar`, titolo `h2` in Bodoni «Questa categoria non esiste», testo `body2` `text.secondary` «Forse il link è vecchio, oppure l'indirizzo ha un errore.», `Button` pieno "Vedi tutti i prodotti" |
 | Prodotti correlati | griglia di card prodotto sotto il dettaglio; nascosta se l'elenco è vuoto |
 | Rassicurazioni | tre voci con icona: spedizione gratuita sopra la soglia letta dalle impostazioni del negozio (99,00 € nei dati attuali), reso entro 30 giorni, garanzia di 2 anni |
 | Aggiunta al carrello | `Snackbar` "Aggiunto al carrello" con azione "Vai al carrello" e `IconButton` di chiusura |
@@ -152,6 +156,27 @@ Riassunto delle regole di `design/design-system/voice-and-content.md`, che resta
 | Errori del checkout | `Alert` `error` "Pagamento non riuscito" con azione "Modifica la carta"; `Alert` `warning` "Disponibilità cambiata" con azione "Torna al carrello" e l'etichetta di disponibilità sulla riga coinvolta |
 | Conferma d'ordine | icona di successo, "Grazie per il tuo ordine", card con numero d'ordine, data, `Chip` dello stato, pagamento e indirizzo; card "Riepilogo dell'ordine"; pulsanti "Vedi il tuo ordine" e "Continua lo shopping" |
 | Email non verificata | `Alert` persistente in cima alla pagina (non nelle pagine di accesso e dei link email), «Conferma il tuo indirizzo email per completare gli acquisti. Ti abbiamo inviato un link a {email}.», con azione "Invia di nuovo l'email" |
+
+### Assistente AI
+
+Dal mockup `05-assistente-account.pdf`. I testi indicati sono vincolanti; regole di comportamento nelle skill `ai-assistant` e `react-architecture`.
+
+| Caso | Componenti MUI |
+|---|---|
+| Pulsante | `Button` fisso in basso a destra, sopra il contenuto (`position: 'fixed'`, `zIndex: 'fab'` del tema; il pannello desktop usa lo stesso livello, sotto `modal` e `snackbar`), in ogni pagina di `StoreLayout`, mai per un admin. Sotto `md` non compare in `/cart` e `/checkout`, dove c'è la barra fissa del carrello e del checkout. Chiuso: outlined su `background.paper` con `ChatBubbleOutline` e «Chiedi all'assistente». Aperto, solo su desktop: pieno scuro con `ExpandMore` e «Chiudi l'assistente», nella stessa posizione. Non disponibile: disabilitato, dentro un `Tooltip` sempre visibile «Assistente non disponibile» (con uno `span` intorno al pulsante disabilitato, che porta anche `aria-describedby` verso il testo del tooltip, perché un pulsante disabilitato non riceve il focus) |
+| Pannello su desktop | da `md`: `Paper` fluttuante e **non modale** sopra il pulsante, ancorato in basso a destra, larghezza `theme.layout.assistantPanelWidth` (440 px), altezza dal token del tema `theme.layout.assistantPanelMaxHeight` (relativa alla finestra, sotto l'header), bordo `divider` ed `elevation`; la pagina sotto resta usabile. Testata: titolo «Assistente di Casa del Silicio» (`h3` in Bodoni) e `IconButton` «Chiudi l'assistente» con `Close`; sotto, `Button` testuale «Nuova conversazione» con `Add`, disabilitato a conversazione vuota; `Divider`. Area dei messaggi su `background.default`, che scorre; in fondo il form e la nota |
+| Pannello su mobile | sotto `md`: a schermo intero (`Dialog` `fullScreen`), stessa testata, stesso contenuto; il pulsante «Chiudi l'assistente» non c'è, si chiude con la X |
+| Conversazione vuota | titolo «Ciao, come posso aiutarti?» (`h3` in Bodoni), sotto «Chiedimi dei prodotti, della spedizione o dei resi.» in `body2` `text.secondary`; quattro suggerimenti come `Button` outlined a tutta larghezza, testo a sinistra e `ArrowForward` a destra: «Cerco cuffie per viaggiare», «Un regalo sotto i 100 €», «Quanto costa la spedizione?», «Come funzionano i resi?». Un clic invia subito il testo del suggerimento |
+| Messaggio dell'utente | bolla a destra su `text.primary` con testo `background.paper`, `borderRadius: 1`, larghezza massima in percentuale del pannello (es. `maxWidth: '85%'`); prima del testo «Tu» solo per gli screen reader |
+| Messaggio dell'assistente | etichetta «Assistente» in `caption` `text.secondary` sopra una bolla a sinistra su `background.paper` con bordo `divider`; testo in `body2` con il Markdown leggero (grassetto in `strong`, elenchi puntati e numerati in `List` compatte) |
+| Card prodotto citato | sotto la bolla, una per prodotto dell'evento `products`: `Card` orizzontale compatta con miniatura quadrata a sinistra, nome in `subtitle2`, prezzo in Bodoni con accanto l'etichetta di disponibilità con icona (colori della mappa "Disponibilità", mostrata sempre, anche per `available`), in basso "Vedi prodotto" (`Button` testuale verso la pagina prodotto) e "Aggiungi al carrello" (`Button` outlined) |
+| Attesa | prima del primo frammento, al posto della bolla: riquadro su `background.paper` con `SearchOutlined` e «Sto preparando la risposta…» in `body2`, `LinearProgress` indeterminata, «Di solito servono 15–20 secondi.» in `caption` `text.secondary` |
+| Scrittura | il testo cresce nella bolla con un cursore verticale in fondo; durante attesa e scrittura, sotto la bolla, `Button` outlined «Interrompi» con `StopCircleOutlined`, nella stessa posizione nei due stati |
+| Risposta interrotta | dopo «Interrompi»: la bolla con il testo arrivato fino a quel momento, senza card, e sotto «Risposta interrotta.» in `caption` `text.secondary`; se non era arrivato testo, solo «Risposta interrotta.», senza bolla |
+| Errori | `Alert` a tutta larghezza al posto della risposta (o sotto il testo parziale), con azione `Button` testuale «Riprova» con `Refresh`: «L'assistente è occupato, riprova tra poco.» (`warning`, `WarningAmberOutlined`); «L'assistente non è disponibile in questo momento.» (`error`, `ErrorOutline`); «La risposta si è interrotta prima della fine.» (`error`, `ErrorOutline`, sotto la bolla con il testo parziale); «Hai fatto troppe domande, riprova tra N secondi.» (`warning`, `ScheduleOutlined`, N fisso, «Riprova» disabilitato finché il tempo non scade; senza `Retry-After` «…riprova tra poco.» con «Riprova» attivo) |
+| Domanda fuori tema | la bolla con la frase fissa «Posso aiutarti solo con i prodotti e i servizi di Casa del Silicio.» e sotto di nuovo i quattro suggerimenti |
+| Campo della domanda | `TextField` outlined «La tua domanda», placeholder «Scrivi una domanda», contatore «N/500» in `caption` a destra sotto il campo; accanto `IconButton` pieno «Invia» con `Send`, disabilitato con il campo vuoto. Durante attesa e scrittura campo e invio disabilitati con l'helper «L'assistente sta rispondendo.»; dopo un 429 disabilitati con l'helper «Potrai scrivere tra N secondi.», con N che scende |
+| Nota | sotto il form, in `caption` `text.secondary`: «Le risposte sono generate da un'AI: prezzi e disponibilità sono quelli delle schede.» |
 
 ### Accesso e pagine dai link email
 
@@ -193,6 +218,9 @@ Riassunto delle regole di `design/design-system/voice-and-content.md`, che resta
 | Rinomina passkey | `Dialog` con campo "Nome della passkey", pulsanti "Annulla" e "Salva" |
 | Attività recente | card "Attività recente" con `List`: icona del tipo di evento in `Avatar`, etichetta dall'API, sotto «[nome della passkey ·] dispositivo · IP {indirizzo}» in `caption`, data e ora a destra su desktop e sotto su mobile; righe separate da `Divider`; in fondo pulsante testuale "Mostra altre attività" finché ci sono altre pagine |
 | Conferma dell'identità | `ConfirmIdentityDialog`: titolo "Conferma la tua identità" con `IconButton` di chiusura, descrizione dell'operazione (es. «Per disattivare la doppia autenticazione, conferma che sei tu.»), campo Password con mostra/nascondi; con la doppia autenticazione attiva, un `Divider`, "Secondo fattore" e un `ToggleButtonGroup` a tutta larghezza App / Codice di recupero / Passkey (Passkey solo se l'utente ne ha), con il campo del codice e il suo `helperText` ("Lo trovi nell'app di autenticazione.", "Ogni codice si può usare una sola volta. Te ne restano N.") oppure il pulsante "Usa la passkey" con "Il dispositivo ti chiederà l'impronta, il volto o il PIN."; pulsanti "Annulla" e "Conferma" |
+| Sezione Elimina account | dal mockup `05-assistente-account.pdf`: in fondo alla pagina Sicurezza, dopo un `Divider` che la separa dalle altre card; `Card` con titolo `h3` «Elimina account», testo «Cancelli i tuoi dati, gli indirizzi e l'accesso. L'operazione non si può annullare.» e a destra `Button` outlined `error` «Elimina l'account» con `DeleteOutline` (su mobile a tutta larghezza sotto il testo). Non compare per un admin |
+| Conferma dell'eliminazione | `Dialog` «Vuoi eliminare il tuo account?» (titolo in Bodoni): «Cosa viene cancellato» in `subtitle2` con un elenco di righe con icona, «I tuoi dati personali» (`PersonOutline`), «Gli indirizzi salvati» (`PlaceOutlined`), «Il carrello» (`ShoppingBagOutlined`), «L'accesso: password, passkey e doppia autenticazione» (`KeyOutlined`); «Cosa conserviamo» in `subtitle2` con un `Alert` `info` dal titolo «Gli ordini, per 10 anni» e testo «È un obbligo di legge: i documenti di vendita vanno conservati.»; `Checkbox` «Ho capito che l'operazione non si può annullare»; pulsanti «Annulla» (testuale) ed «Elimina l'account» (pieno, `error`, disabilitato finché la checkbox non è spuntata, con `CircularProgress` durante l'invio). Su mobile il dialog non è a schermo intero |
+| Ordini in corso | dopo un 409 `account_has_open_orders` il dialog cambia contenuto: titolo «Per ora non puoi eliminare l'account», `Alert` `warning` con il messaggio ricevuto dall'API («Hai ordini in corso: potrai eliminare l'account dopo la consegna, oppure annullandoli.»), pulsanti «Chiudi» (testuale) e «I miei ordini» (pieno, con `ArrowForward`) |
 
 Icone degli eventi di sicurezza: `Login` per accessi e uscite, `LockOutlined` per password, `KeyOutlined` per passkey, `VerifiedUserOutlined` per doppia autenticazione e codici, `MailOutline` per email, `WarningAmberOutlined` per tentativi falliti.
 
@@ -298,6 +326,7 @@ Solo `@mui/icons-material`, nella variante outlined dove esiste.
 - Contrasto della palette conforme a WCAG AA.
 - Il focus resta sempre visibile; i dialog spostano il focus sul primo campo.
 - Il colore non è mai l'unica informazione: stati e disponibilità hanno sempre anche l'etichetta testuale.
+- Assistente: il pannello ha `role="dialog"` con `aria-labelledby` sul titolo (su desktop senza `aria-modal`, perché non è modale); all'apertura il focus va sul campo della domanda, alla chiusura torna al pulsante; Esc chiude il pannello. L'area dei messaggi **non** è una regione live e ha `aria-busy="true"` durante attesa e scrittura, così i frammenti dello streaming non vengono letti; una regione separata `aria-live="polite"`, nascosta alla vista, riceve solo il testo della risposta completa, «Risposta interrotta.» e i messaggi d'errore. L'helper «Potrai scrivere tra N secondi.» non sta in una regione live, altrimenti verrebbe annunciato ogni secondo. Focus durante la conversazione: all'invio va su «Interrompi»; quando il campo si riattiva (fine della risposta, interruzione, fine del conto alla rovescia del 429) torna sul campo; dopo un errore va sull'azione «Riprova», o sul campo se «Riprova» è disabilitato. Il pulsante «Chiedi all'assistente» ha `aria-expanded`.
 
 ## Da Claude Design al codice
 
@@ -321,3 +350,9 @@ Solo `@mui/icons-material`, nella variante outlined dove esiste.
    - la descrizione breve del prodotto è obbligatoria e ha l'asterisco (il mockup non lo mostra)
    - nel nuovo prodotto le immagini si aggiungono solo dopo il primo salvataggio (il mockup mostra l'area di caricamento anche nel nuovo prodotto)
    - il numero di pezzi delle scorte basse nei testi della dashboard e del form arriva dalle impostazioni admin, non è scritto nel frontend
+   - l'amministratrice demo è Marta Lenzi (marta.lenzi@esempio.it), dai dati demo della skill `ecommerce-domain` (il mockup `05-assistente-account.pdf` scrive «Marta Bianchi»)
+   - l'attesa dell'assistente dice «Sto preparando la risposta…» (il mockup scrive «Sto cercando nel catalogo…», ma l'indicatore compare anche per le domande su spedizione e resi, dove non si cerca nel catalogo, e il frontend non sa se il modello usa un tool)
+   - le card dei prodotti citati dall'assistente sono un componente compatto della feature, che riusa etichetta e colori della disponibilità e l'aggiunta al carrello del catalogo
+   - per un admin il pulsante dell'assistente non compare e la sezione «Elimina account» è nascosta (il mockup non mostra la pagina Sicurezza dell'admin; l'API risponde 403)
+   - i suggerimenti dopo una domanda fuori tema compaiono solo quando la risposta coincide con la frase fissa del rifiuto (regola nella skill `react-architecture`)
+   - il catalogo del mockup `05-assistente-account.pdf` mostra ancora «Rilevanza»: vale «Novità»

@@ -5,7 +5,7 @@ description: Autenticazione e sicurezza dell'account — registrazione con verif
 
 # Sicurezza dell'account
 
-Riferimento visivo: `design/mockups/03-account.pdf` (accesso, registrazione, pagine raggiunte dai link email, area account, sicurezza, dialog di conferma). Dove il mockup e questa skill divergono, vale questa skill.
+Riferimenti visivi: `design/mockups/03-account.pdf` (accesso, registrazione, pagine raggiunte dai link email, area account, sicurezza, dialog di conferma) e `design/mockups/05-assistente-account.pdf` (Design E: sezione ed eliminazione dell'account). Dove il mockup e questa skill divergono, vale questa skill.
 
 ## Principi
 
@@ -206,7 +206,7 @@ Si realizza nella Fase 3b (`docs/roadmap.md`), con la colonna `users.anonymized_
 
 1. `DELETE /me`, con i middleware in quest'ordine: `can:delete,…` sull'utente autenticato (Policy), poi `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). La logica sta in `DeleteAccountAction`.
 2. **Chi può farlo:** solo un `customer`. Un admin riceve 403 dalla Policy, così il negozio non resta senza amministratori. Il permesso si controlla **prima** della conferma dell'identità: un admin riceve subito 403, senza che gli si chieda la password.
-3. **Ordini aperti:** sono aperti gli ordini `paid` e `shipped`, e gli ordini `pending` creati negli ultimi `account_deletion_pending_window` minuti (15), cioè un pagamento ancora in corso. Un ordine `pending` più vecchio è un orfano e non blocca per sempre l'eliminazione. Con ordini aperti: `AccountHasOpenOrdersException` (409) con `code` `account_has_open_orders` e il messaggio «Hai ordini ancora in corso: potrai eliminare l'account quando saranno consegnati o annullati.». Nessun effetto.
+3. **Ordini aperti:** sono aperti gli ordini `paid` e `shipped`, e gli ordini `pending` creati negli ultimi `account_deletion_pending_window` minuti (15), cioè un pagamento ancora in corso. Un ordine `pending` più vecchio è un orfano e non blocca per sempre l'eliminazione. Con ordini aperti: `AccountHasOpenOrdersException` (409) con `code` `account_has_open_orders` e il messaggio «Hai ordini ancora in corso: potrai eliminare l'account quando saranno consegnati o annullati.». Nessun effetto. **Dalla Fase 9** il messaggio diventa quello del Design E, «Hai ordini in corso: potrai eliminare l'account dopo la consegna, oppure annullandoli.» (eccezione, test e `docs/api/openapi.yaml`, riga in `docs/backlog.md`).
 4. **Prima della transazione** si legge l'indirizzo email originale e il nome, che servono alla notifica.
 5. **In `DB::transaction()`, con `lockForUpdate()` sull'utente** (il controllo degli ordini aperti si ripete sotto lock; un checkout che arriva dopo trova le sessioni chiuse e riceve 401):
    - si cancellano indirizzi, carrello con le sue righe, eventi di sicurezza, richieste di cambio email, token di reset dell'indirizzo originale (`password_reset_tokens`) e tutte le sessioni dell'utente, compresa quella corrente
@@ -337,12 +337,19 @@ Verifica email, reset password, password cambiata, conferma cambio email (nuovo 
 - Sotto i campi della nuova password, l'elenco dei requisiti si aggiorna mentre l'utente scrive, con le stesse regole dello schema Zod.
 - I codici di recupero si mostrano una volta sola, con copia e download in un file `.txt`.
 - L'attività recente mostra la prima pagina e il pulsante "Mostra altre attività" finché ci sono pagine successive.
-- Eliminazione dell'account (Fase 9, posizione e testi dal Design E):
-  - sezione "Elimina account" con il pulsante «Elimina l'account» in colore errore
-  - il pulsante apre un `Dialog` di conferma esplicito, che elenca cosa si cancella e dice che gli ordini restano conservati per gli obblighi fiscali; il pulsante di conferma resta disabilitato finché l'utente non spunta «Ho capito che l'operazione non si può annullare»
-  - la richiesta `DELETE /me` porta la descrizione `identityPrompt` («Prima di eliminare l'account, conferma che sei tu.»); il 423 lo gestisce l'interceptor
+- Eliminazione dell'account (Fase 9, mockup `05-assistente-account.pdf`; componenti nella skill `mui-design-system`, "Sicurezza"):
+  - in fondo alla pagina Sicurezza, dopo un `Divider`, la card "Elimina account" con «Cancelli i tuoi dati, gli indirizzi e l'accesso. L'operazione non si può annullare.» e il pulsante outlined «Elimina l'account» in colore errore
+  - per un admin la sezione non compare: la Policy risponderebbe comunque 403
+  - il pulsante apre il `Dialog` «Vuoi eliminare il tuo account?»:
+    - «Cosa viene cancellato»: «I tuoi dati personali», «Gli indirizzi salvati», «Il carrello», «L'accesso: password, passkey e doppia autenticazione»
+    - «Cosa conserviamo»: «Gli ordini, per 10 anni», «È un obbligo di legge: i documenti di vendita vanno conservati.»
+    - checkbox «Ho capito che l'operazione non si può annullare»
+    - pulsanti «Annulla» ed «Elimina l'account»; quest'ultimo resta disabilitato finché la checkbox non è spuntata
+  - chiudere e riaprire il dialog toglie la spunta e, dopo un 409, riporta al contenuto di conferma
+  - la richiesta `DELETE /me` porta la descrizione `identityPrompt` («Prima di eliminare l'account, conferma che sei tu.»); il 423 lo gestisce l'interceptor, che apre `ConfirmIdentityDialog` sopra il dialog di eliminazione e poi ripete la richiesta
   - dopo il 204: cache di TanStack Query svuotata, navigazione alla home e Snackbar «Il tuo account è stato eliminato.»
-  - un 409 `account_has_open_orders` lascia il dialog aperto con l'`Alert` del messaggio ricevuto
+  - un 409 `account_has_open_orders` cambia il contenuto del dialog: titolo «Per ora non puoi eliminare l'account», `Alert` `warning` con il messaggio ricevuto (dalla Fase 9 «Hai ordini in corso: potrai eliminare l'account dopo la consegna, oppure annullandoli.»), pulsanti «Chiudi» e «I miei ordini», che porta a `/account/orders`
+  - se l'utente annulla la conferma dell'identità il dialog di eliminazione resta aperto, senza errori
 
 ## Test obbligatori
 

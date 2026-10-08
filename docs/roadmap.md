@@ -19,7 +19,7 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 5b | Checkout, pagamenti, ordini del cliente, annullamento con rimborso, email, riconciliazione degli ordini rimasti in attesa | completata |
 | Fase 5c | Ordini e dashboard admin | completata |
 | Fase 6 | Revisione della copertura dei test e documentazione delle API | completata |
-| Design E | Chat dell'assistente e sezione "Elimina account" (in Claude Design, prima della Fase 7) | |
+| Design E | Chat dell'assistente e sezione "Elimina account" (in Claude Design, prima della Fase 7), `design/mockups/05-assistente-account.pdf`, e allineamento delle skill | completata |
 | Fase 7 | Frontend base: tema dal design system, router, layout, httpClient, autenticazione, pagine raggiunte dai link email | |
 | Fase 8 | Negozio: home, catalogo, prodotto, carrello, checkout, conferma d'ordine, widget dell'assistente | |
 | Fase 9 | Area account (profilo, indirizzi, ordini, sicurezza, eliminazione dell'account) e pannello admin | |

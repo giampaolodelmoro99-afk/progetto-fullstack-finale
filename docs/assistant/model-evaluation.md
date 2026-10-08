@@ -185,7 +185,7 @@ Esito: su questa versione di Ollama un messaggio `system` nella richiesta **sost
 
 ## Punti aperti per le fasi successive
 
-- **Markdown nelle risposte.** Tutti i modelli usano grassetto ed elenchi puntati. Il widget (Design E, Fase 8) deve decidere se mostrarli o se chiedere nel Modelfile testo semplice.
+- **Markdown nelle risposte.** Tutti i modelli usano grassetto ed elenchi puntati. Deciso nel Design E: il widget mostra un Markdown leggero (solo grassetto ed elenchi puntati e numerati) con un parser scritto a mano; nella Fase 8 il Modelfile chiede esplicitamente questo formato e le domande fisse si riprovano con `make ask`.
 - **Header in ritardo.** Con qwen3.5 l'endpoint della Fase 4b invia gli header solo quando arriva il primo frammento (circa 14 s); il frontend mostra un indicatore di attesa fino ad allora.
 - **Ricerca senza parola chiave.** Risolto nella Fase 4b (sezione «Fase 4b: ricerca senza parola chiave»).
 - **Confronti numerici.** In q2 il modello a volte considera il Caricatore Brezza 100 W fuori da «almeno 65 W» (2 esecuzioni su 3 dopo la revisione della Fase 4b). La ricerca è corretta; da rivalutare con una regola nel Modelfile, riprovando tutte le domande fisse.

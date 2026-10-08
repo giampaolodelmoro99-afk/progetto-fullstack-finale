@@ -5,7 +5,7 @@ description: Architettura del frontend React del progetto — struttura per feat
 
 # React — architettura del frontend
 
-Riferimenti visivi: `design/mockups/01-negozio.pdf` (negozio), `design/mockups/02-acquisto.pdf` (carrello, checkout, conferma) `design/mockups/03-account.pdf` (accesso, registrazione, pagine dai link email, area account, sicurezza) e `design/mockups/04-admin.pdf` (pannello di amministrazione). Testi e formati: `design/design-system/voice-and-content.md`.
+Riferimenti visivi: `design/mockups/01-negozio.pdf` (negozio), `design/mockups/02-acquisto.pdf` (carrello, checkout, conferma) `design/mockups/03-account.pdf` (accesso, registrazione, pagine dai link email, area account, sicurezza), `design/mockups/04-admin.pdf` (pannello di amministrazione) e `design/mockups/05-assistente-account.pdf` (Design E: assistente AI, eliminazione dell'account, categoria inesistente, admin nel negozio). Testi e formati: `design/design-system/voice-and-content.md`.
 
 ## Stack
 
@@ -33,7 +33,7 @@ src/
 │   ├── checkout/
 │   ├── account/
 │   ├── settings/             # api/ hooks/: useShopSettings, useAdminSettings, useSupportContent
-│   ├── assistant/            # widget dell'assistente AI (skill ai-assistant)
+│   ├── assistant/            # widget dell'assistente AI: api/ hooks/ components/ utils/ (sezione "Assistente AI")
 │   └── admin/                # navigation.js; dashboard/ products/ categories/ orders/, ognuna con api/ hooks/ components/ pages/
 ├── components/               # condivisi: feedback/, form/, data-display/, navigation/
 ├── layouts/                  # StoreLayout, AuthLayout, AccountLayout, AdminLayout
@@ -192,14 +192,45 @@ Dal mockup `01-negozio.pdf`:
 | Prezzo decrescente | `price_desc` |
 
 - Il valore predefinito non compare nella query string; cambiare ordinamento o filtri riporta a pagina 1.
-- Categoria inesistente: `GET /products` risponde 422 con un errore su `category` (es. un link a una categoria eliminata). La pagina non mostra l'errore generico ma lo stato «Questa categoria non esiste», nello stile dello stato vuoto del mockup `01-negozio`, con il pulsante "Vedi tutti i prodotti" che porta al catalogo completo (`/products` senza parametri).
+- Categoria inesistente: `GET /products` risponde 422 con un errore su `category` (es. un link a una categoria eliminata). La pagina non mostra l'errore generico ma lo stato del mockup `05-assistente-account.pdf`: breadcrumb «Categoria non trovata», senza filtri né ordinamento, titolo «Questa categoria non esiste», testo «Forse il link è vecchio, oppure l'indirizzo ha un errore.» e pulsante "Vedi tutti i prodotti" che porta al catalogo completo (`/products` senza parametri).
 - I limiti dello slider del prezzo arrivano da `meta.price_range` della risposta, in centesimi.
 - Il numero di prodotti mostrato sotto il titolo arriva da `meta.total`.
 - Il dettaglio prodotto carica i correlati con `GET /products/{slug}/related`; se l'elenco è vuoto la sezione non si mostra.
 - `is_new` e `availability` arrivano dall'API: il frontend li mostra, non li calcola.
 - Il selettore di quantità della pagina prodotto va da 1 a `max_quantity` del prodotto.
 - Dopo l'aggiunta al carrello compare uno Snackbar "Aggiunto al carrello" con l'azione "Vai al carrello"; si invalida `cart`.
-- **Admin nel negozio:** gli admin non possono fare acquisti (le API di indirizzi, carrello e checkout rispondono 403, skill `ecommerce-domain`). Per un utente admin che naviga il negozio l'icona del carrello nell'header è nascosta (e `GET /cart` non viene richiesto), e al posto di "Aggiungi al carrello" compare un testo informativo con lo stesso messaggio dell'API: «Gli account di amministrazione non possono fare acquisti.».
+- **Admin nel negozio:** gli admin non possono fare acquisti (le API di indirizzi, carrello e checkout rispondono 403, skill `ecommerce-domain`). Per un utente admin che naviga il negozio l'icona del carrello nell'header è nascosta (e `GET /cart` non viene richiesto); nella pagina prodotto, al posto del selettore di quantità e di "Aggiungi al carrello", compare un `Alert` `info` con lo stesso messaggio dell'API: «Gli account di amministrazione non possono fare acquisti.» (mockup `05-assistente-account.pdf`). Il pulsante dell'assistente AI non compare (sezione "Assistente AI").
+
+## Assistente AI (`features/assistant`)
+
+Dal mockup `05-assistente-account.pdf`; aspetto nella skill `mui-design-system` ("Assistente AI"), API e streaming nella skill `ai-assistant`.
+
+```
+features/assistant/
+├── api/          # fetchAssistantStatus, streamAssistantAnswer (fetch + NDJSON)
+├── hooks/        # useAssistantStatus, useAssistant (contesto della conversazione)
+├── components/   # AssistantProvider, AssistantLauncher, AssistantPanel, AssistantMessage, AssistantProductCard, AssistantComposer
+└── utils/        # parseNdjson, stripProductMarkers, parseLightMarkdown, con i test
+```
+
+- **Montaggio:** `AssistantProvider` e il pulsante stanno in `StoreLayout`, quindi in ogni pagina del negozio (anche account e accesso), mai in `AdminLayout`. Sotto `md` il pulsante si nasconde nelle rotte del carrello e del checkout (`paths.cart`, `paths.checkout`), per non coprire la barra fissa in fondo; la conversazione resta nel provider. Per un admin (`isAdmin` di `useAuth`) non si montano e `GET /assistant/status` non viene richiesto: l'assistente è per clienti e ospiti. Si montano solo quando `isLoading` di `useAuth` è falso, così il pulsante non compare per un attimo a un admin e la richiesta di stato non parte prima di sapere chi è l'utente.
+- **Stato della conversazione** nel provider, solo in memoria: elenco dei messaggi (`{ id, role, content, products, interrupted }`), `status` (`idle`, `waiting` fino al primo `delta`, `streaming`, `error`), l'errore corrente (`{ kind, message, retryAfter }`) e lo stato del pannello aperto o chiuso. Aprire e chiudere il pannello non cancella la conversazione. Quando cambia l'utente (login, logout, anche dopo l'eliminazione dell'account) il provider interrompe la richiesta in corso e svuota la conversazione, così su un dispositivo condiviso chi viene dopo non vede le domande precedenti; il blocco di un 429 in corso resta fino alla scadenza, per semplicità: dura al massimo il `Retry-After` ricevuto.
+- **Invio:** il messaggio dell'utente si aggiunge subito; la cronologia inviata contiene gli ultimi 10 messaggi completi, senza le risposte interrotte o fallite; delle risposte si invia il testo grezzo ricevuto, con i marcatori `[[slug]]`, che il frontend toglie solo nella visualizzazione, troncato a 4000 caratteri (`max_assistant_message_length` del backend, costante della feature), così una risposta lunga non fa rispondere 422 alla domanda successiva. Due messaggi `user` di seguito (dopo un'interruzione o un errore) sono ammessi dal backend, che controlla solo che l'ultimo sia `user`. Durante `waiting` e `streaming` campo e invio sono disabilitati.
+- **Interrompi:** visibile in `waiting` e in `streaming`, nella stessa posizione. Chiama `abort()` dell'`AbortController` della richiesta in corso: nessun errore mostrato, il testo già arrivato resta con `interrupted: true` (mostrato con «Risposta interrotta.»), senza card, e non entra nella cronologia inviata; `status` torna `idle` e si può scrivere subito. Se non era arrivato nessun testo, al posto della bolla compare solo «Risposta interrotta.». Un `AbortError` (o `signal.aborted`) non è mai un errore: la funzione di streaming lo distingue dall'errore di rete e non mostra nessun `Alert`. La chiusura del pannello interrompe allo stesso modo.
+- **Nuova conversazione:** interrompe la richiesta in corso, svuota messaggi ed errore e mostra di nuovo i suggerimenti; disabilitata a conversazione vuota. Il blocco di un 429 ancora in corso resta: campo e invio restano disabilitati fino alla scadenza.
+- **Riprova:** reinvia l'ultima domanda dell'utente con la stessa cronologia, senza duplicarla nell'elenco; l'`Alert` sparisce all'invio e l'eventuale testo parziale della risposta fallita viene sostituito dalla nuova risposta.
+- **Errori**, mostrati nel pannello senza perdere la conversazione:
+  - 503 `assistant_busy` e `assistant_unavailable`: messaggio ricevuto dall'API
+  - evento `error` durante lo streaming: messaggio ricevuto, sotto il testo parziale, che resta visibile e non entra nella cronologia
+  - stream chiuso senza `done` né `error` (per esempio un worker interrotto): come l'evento `error`, con «La risposta si è interrotta prima della fine.»
+  - 429 con `Retry-After`: testo locale dell'`Alert` «Hai fatto troppe domande, riprova tra N secondi.», con N da `retryAfter` di `normalizeApiError`, fisso nell'`Alert`. Il provider salva la scadenza (`Date.now() + retryAfter * 1000`) e un `setInterval` di un secondo, pulito allo smontaggio, ricalcola a ogni tick i secondi rimasti dalla scadenza (non decrementa un contatore, che resterebbe indietro nelle schede in background). Fino alla scadenza «Riprova», campo e invio sono disabilitati e l'helper del campo dice «Potrai scrivere tra N secondi.», con N che scende; alla scadenza l'helper sparisce, campo e invio si riattivano e l'`Alert` resta con «Riprova» attivo
+  - 429 senza `Retry-After`: «Hai fatto troppe domande, riprova tra poco.», nessun blocco, «Riprova» attivo
+  - errore di rete: «L'assistente non è disponibile in questo momento.»
+- **Testo della risposta:** `stripProductMarkers` toglie i marcatori `[[slug]]`, anche quelli incompleti in fondo durante lo streaming; poi `parseLightMarkdown` trasforma il testo in blocchi (paragrafi, elenchi puntati con righe che iniziano con «- » o «* », elenchi numerati con «1. ») e segmenti in linea (testo e `**grassetto**`). Il componente li rende con `Typography`, `List` e `strong`. Nessun `dangerouslySetInnerHTML` e nessuna libreria: titoli, link, immagini, codice e HTML restano testo semplice; un `**` non ancora chiuso durante lo streaming non si mostra.
+- **Suggerimenti:** con la conversazione vuota, e di nuovo sotto l'ultima risposta quando il suo testo, senza marcatori e spazi ai bordi, coincide con la frase fissa del rifiuto «Posso aiutarti solo con i prodotti e i servizi di Casa del Silicio.» (costante della feature). Un clic invia il suggerimento.
+- **Card:** `AssistantProductCard`, una per prodotto dell'evento `products`, con prezzo e disponibilità della risposta; "Vedi prodotto" porta a `paths.product(slug)`, "Aggiungi al carrello" usa la stessa mutation del catalogo (ospite → login con ritorno alla pagina corrente). Il backend scarta già gli esauriti prima dell'evento `products`; il pulsante disabilitato per un prodotto non disponibile resta solo come difesa.
+- **Stato dell'assistente:** `useAssistantStatus()` su `queryKeys.assistant.status`; con `available: false` o con un errore il pulsante è disabilitato con «Assistente non disponibile».
+- **Layout:** pannello non modale da `md` (la pagina sotto resta usabile), `Dialog` a schermo intero sotto `md`, con `useMediaQuery` sul breakpoint del tema. Su mobile una navigazione dal pannello ("Vedi prodotto", login da ospite) chiude il pannello senza toccare la conversazione; su desktop il pannello resta aperto.
 
 ## Carrello (`/cart`)
 
@@ -280,7 +311,7 @@ Dal mockup `03-account.pdf`.
   - attivazione TOTP con lo stato del passo in `useState` del componente; i codici di recupero vivono solo nello stato locale del passo 3 e si perdono chiudendolo
   - passkey da `GET /me/passkeys`, con aggiunta, rinomina e rimozione; le rotte `identity.confirmed` passano la descrizione dell'operazione nella configurazione della richiesta
   - attività recente con `useInfiniteQuery` su `GET /me/security-events` (`queryKeys.security.events`), `getNextPageParam` dai `meta` della paginazione e pulsante "Mostra altre attività" finché `hasNextPage`
-- **Elimina account** (Fase 9, posizione dal Design E): mutation su `DELETE /me` con `identityPrompt`; dopo il 204 `queryClient.clear()`, navigazione alla home e Snackbar. Flusso, dialog e testi nella skill `account-security`, "Eliminazione dell'account" e "Frontend".
+- **Elimina account** (Fase 9, mockup `05-assistente-account.pdf`): sezione in fondo alla pagina Sicurezza, nascosta per un admin. Il pulsante apre il dialog di conferma (stato `useState` del componente: aperto, checkbox, esito 409); la conferma lancia la mutation su `DELETE /me` con `identityPrompt`, e il 423 lo gestisce l'interceptor. Dopo il 204 `queryClient.clear()`, navigazione alla home e Snackbar. Un 409 `account_has_open_orders` cambia il contenuto del dialog nello stato "Per ora non puoi eliminare l'account" con il messaggio ricevuto, "Chiudi" e "I miei ordini" (`paths.accountOrders`). Testi nella skill `account-security`, "Frontend".
 
 ## Area admin (`features/admin`)
 
@@ -415,7 +446,7 @@ export function useProducts(filters) {
 - `IdentityConfirmationProvider` espone anche `confirmIdentity({ prompt })`, che apre il dialog senza una richiesta fallita e restituisce una Promise risolta alla conferma e rifiutata all'annullamento.
 - Errori normalizzati da `utils/normalizeApiError.js` nella forma `{ status, message, fieldErrors, retryAfter, code }`:
   - `code` è il campo `code` della risposta del server, `null` se manca; serve a distinguere errori con lo stesso status (es. `two_factor_challenge_expired` rispetto a un codice sbagliato, entrambi 422)
-  - il messaggio del server si usa solo per 422, 409, 402 e per il 502 con `code` `refund_failed`; per gli altri status e per l'errore di rete si usano testi italiani locali
+  - il messaggio del server si usa solo per 422, 409, 402, per il 502 con `code` `refund_failed` e per il 503 con `code` `assistant_busy` o `assistant_unavailable` (skill `ai-assistant`); per gli altri status e per l'errore di rete si usano testi italiani locali
   - `retryAfter` è il numero di secondi letto dall'header `Retry-After` delle risposte 429, `null` se l'header manca o non è un numero
   - per il 429 il messaggio è «Troppi tentativi. Riprova tra N secondi», con N da `retryAfter`, oppure «Troppi tentativi. Riprova tra poco» se manca
 
