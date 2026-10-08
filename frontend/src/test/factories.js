@@ -64,13 +64,71 @@ export function buildCart(overrides = {}) {
     summary: {
       items_count: 0,
       subtotal: 0,
-      shipping: 0,
+      shipping_cost: 0,
       total: 0,
+      free_shipping_threshold: 9900,
       free_shipping_remaining: null,
-      can_checkout: false,
       ...summary,
     },
+    can_checkout: false,
     ...rest,
+  };
+}
+
+export function buildProduct(overrides = {}) {
+  const id = nextId();
+
+  return {
+    id,
+    name: 'Cuffie Aria',
+    slug: `cuffie-aria-${id}`,
+    price: 34900,
+    is_new: false,
+    availability: { status: 'available', label: 'Disponibile' },
+    category: { name: 'Audio', slug: 'audio' },
+    cover: { url: `https://cdn.esempio.it/products/${id}.webp`, alt: 'Cuffie Aria grafite' },
+    ...overrides,
+  };
+}
+
+export function buildProductDetail(overrides = {}) {
+  const product = buildProduct(overrides);
+
+  return {
+    short_description: 'Cuffie wireless con cancellazione del rumore adattiva.',
+    description: 'Padiglioni in alluminio anodizzato.\n\nFino a 40 ore di ascolto.',
+    specifications: [
+      { label: 'Peso', value: '250 g' },
+      { label: 'Autonomia', value: '40 ore' },
+    ],
+    images: [
+      { url: `https://cdn.esempio.it/products/${product.id}-front.webp`, alt: 'Vista frontale' },
+      {
+        url: `https://cdn.esempio.it/products/${product.id}-angle.webp`,
+        alt: 'Vista di tre quarti',
+      },
+    ],
+    max_quantity: 10,
+    ...product,
+    ...overrides,
+  };
+}
+
+export function buildProductPage(products = [], meta = {}) {
+  return {
+    data: products,
+    links: { first: null, last: null, prev: null, next: null },
+    meta: {
+      current_page: 1,
+      from: products.length > 0 ? 1 : null,
+      last_page: 1,
+      per_page: 12,
+      to: products.length > 0 ? products.length : null,
+      total: products.length,
+      path: 'http://localhost:8000/api/v1/products',
+      price_range: { min: 1900, max: 149900 },
+      ...meta,
+    },
   };
 }
 

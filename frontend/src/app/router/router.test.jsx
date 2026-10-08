@@ -20,7 +20,7 @@ describe('router', () => {
   it('opens the public pages for a guest', async () => {
     const { router } = renderRoute('/products');
 
-    await expectPage('Catalogo');
+    await expectPage('Tutti i prodotti');
     expect(router.state.location.pathname).toBe('/products');
   });
 
@@ -62,7 +62,7 @@ describe('router', () => {
     async (route) => {
       const { router } = renderRoute(route, buildUser());
 
-      await expectPage('Casa del Silicio');
+      await expectPage('Suono, in silenzio');
       expect(router.state.location.pathname).toBe('/');
     },
   );
@@ -170,7 +170,7 @@ describe('router', () => {
   it('sends a customer from the admin area to the home', async () => {
     const { router } = renderRoute('/admin/products', buildUser());
 
-    await expectPage('Casa del Silicio');
+    await expectPage('Suono, in silenzio');
     expect(router.state.location.pathname).toBe('/');
   });
 

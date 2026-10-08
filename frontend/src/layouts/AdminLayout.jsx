@@ -8,7 +8,7 @@ import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { Suspense, useState } from 'react';
-import { Outlet } from 'react-router';
+import { Outlet, ScrollRestoration } from 'react-router';
 import { useDocumentTitle } from '@/app/router/useDocumentTitle';
 import { useRouteTitle } from '@/app/router/useRouteTitle';
 import { PageLoader } from '@/components/feedback/PageLoader';
@@ -101,6 +101,7 @@ export function AdminLayout() {
           </Suspense>
         </Box>
       </Box>
+      <ScrollRestoration />
     </Box>
   );
 }

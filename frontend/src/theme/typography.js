@@ -56,6 +56,12 @@ export const typography = {
     fontWeight: 400,
     letterSpacing: '0.01em',
   },
+  captionStrong: {
+    fontSize: '0.75rem',
+    lineHeight: '1.125rem',
+    fontWeight: 600,
+    letterSpacing: '0.01em',
+  },
   overline: {
     fontSize: '0.6875rem',
     lineHeight: '1rem',

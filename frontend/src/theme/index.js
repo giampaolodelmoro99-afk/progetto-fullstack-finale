@@ -23,6 +23,8 @@ export const layout = {
   accountNavigationWidth: 260,
   assistantPanelWidth: 440,
   assistantPanelMaxHeight: 'calc(100vh - 160px)',
+  heroTextMaxWidth: '48ch',
+  anchorScrollOffset: 160,
 };
 
 const mixins = {

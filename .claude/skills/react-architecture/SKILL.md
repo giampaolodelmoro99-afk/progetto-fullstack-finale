@@ -200,7 +200,7 @@ Dal mockup `01-negozio.pdf`:
 - Il dettaglio prodotto carica i correlati con `GET /products/{slug}/related`; se l'elenco è vuoto la sezione non si mostra.
 - `is_new` e `availability` arrivano dall'API: il frontend li mostra, non li calcola.
 - Il selettore di quantità della pagina prodotto va da 1 a `max_quantity` del prodotto.
-- Dopo l'aggiunta al carrello compare uno Snackbar "Aggiunto al carrello" con l'azione "Vai al carrello"; si invalida `cart`.
+- Dopo l'aggiunta al carrello compare uno Snackbar "Aggiunto al carrello" con l'azione "Vai al carrello"; la `CartResource` della risposta sostituisce `cart` in cache con `setQueryData` (le scritture del carrello rispondono con il carrello aggiornato, skill `ecommerce-domain`), così il badge si aggiorna senza una seconda richiesta.
 - **Admin nel negozio:** gli admin non possono fare acquisti (le API di indirizzi, carrello e checkout rispondono 403, skill `ecommerce-domain`). Per un utente admin che naviga il negozio l'icona del carrello nell'header è nascosta (e `GET /cart` non viene richiesto); nella pagina prodotto, al posto del selettore di quantità e di "Aggiungi al carrello", compare un `Alert` `info` con lo stesso messaggio dell'API: «Gli account di amministrazione non possono fare acquisti.» (mockup `05-assistente-account.pdf`). Il pulsante dell'assistente AI non compare (sezione "Assistente AI").
 
 ## Assistente AI (`features/assistant`)
@@ -243,7 +243,7 @@ Dal mockup `02-acquisto.pdf`. Tutti i valori arrivano dalla `CartResource` (skil
 - Riepilogo con subtotale, spedizione ("Gratuita" quando è 0), totale e, se `free_shipping_remaining` è maggiore di 0, la barra "Ti mancano … per la spedizione gratuita".
 - "Procedi al checkout" disabilitato quando `can_checkout` è false, con il motivo accanto ("Rimuovi i prodotti esauriti per procedere al checkout").
 - Carrello vuoto: messaggio con "Scopri il negozio" e sezione "Potrebbero piacerti" con `GET /products?in_stock=1&sort=newest&per_page=4`.
-- Modifica della quantità e rimozione sono mutation che invalidano `cart`.
+- Modifica della quantità e rimozione sono mutation che aggiornano `cart` con `setQueryData` dalla `CartResource` della risposta, senza invalidare.
 
 ## Checkout (`/checkout`)
 
@@ -379,7 +379,7 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 - `features/x/api/*.js`: funzioni pure che usano `httpClient` e restituiscono `response.data`. Unica eccezione: la funzione di streaming dell'assistente AI usa `fetch`, perché axios nel browser non legge una risposta a frammenti, e replica a mano CSRF, 419 e normalizzazione degli errori (skill `ai-assistant`, "Frontend").
 - `features/x/hooks/*.js`: `useQuery` e `useMutation` che usano quelle funzioni.
 - Query key centralizzate in `api/queryKeys.js` come factory.
-- Dopo una mutation si invalidano le query toccate (aggiunta al carrello → `cart`; annullamento di un ordine dal cliente → `orders`, `products` e le query admin di ordini, prodotti e dashboard; cambio di stato dall'admin → `admin.orders` e `admin.dashboard`; prodotti e categorie dall'admin → le query admin e quelle pubbliche di `products` e `categories`; modifiche di sicurezza → `me` e `security`).
+- Dopo una mutation si invalidano le query toccate (le scritture del carrello non invalidano: la risposta sostituisce `cart` in cache; annullamento di un ordine dal cliente → `orders`, `products` e le query admin di ordini, prodotti e dashboard; cambio di stato dall'admin → `admin.orders` e `admin.dashboard`; prodotti e categorie dall'admin → le query admin e quelle pubbliche di `products` e `categories`; modifiche di sicurezza → `me` e `security`).
 - `QueryClient` con `staleTime` ragionevole e nessun retry per gli errori 4xx.
 
 ```js

@@ -3,6 +3,8 @@ import {
   buildAdminSettings,
   buildCart,
   buildCategories,
+  buildProductDetail,
+  buildProductPage,
   buildShopSettings,
   buildSupportSections,
 } from '@/test/factories';
@@ -20,6 +22,11 @@ export const handlers = [
   http.get(apiUrl('/api/v1/me'), () => unauthenticated()),
   http.post(apiUrl('/api/v1/logout'), () => new HttpResponse(null, { status: 204 })),
   http.get(apiUrl('/api/v1/categories'), () => HttpResponse.json({ data: buildCategories() })),
+  http.get(apiUrl('/api/v1/products'), () => HttpResponse.json(buildProductPage())),
+  http.get(apiUrl('/api/v1/products/:slug'), ({ params }) =>
+    HttpResponse.json({ data: buildProductDetail({ slug: params.slug }) }),
+  ),
+  http.get(apiUrl('/api/v1/products/:slug/related'), () => HttpResponse.json({ data: [] })),
   http.get(apiUrl('/api/v1/cart'), () => HttpResponse.json({ data: buildCart() })),
   http.get(apiUrl('/api/v1/shop/settings'), () => HttpResponse.json({ data: buildShopSettings() })),
   http.get(apiUrl('/api/v1/shop/support'), () =>

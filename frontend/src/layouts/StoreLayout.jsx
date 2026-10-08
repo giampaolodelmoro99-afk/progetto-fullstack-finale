@@ -1,5 +1,5 @@
 import Box from '@mui/material/Box';
-import { Outlet } from 'react-router';
+import { Outlet, ScrollRestoration } from 'react-router';
 import { useDocumentTitle } from '@/app/router/useDocumentTitle';
 import { EmailVerificationBanner } from '@/layouts/store/EmailVerificationBanner';
 import { StoreFooter } from '@/layouts/store/StoreFooter';
@@ -23,6 +23,7 @@ export function StoreLayout() {
         <Outlet />
       </Box>
       <StoreFooter />
+      <ScrollRestoration />
     </Box>
   );
 }

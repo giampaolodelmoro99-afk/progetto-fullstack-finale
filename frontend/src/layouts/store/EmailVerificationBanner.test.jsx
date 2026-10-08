@@ -18,12 +18,12 @@ describe('EmailVerificationBanner', () => {
 
   it('is not shown to verified users and guests', async () => {
     const { unmount } = renderApp('/', { user: buildUser() });
-    await screen.findByRole('heading', { level: 1, name: 'Casa del Silicio' });
+    await screen.findByRole('heading', { level: 1, name: 'Suono, in silenzio' });
     expect(screen.queryByText(/Conferma il tuo indirizzo email/)).not.toBeInTheDocument();
     unmount();
 
     renderApp('/');
-    await screen.findByRole('heading', { level: 1, name: 'Casa del Silicio' });
+    await screen.findByRole('heading', { level: 1, name: 'Suono, in silenzio' });
     expect(screen.queryByText(/Conferma il tuo indirizzo email/)).not.toBeInTheDocument();
   });
 
