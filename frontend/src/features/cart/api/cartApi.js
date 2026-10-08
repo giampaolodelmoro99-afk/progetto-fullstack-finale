@@ -17,3 +17,19 @@ export function addCartItem({ productId, quantity }) {
     return response.data.data;
   });
 }
+
+export function updateCartItem({ itemId, quantity }) {
+  return withNormalizedError(async () => {
+    const response = await httpClient.patch(`/api/v1/cart/items/${itemId}`, { quantity });
+
+    return response.data.data;
+  });
+}
+
+export function removeCartItem(itemId) {
+  return withNormalizedError(async () => {
+    const response = await httpClient.delete(`/api/v1/cart/items/${itemId}`);
+
+    return response.data.data;
+  });
+}

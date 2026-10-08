@@ -5,13 +5,14 @@ import { Link as RouterLink } from 'react-router';
 import { paths } from '@/app/router/paths';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useCart } from '@/features/cart/hooks/useCart';
+import { formatItemCount } from '@/utils/format';
 
 function cartLabel(count) {
   if (count === 0) {
     return 'Carrello';
   }
 
-  return `Carrello, ${count} ${count === 1 ? 'articolo' : 'articoli'}`;
+  return `Carrello, ${formatItemCount(count)}`;
 }
 
 export function CartButton() {

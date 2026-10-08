@@ -39,6 +39,8 @@ describe('theme', () => {
     expect(theme.layout.navigationUnderlineOffset).toBe(6);
     expect(theme.layout.heroTextMaxWidth).toBe('48ch');
     expect(theme.layout.anchorScrollOffset).toBe(160);
+    expect(theme.layout.mobileActionBarHeight).toBe(80);
+    expect(theme.layout.stickySummaryTop).toBe(120);
     expect(theme.shape.borderRadius).toBe(4);
   });
 

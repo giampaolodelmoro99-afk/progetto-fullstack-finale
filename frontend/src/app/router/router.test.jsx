@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router/router';
-import { buildAdmin, buildUser } from '@/test/factories';
+import { buildAdmin, buildCart, buildCartItem, buildUser } from '@/test/factories';
 import { apiUrl } from '@/test/mocks/handlers';
 import { server } from '@/test/mocks/server';
 import { renderWithProviders } from '@/test/renderWithProviders';
@@ -203,6 +203,18 @@ describe('router', () => {
     ['/checkout', 'Checkout', 1],
     ['/checkout/success/12', 'Grazie per il tuo ordine', 1],
   ])('opens %s for a customer', async (route, title, level) => {
+    server.use(
+      http.get(apiUrl('/api/v1/cart'), () =>
+        HttpResponse.json({
+          data: buildCart({
+            items: [buildCartItem()],
+            summary: { items_count: 1, subtotal: 34900, total: 34900 },
+            can_checkout: true,
+          }),
+        }),
+      ),
+    );
+
     const { router } = renderRoute(route, buildUser());
 
     await expectPage(title, level);

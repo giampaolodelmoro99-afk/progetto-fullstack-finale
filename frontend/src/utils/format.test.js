@@ -4,7 +4,9 @@ import {
   formatDateTime,
   formatDateTimeShort,
   formatDayTimeShort,
+  formatItemCount,
   formatMonthYear,
+  formatPostalLine,
   formatPrice,
 } from '@/utils/format';
 
@@ -50,5 +52,17 @@ describe('dates', () => {
   it('formats a month with a capital initial', () => {
     expect(formatMonthYear('2026-09')).toBe('Settembre 2026');
     expect(formatMonthYear('2027-01')).toBe('Gennaio 2027');
+  });
+
+  it('counts the items in singular and plural', () => {
+    expect(formatItemCount(1)).toBe('1 articolo');
+    expect(formatItemCount(4)).toBe('4 articoli');
+    expect(formatItemCount(0)).toBe('0 articoli');
+  });
+
+  it('formats the postal line of an italian address', () => {
+    expect(
+      formatPostalLine({ postal_code: '56125', city: 'Pisa', province: 'PI', country: 'IT' }),
+    ).toBe('56125 Pisa (PI), Italia');
   });
 });
