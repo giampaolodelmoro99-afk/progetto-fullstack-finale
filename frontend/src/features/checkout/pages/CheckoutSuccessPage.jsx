@@ -4,7 +4,6 @@ import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
@@ -13,13 +12,13 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink, useParams } from 'react-router';
 import { paths } from '@/app/router/paths';
+import { OrderStatusChip } from '@/components/data-display/OrderStatusChip';
 import { OrderTotals } from '@/components/data-display/OrderTotals';
 import { ProductThumbnail } from '@/components/data-display/ProductThumbnail';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { useOrder } from '@/features/account/hooks/useOrder';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { orderStatusColors } from '@/theme/statusColors';
 import { formatDate, formatPostalLine, formatPrice } from '@/utils/format';
 
 function Detail({ label, children }) {
@@ -71,12 +70,9 @@ function OrderConfirmation({ order }) {
               </Grid>
               <Grid size={6}>
                 <Detail label="Stato">
-                  <Chip
-                    size="small"
-                    label={order.status.label}
-                    color={orderStatusColors[order.status.value]}
-                    sx={{ alignSelf: 'flex-start' }}
-                  />
+                  <Stack direction="row">
+                    <OrderStatusChip status={order.status} />
+                  </Stack>
                 </Detail>
               </Grid>
               {order.payment ? (

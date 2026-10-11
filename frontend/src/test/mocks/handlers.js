@@ -5,6 +5,7 @@ import {
   buildCart,
   buildCategories,
   buildOrder,
+  buildOrderPage,
   buildProductDetail,
   buildProductPage,
   buildShopSettings,
@@ -31,6 +32,7 @@ export const handlers = [
   http.get(apiUrl('/api/v1/products/:slug/related'), () => HttpResponse.json({ data: [] })),
   http.get(apiUrl('/api/v1/cart'), () => HttpResponse.json({ data: buildCart() })),
   http.get(apiUrl('/api/v1/addresses'), () => HttpResponse.json({ data: [buildAddress()] })),
+  http.get(apiUrl('/api/v1/orders'), () => HttpResponse.json(buildOrderPage([buildOrder()]))),
   http.get(apiUrl('/api/v1/orders/:orderId'), ({ params }) =>
     HttpResponse.json({ data: buildOrder({ id: Number(params.orderId) }) }),
   ),

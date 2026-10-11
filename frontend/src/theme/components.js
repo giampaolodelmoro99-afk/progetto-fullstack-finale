@@ -1,3 +1,30 @@
+import { getContrastRatio } from '@mui/material/styles';
+
+const MIN_TEXT_CONTRAST = 4.5;
+
+const SOFT_CHIP_COLORS = ['secondary', 'info', 'success', 'warning', 'error'];
+
+export function softChipTextColor(palette, color) {
+  const { main, light, dark } = palette[color];
+
+  return getContrastRatio(main, light) >= MIN_TEXT_CONTRAST ? main : dark;
+}
+
+function softChipVariant(color) {
+  return {
+    props: { variant: 'soft', color },
+    style: ({ theme }) => {
+      const text = softChipTextColor(theme.palette, color);
+
+      return {
+        backgroundColor: theme.palette[color].light,
+        color: text,
+        '& .MuiChip-icon': { color: text },
+      };
+    },
+  };
+}
+
 function focusRing(theme) {
   return `0 0 0 2px ${theme.palette.background.paper}, 0 0 0 4px ${theme.palette.focusRing}`;
 }
@@ -226,6 +253,7 @@ export const components = {
       }),
       label: ({ theme }) => ({ paddingInline: theme.spacing(1.5) }),
     },
+    variants: SOFT_CHIP_COLORS.map(softChipVariant),
   },
   MuiBadge: {
     styleOverrides: {

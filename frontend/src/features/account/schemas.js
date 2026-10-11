@@ -39,3 +39,20 @@ export const emptyAddress = {
   phone: '',
   is_default: false,
 };
+
+export const profileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Inserisci nome e cognome.')
+    .max(255, 'Usa al massimo 255 caratteri.'),
+});
+
+export const newEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Inserisci l'indirizzo email.")
+    .max(255, 'Usa al massimo 255 caratteri.')
+    .pipe(z.email('Inserisci un indirizzo email valido.')),
+});

@@ -198,7 +198,7 @@ describe('router', () => {
   it.each([
     ['/account/addresses', 'Indirizzi', 2],
     ['/account/orders', 'I miei ordini', 2],
-    ['/account/orders/12', 'Dettaglio ordine', 2],
+    ['/account/orders/12', 'Ordine ORD-2026-000042', 2],
     ['/cart', 'Il tuo carrello', 1],
     ['/checkout', 'Checkout', 1],
     ['/checkout/success/12', 'Grazie per il tuo ordine', 1],
