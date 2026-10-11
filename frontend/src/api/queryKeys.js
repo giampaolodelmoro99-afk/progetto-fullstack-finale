@@ -16,6 +16,7 @@ export const queryKeys = {
     detail: (orderId) => ['orders', 'detail', orderId],
   },
   security: {
+    all: ['security'],
     overview: ['security', 'overview'],
     passkeys: ['security', 'passkeys'],
     events: ['security', 'events'],

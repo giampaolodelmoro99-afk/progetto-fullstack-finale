@@ -113,7 +113,7 @@ it('refuses with open orders and changes nothing', function (Closure $order) {
     fromFrontend()->deleteJson('/api/v1/me')
         ->assertConflict()
         ->assertExactJson([
-            'message' => 'Hai ordini ancora in corso: potrai eliminare l\'account quando saranno consegnati o annullati.',
+            'message' => 'Hai ordini in corso: potrai eliminare l\'account dopo la consegna, oppure annullandoli.',
             'code' => 'account_has_open_orders',
         ]);
 

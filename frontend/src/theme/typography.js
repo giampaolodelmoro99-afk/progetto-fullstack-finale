@@ -3,6 +3,8 @@ export const serifFontFamily =
 
 export const sansFontFamily = '"Manrope Variable", "Manrope", "Helvetica Neue", Arial, sans-serif';
 
+export const monospaceFontFamily = 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
+
 export const typography = {
   fontFamily: sansFontFamily,
   htmlFontSize: 16,
@@ -82,6 +84,13 @@ export const typography = {
     lineHeight: '2.5rem',
     fontWeight: 500,
     fontVariantNumeric: 'lining-nums',
+  },
+  code: {
+    fontFamily: monospaceFontFamily,
+    fontSize: '0.9375rem',
+    lineHeight: '1.5rem',
+    fontWeight: 500,
+    letterSpacing: '0.06em',
   },
   logo: {
     fontFamily: serifFontFamily,

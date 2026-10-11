@@ -323,7 +323,7 @@ Dal mockup `03-account.pdf`.
   - attivazione TOTP con lo stato del passo in `useState` del componente; i codici di recupero vivono solo nello stato locale del passo 3 e si perdono chiudendolo
   - passkey da `GET /me/passkeys`, con aggiunta, rinomina e rimozione; le rotte `identity.confirmed` passano la descrizione dell'operazione nella configurazione della richiesta
   - attività recente con `useInfiniteQuery` su `GET /me/security-events` (`queryKeys.security.events`), `getNextPageParam` dai `meta` della paginazione e pulsante "Mostra altre attività" finché `hasNextPage`
-- **Elimina account** (Fase 9, mockup `05-assistente-account.pdf`): sezione in fondo alla pagina Sicurezza, nascosta per un admin. Il pulsante apre il dialog di conferma (stato `useState` del componente: aperto, checkbox, esito 409); la conferma lancia la mutation su `DELETE /me` con `identityPrompt`, e il 423 lo gestisce l'interceptor. Dopo il 204 `queryClient.clear()`, navigazione alla home e Snackbar. Un 409 `account_has_open_orders` cambia il contenuto del dialog nello stato "Per ora non puoi eliminare l'account" con il messaggio ricevuto, "Chiudi" e "I miei ordini" (`paths.accountOrders`). Testi nella skill `account-security`, "Frontend".
+- **Elimina account** (Fase 9, mockup `05-assistente-account.pdf`): sezione in fondo alla pagina Sicurezza, nascosta per un admin. Il pulsante apre il dialog di conferma (stato `useState` del componente: aperto, checkbox, esito 409); la conferma lancia la mutation su `DELETE /me` con `identityPrompt`, e il 423 lo gestisce l'interceptor. Dopo il 204 navigazione alla home con `flushSync: true`, poi `endUserSession()` di `api/session.js` (svuota tutta la cache e imposta `me` a `null` senza rileggere `GET /me`; senza `flushSync` `ProtectedRoute` vedrebbe l'ospite prima della home e porterebbe al login) e Snackbar. Un 409 `account_has_open_orders` cambia il contenuto del dialog nello stato "Per ora non puoi eliminare l'account" con il messaggio ricevuto, "Chiudi" e "I miei ordini" (`paths.accountOrders`). Testi nella skill `account-security`, "Frontend".
 
 ## Area admin (`features/admin`)
 
@@ -411,6 +411,7 @@ export const queryKeys = {
     detail: (orderId) => ['orders', 'detail', orderId],
   },
   security: {
+    all: ['security'],
     overview: ['security', 'overview'],
     passkeys: ['security', 'passkeys'],
     events: ['security', 'events'],

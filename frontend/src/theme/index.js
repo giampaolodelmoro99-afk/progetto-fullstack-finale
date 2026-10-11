@@ -28,6 +28,7 @@ export const layout = {
   anchorScrollOffset: 160,
   mobileActionBarHeight: 80,
   stickySummaryTop: 120,
+  qrCodeSize: 176,
 };
 
 const mixins = {

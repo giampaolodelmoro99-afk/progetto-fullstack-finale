@@ -25,17 +25,16 @@ import CheckoutSuccessPage from '@/features/checkout/pages/CheckoutSuccessPage';
 import HomePage from '@/features/home/pages/HomePage';
 import LegalPage from '@/features/info/pages/LegalPage';
 import SupportPage from '@/features/info/pages/SupportPage';
+import SecurityPage from '@/features/security/pages/SecurityPage';
 import { AccountLayout } from '@/layouts/AccountLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { StoreLayout } from '@/layouts/StoreLayout';
 import ErrorPage from '@/pages/ErrorPage';
 import NotFoundPage from '@/pages/NotFoundPage';
-import PlaceholderPage from '@/pages/PlaceholderPage';
 
 const AdminPlaceholderPage = lazy(() => import('@/pages/PlaceholderPage'));
 
-const accountPage = <PlaceholderPage headingComponent="h2" />;
 const adminPage = <AdminPlaceholderPage headingComponent={null} />;
 
 function page(path, title, element, handle = {}) {
@@ -97,7 +96,7 @@ export const routes = [
                 children: [
                   { path: paths.account, element: <Navigate to={paths.accountProfile} replace /> },
                   page(paths.accountProfile, 'Profilo', <ProfilePage />),
-                  page(paths.accountSecurity, 'Sicurezza', accountPage),
+                  page(paths.accountSecurity, 'Sicurezza', <SecurityPage />),
                   {
                     element: <CustomerRoute adminRedirect={paths.accountProfile} />,
                     children: [

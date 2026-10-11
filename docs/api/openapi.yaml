@@ -979,7 +979,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Message' }
               example: { message: Gli account di amministrazione non si possono eliminare. }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: Ordini aperti; nessun effetto.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainError' }
+              example:
+                message: "Hai ordini in corso: potrai eliminare l'account dopo la consegna, oppure annullandoli."
+                code: account_has_open_orders
         '419': { $ref: '#/components/responses/CsrfMismatch' }
         '423': { $ref: '#/components/responses/IdentityNotConfirmed' }
 
