@@ -229,16 +229,16 @@ it('answers 503 when the assistant is unavailable', function () {
         ]);
 });
 
-it('ends with an error event after the fragments already sent', function (string $interruption, string $message) {
+it('ends with an error event after the fragments already sent', function (string $interruption) {
     $this->fake->respondWith('Ti consiglio ', 'il Caricatore')->{$interruption}(1);
 
     expect(assistantEvents(askAssistant('Un caricatore?')))->toBe([
         ['type' => 'text', 'delta' => 'Ti consiglio '],
-        ['type' => 'error', 'message' => $message],
+        ['type' => 'error', 'message' => 'La risposta si è interrotta prima della fine.'],
     ]);
 })->with([
-    'failure' => ['failAfter', "Si è verificato un problema con l'assistente. Riprova tra poco."],
-    'timeout' => ['timeoutAfter', "L'assistente non ha risposto in tempo. Riprova tra poco."],
+    'failure' => ['failAfter'],
+    'timeout' => ['timeoutAfter'],
 ]);
 
 it('answers 503 busy without calling the model when every slot is taken', function () {
@@ -410,7 +410,7 @@ it('ends with a generic error event on an unexpected error while streaming', fun
 
     expect(streamAnswerDirectly('Domanda riservata'))->toBe([
         ['type' => 'text', 'delta' => 'Ti consiglio '],
-        ['type' => 'error', 'message' => "Si è verificato un problema con l'assistente. Riprova tra poco."],
+        ['type' => 'error', 'message' => 'La risposta si è interrotta prima della fine.'],
     ])
         ->and(slotIsFree())->toBeTrue();
 

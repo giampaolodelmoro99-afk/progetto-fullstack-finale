@@ -1,6 +1,7 @@
 import Box from '@mui/material/Box';
 import { Outlet, ScrollRestoration } from 'react-router';
 import { useDocumentTitle } from '@/app/router/useDocumentTitle';
+import { AssistantWidget } from '@/features/assistant/components/AssistantWidget';
 import { EmailVerificationBanner } from '@/layouts/store/EmailVerificationBanner';
 import { StoreFooter } from '@/layouts/store/StoreFooter';
 import { StoreHeader } from '@/layouts/store/StoreHeader';
@@ -26,6 +27,7 @@ export function StoreLayout() {
         <Outlet />
       </Box>
       <StoreFooter />
+      <AssistantWidget />
       <ScrollRestoration />
     </Box>
   );

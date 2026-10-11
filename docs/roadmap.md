@@ -24,6 +24,6 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 7b | Autenticazione: login con secondo fattore, registrazione, password dimenticata e reset, pagine raggiunte dai link email, banner dell'email non verificata, conferma dell'identità (423) | completata |
 | Fase 8a | Negozio: home, catalogo con filtri nella query string, dettaglio prodotto con aggiunta al carrello e badge, pagine Assistenza e Note legali | completata |
 | Fase 8b | Carrello, checkout in tre passi, conferma d'ordine | completata |
-| Fase 8c | Widget dell'assistente AI e formato Markdown leggero nel Modelfile | |
+| Fase 8c | Widget dell'assistente AI e formato Markdown leggero (garantito dal parser del widget) | completata |
 | Fase 9 | Area account (profilo, indirizzi, ordini, sicurezza, eliminazione dell'account) e pannello admin | |
 | Fase 10 | Rifinitura, README, verifica dei dati demo, preparazione della presentazione; test end-to-end con Playwright facoltativi | |
