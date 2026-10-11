@@ -54,6 +54,7 @@ export const components = {
         inherit: 'p',
         price: 'p',
         priceLarge: 'p',
+        code: 'span',
         logo: 'span',
       },
     },

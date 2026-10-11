@@ -278,3 +278,43 @@ export function buildTwoFactorOverview(overrides = {}) {
     ...overrides,
   });
 }
+
+export function buildPasskey(overrides = {}) {
+  return {
+    id: nextId(),
+    name: 'MacBook di Giulia',
+    created_at: '2026-09-20T18:02:00+02:00',
+    last_used_at: '2026-09-29T09:14:00+02:00',
+    ...overrides,
+  };
+}
+
+export function buildSecurityEvent(overrides = {}) {
+  return {
+    id: nextId(),
+    type: 'login',
+    label: 'Accesso effettuato',
+    device: 'Chrome su macOS',
+    ip_address: '93.45.112.18',
+    passkey_name: null,
+    created_at: '2026-09-29T09:14:00+02:00',
+    ...overrides,
+  };
+}
+
+export function buildSecurityEventPage(events = [], meta = {}) {
+  return {
+    data: events,
+    links: { first: null, last: null, prev: null, next: null },
+    meta: {
+      current_page: 1,
+      from: events.length > 0 ? 1 : null,
+      last_page: 1,
+      per_page: 10,
+      to: events.length > 0 ? events.length : null,
+      total: events.length,
+      path: 'http://localhost:8000/api/v1/me/security-events',
+      ...meta,
+    },
+  };
+}

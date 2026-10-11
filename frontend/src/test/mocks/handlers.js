@@ -8,6 +8,8 @@ import {
   buildOrderPage,
   buildProductDetail,
   buildProductPage,
+  buildSecurityEventPage,
+  buildSecurityOverview,
   buildShopSettings,
   buildSupportSections,
 } from '@/test/factories';
@@ -36,6 +38,11 @@ export const handlers = [
   http.get(apiUrl('/api/v1/orders/:orderId'), ({ params }) =>
     HttpResponse.json({ data: buildOrder({ id: Number(params.orderId) }) }),
   ),
+  http.get(apiUrl('/api/v1/me/security'), () =>
+    HttpResponse.json({ data: buildSecurityOverview() }),
+  ),
+  http.get(apiUrl('/api/v1/me/passkeys'), () => HttpResponse.json({ data: [] })),
+  http.get(apiUrl('/api/v1/me/security-events'), () => HttpResponse.json(buildSecurityEventPage())),
   http.get(apiUrl('/api/v1/shop/settings'), () => HttpResponse.json({ data: buildShopSettings() })),
   http.get(apiUrl('/api/v1/shop/support'), () =>
     HttpResponse.json({ data: buildSupportSections() }),

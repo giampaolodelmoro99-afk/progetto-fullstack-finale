@@ -6,13 +6,17 @@ export const PASSKEY_FAILED = 'passkey_failed';
 
 const CANCELLATION_ERRORS = new Set(['NotAllowedError', 'AbortError']);
 
+export function isBrowserCancellation(error) {
+  return CANCELLATION_ERRORS.has(error?.name);
+}
+
 export async function authenticateWithPasskey(fetchOptions) {
   const optionsJSON = await fetchOptions();
 
   try {
     return await startAuthentication({ optionsJSON });
   } catch (error) {
-    if (CANCELLATION_ERRORS.has(error?.name)) {
+    if (isBrowserCancellation(error)) {
       throw createClientError(PASSKEY_CANCELLED, 'Verifica con la passkey annullata.');
     }
 

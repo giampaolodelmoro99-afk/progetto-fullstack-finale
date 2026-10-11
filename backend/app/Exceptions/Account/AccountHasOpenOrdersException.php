@@ -19,7 +19,7 @@ final class AccountHasOpenOrdersException extends RuntimeException implements Sh
 
     public function __construct()
     {
-        parent::__construct('Hai ordini ancora in corso: potrai eliminare l\'account quando saranno consegnati o annullati.');
+        parent::__construct('Hai ordini in corso: potrai eliminare l\'account dopo la consegna, oppure annullandoli.');
     }
 
     public function render(): JsonResponse
