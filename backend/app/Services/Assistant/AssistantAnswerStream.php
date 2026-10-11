@@ -21,6 +21,13 @@ use Throwable;
  */
 final class AssistantAnswerStream
 {
+    /**
+     * The error event arrives after the answer has started, so the client
+     * sees one message for every cause; the log keeps timeout and failure
+     * apart.
+     */
+    public const INTERRUPTED_MESSAGE = 'La risposta si è interrotta prima della fine.';
+
     public function __construct(
         private readonly CitedProducts $citedProducts,
         private readonly ClientConnection $connection,
@@ -76,18 +83,18 @@ final class AssistantAnswerStream
 
             $this->write(['type' => 'products', 'data' => ProductResource::collection($products)->resolve()]);
             $this->write(['type' => 'done']);
-        } catch (AssistantTimeoutException $exception) {
+        } catch (AssistantTimeoutException) {
             $outcome = AssistantLog::TIMEOUT;
-            $this->write(['type' => 'error', 'message' => $exception->getMessage()]);
+            $this->write(['type' => 'error', 'message' => self::INTERRUPTED_MESSAGE]);
         } catch (AssistantFailedException $exception) {
             $outcome = AssistantLog::FAILED;
             $reason = $exception->reason;
-            $this->write(['type' => 'error', 'message' => $exception->getMessage()]);
+            $this->write(['type' => 'error', 'message' => self::INTERRUPTED_MESSAGE]);
         } catch (Throwable $exception) {
             $outcome = AssistantLog::FAILED;
             $reason = $exception::class;
             report($exception);
-            $this->write(['type' => 'error', 'message' => (new AssistantFailedException)->getMessage()]);
+            $this->write(['type' => 'error', 'message' => self::INTERRUPTED_MESSAGE]);
         } finally {
             $answer->finish();
             AssistantLog::answer($outcome, $answer->startedAt, $toolCalls, $reason);

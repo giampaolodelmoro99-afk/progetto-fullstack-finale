@@ -343,7 +343,7 @@ paths:
         2. un evento `products` con le card dei prodotti citati (al massimo 4, solo acquistabili, nell'ordine di citazione; `data` può essere vuoto)
         3. un evento `done`
 
-        Se la generazione si interrompe a metà (timeout di 120 s o errore), dopo i `text` già inviati arriva un solo evento `error` e la risposta si chiude, senza `products` né `done`.
+        Se la generazione si interrompe a metà (timeout di 120 s o errore), dopo i `text` già inviati arriva un solo evento `error` e la risposta si chiude, senza `products` né `done`. Il messaggio è sempre «La risposta si è interrotta prima della fine.»: la causa (timeout o errore) resta solo nel log del server.
 
         ```
         {"type":"text","delta":"Ti consiglio "}
@@ -2925,5 +2925,4 @@ components:
             message:
               type: string
               enum:
-                - "L'assistente non ha risposto in tempo. Riprova tra poco."
-                - "Si è verificato un problema con l'assistente. Riprova tra poco."
+                - La risposta si è interrotta prima della fine.
