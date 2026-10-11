@@ -32,6 +32,8 @@ describe('theme', () => {
   it('defines the layout tokens', () => {
     expect(theme.layout.adminDrawerWidth).toBe(264);
     expect(theme.layout.assistantPanelWidth).toBe(440);
+    expect(theme.layout.assistantPanelMaxHeight).toBe(760);
+    expect(theme.layout.storeHeaderHeight).toBe(120);
     expect(theme.layout.minPageHeight).toBe('100vh');
     expect(theme.layout.drawerMaxWidth).toBe('85vw');
     expect(theme.layout.emptyStateTextMaxWidth).toBe('48ch');

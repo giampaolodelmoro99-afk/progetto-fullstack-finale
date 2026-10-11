@@ -12,7 +12,14 @@ export function AssistantPanelHeader({ titleId }) {
   return (
     <Stack sx={{ px: 2, pt: 2, pb: 1, gap: 0.5 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-        <Typography ref={registerTitle} variant="h3" id={titleId} tabIndex={-1}>
+        <Typography
+          ref={registerTitle}
+          variant="h6"
+          component="h3"
+          id={titleId}
+          tabIndex={-1}
+          sx={{ whiteSpace: 'nowrap' }}
+        >
           Assistente di Casa del Silicio
         </Typography>
         <IconButton aria-label="Chiudi l'assistente" onClick={closePanel}>

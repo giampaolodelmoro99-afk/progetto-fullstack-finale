@@ -6,7 +6,7 @@ export function AssistantWelcome() {
   return (
     <Stack sx={{ gap: 2 }}>
       <Stack sx={{ gap: 0.5 }}>
-        <Typography variant="h3" component="p">
+        <Typography variant="h5" component="p">
           Ciao, come posso aiutarti?
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>

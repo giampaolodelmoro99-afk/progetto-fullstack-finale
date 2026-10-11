@@ -40,7 +40,7 @@ export function AssistantPanel() {
         zIndex: 'fab',
         width: theme.layout.assistantPanelWidth,
         maxWidth: `calc(100vw - ${theme.spacing(6)})`,
-        height: theme.layout.assistantPanelMaxHeight,
+        height: `min(${theme.layout.assistantPanelMaxHeight}px, calc(100dvh - ${theme.layout.storeHeaderHeight}px - ${theme.spacing(10)} - ${theme.spacing(2)}))`,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
