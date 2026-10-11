@@ -153,6 +153,23 @@ export function buildOrder(overrides = {}) {
   };
 }
 
+export function buildOrderPage(orders = [], meta = {}) {
+  return {
+    data: orders,
+    links: { first: null, last: null, prev: null, next: null },
+    meta: {
+      current_page: 1,
+      from: orders.length > 0 ? 1 : null,
+      last_page: 1,
+      per_page: 10,
+      to: orders.length > 0 ? orders.length : null,
+      total: orders.length,
+      path: 'http://localhost:8000/api/v1/orders',
+      ...meta,
+    },
+  };
+}
+
 export function buildProduct(overrides = {}) {
   const id = nextId();
 

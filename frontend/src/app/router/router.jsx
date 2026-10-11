@@ -5,6 +5,10 @@ import { CustomerRoute } from '@/app/router/CustomerRoute';
 import { GuestRoute } from '@/app/router/GuestRoute';
 import { paths } from '@/app/router/paths';
 import { ProtectedRoute } from '@/app/router/ProtectedRoute';
+import AddressesPage from '@/features/account/pages/AddressesPage';
+import OrderPage from '@/features/account/pages/OrderPage';
+import OrdersPage from '@/features/account/pages/OrdersPage';
+import ProfilePage from '@/features/account/pages/ProfilePage';
 import CancelEmailChangePage from '@/features/auth/pages/CancelEmailChangePage';
 import ConfirmEmailChangePage from '@/features/auth/pages/ConfirmEmailChangePage';
 import ForgotPasswordPage from '@/features/auth/pages/ForgotPasswordPage';
@@ -92,14 +96,14 @@ export const routes = [
                 element: <AccountLayout />,
                 children: [
                   { path: paths.account, element: <Navigate to={paths.accountProfile} replace /> },
-                  page(paths.accountProfile, 'Profilo', accountPage),
+                  page(paths.accountProfile, 'Profilo', <ProfilePage />),
                   page(paths.accountSecurity, 'Sicurezza', accountPage),
                   {
                     element: <CustomerRoute adminRedirect={paths.accountProfile} />,
                     children: [
-                      page(paths.accountAddresses, 'Indirizzi', accountPage),
-                      page(paths.accountOrders, 'I miei ordini', accountPage),
-                      page('/account/orders/:orderId', 'Dettaglio ordine', accountPage),
+                      page(paths.accountAddresses, 'Indirizzi', <AddressesPage />),
+                      page(paths.accountOrders, 'I miei ordini', <OrdersPage />),
+                      page('/account/orders/:orderId', 'Dettaglio ordine', <OrderPage />),
                     ],
                   },
                 ],

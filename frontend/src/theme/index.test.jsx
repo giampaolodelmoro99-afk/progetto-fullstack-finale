@@ -3,11 +3,30 @@ import TableBody from '@mui/material/TableBody';
 import TableFooter from '@mui/material/TableFooter';
 import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
-import { ThemeProvider } from '@mui/material/styles';
+import { getContrastRatio, ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { OrderStatusChip } from '@/components/data-display/OrderStatusChip';
 import { theme } from '@/theme';
-import { availabilityColors, orderStatusColors } from '@/theme/statusColors';
+import {
+  availabilityChipColors,
+  availabilityColors,
+  orderStatusColors,
+} from '@/theme/statusColors';
+
+const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'];
+
+function softChipStyle(color) {
+  const variant = theme.components.MuiChip.variants.find(
+    ({ props }) => props.variant === 'soft' && props.color === color,
+  );
+
+  return variant.style({ theme });
+}
+
+function paletteValue(token) {
+  return token.split('.').reduce((value, key) => value[key], theme.palette);
+}
 
 describe('theme', () => {
   it('uses the colors of the design system', () => {
@@ -98,5 +117,51 @@ describe('status colors', () => {
       low_stock: 'warning.main',
       out_of_stock: 'text.secondary',
     });
+  });
+});
+
+describe('soft status chips', () => {
+  it.each(ORDER_STATUSES)('gives the %s chip a readable text', (status) => {
+    const style = softChipStyle(orderStatusColors[status]);
+
+    expect(getContrastRatio(style.color, style.backgroundColor)).toBeGreaterThanOrEqual(4.5);
+    expect(style['& .MuiChip-icon']).toEqual({ color: style.color });
+  });
+
+  it('uses a light background with the main color when it is readable', () => {
+    expect(softChipStyle('info')).toMatchObject({ backgroundColor: '#E1EDF2', color: '#2B5E78' });
+    expect(softChipStyle('warning')).toMatchObject({
+      backgroundColor: '#F7E9DC',
+      color: '#9A4A12',
+    });
+  });
+
+  it('falls back to the dark color for the shipped chip', () => {
+    expect(softChipStyle('secondary')).toMatchObject({
+      backgroundColor: '#F4ECDD',
+      color: '#76592B',
+    });
+  });
+
+  it.each(Object.keys(availabilityChipColors))(
+    'gives the %s availability chip a readable text',
+    (status) => {
+      const { color, bgcolor } = availabilityChipColors[status];
+
+      expect(getContrastRatio(paletteValue(color), paletteValue(bgcolor))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    },
+  );
+
+  it('renders the order status with the soft variant', () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <OrderStatusChip status={{ value: 'shipped', label: 'Spedito' }} />
+      </ThemeProvider>,
+    );
+
+    const chip = screen.getByText('Spedito').closest('.MuiChip-root');
+    expect(chip).toHaveClass('MuiChip-soft', 'MuiChip-colorSecondary', 'MuiChip-sizeSmall');
   });
 });

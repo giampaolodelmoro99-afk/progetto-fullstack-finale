@@ -11,23 +11,40 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { FormTextField } from '@/components/form/FormTextField';
 import { useCreateAddress } from '@/features/account/hooks/useCreateAddress';
+import { useUpdateAddress } from '@/features/account/hooks/useUpdateAddress';
 import { addressSchema, emptyAddress } from '@/features/account/schemas';
 import { applyFieldErrors } from '@/utils/applyFieldErrors';
 
 const FIELDS = Object.keys(emptyAddress);
 
-export function AddressForm({ title = 'Nuovo indirizzo', onSaved, onCancel }) {
+function initialValues(address) {
+  if (!address) {
+    return emptyAddress;
+  }
+
+  return Object.fromEntries(FIELDS.map((field) => [field, address[field]]));
+}
+
+export function AddressForm({
+  address = null,
+  title = address ? 'Modifica indirizzo' : 'Nuovo indirizzo',
+  showTitle = true,
+  onSaved,
+  onCancel,
+}) {
   const createAddress = useCreateAddress();
+  const updateAddress = useUpdateAddress();
+  const saveAddress = address ? updateAddress : createAddress;
   const [formError, setFormError] = useState(null);
   const { control, handleSubmit, setError } = useForm({
     resolver: zodResolver(addressSchema),
-    defaultValues: emptyAddress,
+    defaultValues: initialValues(address),
   });
 
   function submit(values) {
     setFormError(null);
-    createAddress.mutate(values, {
-      onSuccess: (address) => onSaved(address),
+    saveAddress.mutate(address ? { id: address.id, ...values } : values, {
+      onSuccess: onSaved,
       onError: (error) => {
         if (!applyFieldErrors(setError, error.fieldErrors, FIELDS)) {
           setFormError(error.message);
@@ -44,9 +61,11 @@ export function AddressForm({ title = 'Nuovo indirizzo', onSaved, onCancel }) {
       onSubmit={handleSubmit(submit)}
       sx={{ gap: 2 }}
     >
-      <Typography variant="subtitle1" component="h3">
-        {title}
-      </Typography>
+      {showTitle ? (
+        <Typography variant="subtitle1" component="h3">
+          {title}
+        </Typography>
+      ) : null}
       {formError ? <Alert severity="error">{formError}</Alert> : null}
       <Grid container spacing={2}>
         <Grid size={12}>
@@ -110,30 +129,32 @@ export function AddressForm({ title = 'Nuovo indirizzo', onSaved, onCancel }) {
           />
         </Grid>
       </Grid>
-      <Controller
-        name="is_default"
-        control={control}
-        render={({ field: { value, onChange, ref, ...field } }) => (
-          <FormControlLabel
-            control={
-              <Checkbox
-                {...field}
-                inputRef={ref}
-                checked={value}
-                onChange={(event) => onChange(event.target.checked)}
-              />
-            }
-            label="Imposta come predefinito"
-          />
-        )}
-      />
+      {address?.is_default ? null : (
+        <Controller
+          name="is_default"
+          control={control}
+          render={({ field: { value, onChange, ref, ...field } }) => (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  {...field}
+                  slotProps={{ input: { ref } }}
+                  checked={value}
+                  onChange={(event) => onChange(event.target.checked)}
+                />
+              }
+              label="Imposta come predefinito"
+            />
+          )}
+        />
+      )}
       <Stack direction="row" sx={{ gap: 1.5, justifyContent: 'flex-end' }}>
         {onCancel ? (
-          <Button variant="outlined" onClick={onCancel}>
+          <Button variant="outlined" onClick={onCancel} disabled={saveAddress.isPending}>
             Annulla
           </Button>
         ) : null}
-        <Button type="submit" variant="contained" loading={createAddress.isPending}>
+        <Button type="submit" variant="contained" loading={saveAddress.isPending}>
           Salva indirizzo
         </Button>
       </Stack>

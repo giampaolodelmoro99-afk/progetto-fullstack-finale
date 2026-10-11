@@ -11,6 +11,8 @@ export const queryKeys = {
   },
   orders: {
     all: ['orders'],
+    lists: ['orders', 'list'],
+    list: (page) => ['orders', 'list', page],
     detail: (orderId) => ['orders', 'detail', orderId],
   },
   security: {

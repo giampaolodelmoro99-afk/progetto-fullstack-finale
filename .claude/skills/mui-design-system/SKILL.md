@@ -197,13 +197,16 @@ Dal mockup `05-assistente-account.pdf`. I testi indicati sono vincolanti; regole
 |---|---|
 | Dati personali | card "Dati personali" con "Nome e cognome" e pulsante "Salva le modifiche" |
 | Email del profilo | card "Email": indirizzo, `Chip` piccolo "Confermata" (`success`, icona di spunta) oppure "Da confermare" (`warning`), testo "La usi per accedere e per ricevere le email sui tuoi ordini.", pulsante outlined "Cambia email" a destra |
-| Cambio email in sospeso | nella card Email, al posto del pulsante, `Alert` `info` con icona della busta, titolo "Cambio email in attesa di conferma", testo «Abbiamo inviato un link a **nuova email**. Finché non lo apri, continuerai a usare {email attuale}.» e azione testuale "Annulla la richiesta" |
+| Cambio email in sospeso | nella card Email, al posto del pulsante, `Alert` `info` con icona della busta (`MailOutlined`), titolo "Cambio email in attesa di conferma", testo «Abbiamo inviato un link a **nuova email**. Finché non lo apri, continuerai a usare {email attuale}.», sotto «Scadenza del link: {data e ora}» in `caption` da `expires_at`, e azione testuale "Annulla la richiesta" |
 | Nuova email | `Dialog` aperto dopo la conferma dell'identità: titolo "Cambia email", campo "Nuova email" (`type="email"`, `autoComplete="email"`), pulsanti "Annulla" e "Invia il link" |
-| Indirizzi | griglia di card con nome, indirizzo, telefono, `Chip` "Predefinito", azioni "Modifica", "Elimina" e "Imposta come predefinito"; pulsante "Aggiungi un indirizzo" |
-| Elenco ordini | desktop: `Table` con Numero d'ordine, Data, Articoli, Totale, Stato (`Chip`) e "Dettagli"; mobile: card impilate con numero, `Chip` dello stato, «data · N articoli» e totale |
-| Nessun ordine | stato vuoto "Non hai ancora fatto ordini", testo "Quando acquisterai qualcosa, qui troverai lo stato e i dettagli di ogni ordine." e pulsante "Scopri la collezione" |
-| Dettaglio ordine | link "Tutti gli ordini", titolo «Ordine {numero}» con `Chip` dello stato e «Effettuato il … alle …»; card "Stato dell'ordine" con una timeline verticale (Pagato, Spedito, Consegnato) con data e descrizione da `status_history` per i passi compiuti e suggerimento per quelli futuri, e la riga Annullato per un ordine annullato; card "Prodotti" con righe e totali; card "Indirizzo di spedizione"; card "Pagamento" con solo "Carta che termina con {card_last_four}"; pulsante "Annulla l'ordine" quando l'ordine è annullabile |
-| Annullamento dell'ordine | `Dialog` "Vuoi annullare l'ordine?" con numero, importo del rimborso e ultime cifre della carta, nota sull'email di conferma, pulsanti "Mantieni l'ordine" (testuale) e "Annulla l'ordine" (pieno) |
+| Indirizzi | titolo "Indirizzi" con «Gli indirizzi salvati ti vengono proposti al checkout.»; griglia di card (2 colonne da `md`, 1 su mobile) con nome, via, «CAP città (PR), Italia», telefono; il predefinito ha il bordo `primary.main` spesso 2 e il `Chip` pieno `primary` "Predefinito"; sotto un `Divider` le azioni testuali "Modifica" (`EditOutlined`), "Elimina" (`DeleteOutlined`) e, solo sui non predefiniti, "Imposta come predefinito", con `aria-label` che cita via e città; pulsante outlined "Aggiungi un indirizzo" con `Add` sotto la griglia |
+| Nuovo e modifica indirizzo | `Dialog` "Nuovo indirizzo" o "Modifica indirizzo" (a schermo intero sotto `md`) con il form dell'indirizzo del checkout, precompilato in modifica; nella modifica del predefinito la `Checkbox` "Imposta come predefinito" non compare. Snackbar «Indirizzo salvato», «Indirizzo aggiornato», «Indirizzo predefinito aggiornato» |
+| Eliminazione di un indirizzo | `Dialog` «Vuoi eliminare questo indirizzo?», «{nome}, {via}, {CAP città (PR), Italia}. Gli ordini già effettuati non cambiano.» e, per il predefinito, «Diventerà predefinito l'indirizzo aggiunto più di recente.»; pulsanti "Mantieni l'indirizzo" (testuale) ed "Elimina l'indirizzo" (pieno, `error`); errore in un `Alert` nel dialog; Snackbar «Indirizzo eliminato» |
+| Nessun indirizzo | stato vuoto in una `Card` con `PlaceOutlined`, «Non hai ancora salvato indirizzi», «Aggiungine uno: te lo proporremo al checkout.» e "Aggiungi un indirizzo" |
+| Elenco ordini | titolo "I miei ordini" con «Qui trovi lo stato e i dettagli di ogni ordine.»; desktop: `Table` in una `Card` con Numero d'ordine, Data, Articoli, Totale (Bodoni, a destra), Stato (`OrderStatusChip`) e "Dettagli" con `ChevronRight`; mobile: card cliccabili impilate con numero, `Chip` dello stato, «data · N articoli», totale e `ChevronRight`; sotto l'elenco `Pagination` (`shape="rounded"`) solo con più di una pagina |
+| Nessun ordine | stato vuoto in una `Card` con `ShoppingBagOutlined`, "Non hai ancora fatto ordini", testo "Quando acquisterai qualcosa, qui troverai lo stato e i dettagli di ogni ordine." e pulsante "Scopri la collezione" |
+| Dettaglio ordine | link "Tutti gli ordini" con `ArrowBack`, titolo «Ordine {numero}» con `Chip` dello stato e «Effettuato il … alle …»; due colonne da `md` (8 e 4). Sinistra: card "Prodotti" con miniatura, nome, «Quantità N · {prezzo} cad.», totale della riga e totali. Destra: card "Stato dell'ordine" con una timeline verticale (Pagato, Spedito, Consegnato): passo compiuto con cerchio pieno scuro e `Check`, data e ora e descrizione da `status_history`; passo futuro con cerchio vuoto e il suggerimento («Ti scriveremo quando parte», «Consegna in 24/48 ore dalla spedizione»); per un ordine annullato i passi compiuti e la riga Annullato con `Close` in `error.main`, senza passi futuri; con `can_cancel`, sotto un `Divider`, «Puoi annullare l'ordine finché non viene spedito.» e `Button` outlined "Annulla l'ordine" a tutta larghezza. Poi card "Indirizzo di spedizione" e card "Pagamento" con `CreditCardOutlined` e solo "Carta che termina con {card_last_four}" |
+| Annullamento dell'ordine | `Dialog` "Vuoi annullare l'ordine?" con «L'ordine {numero} non verrà spedito e riceverai il rimborso di **{totale}** sulla carta che termina con {cifre}.», nota «Ti invieremo una conferma via email.», pulsanti "Mantieni l'ordine" (testuale) e "Annulla l'ordine" (pieno, `error`); errori (502 `refund_failed`, 422) in un `Alert` nel dialog; Snackbar «Ordine annullato: riceverai il rimborso sulla tua carta.» |
 
 ### Sicurezza
 
@@ -230,7 +233,7 @@ Icone degli eventi di sicurezza: `Login` per accessi e uscite, `LockOutlined` pe
 |---|---|
 | Codice di verifica | `TextField` numerico con `inputMode="numeric"`, `autoComplete="one-time-code"` e link "Usa un codice di recupero" |
 | Tabelle admin | `Table` dentro una `Card` informativa, intestazioni in `body2` `text.secondary`, importi e numeri allineati a destra, `TablePagination` in fondo con 10, 25 e 50 righe |
-| Stato ordine | `Chip` con l'etichetta ricevuta dall'API e il colore della mappa sotto |
+| Stato ordine | `OrderStatusChip` di `components/data-display`: `Chip` piccolo con `variant="soft"`, l'etichetta ricevuta dall'API e il colore della mappa sotto; lo usano conferma d'ordine, ordini del cliente e admin |
 | Conferme distruttive | `Dialog` con titolo in forma di domanda, conseguenze nel testo e pulsanti che nominano l'azione per esteso |
 | Esito di un'azione | `Snackbar` con `Alert` |
 | Caricamento dati | `Skeleton` con la forma del contenuto |
@@ -274,6 +277,8 @@ Dal mockup `04-admin.pdf`. I testi indicati sono vincolanti.
 ### Colori semantici
 
 Il frontend possiede solo le mappe dei colori; le etichette arrivano dall'API.
+
+**Chip di stato con fondo tenue:** la variante personalizzata `soft` di `MuiChip`, definita una sola volta in `src/theme/components.js` per `secondary`, `info`, `success`, `warning` ed `error`, usa fondo `X.light` e testo (e icona) `X.main`; quando `X.main` non raggiunge il contrasto 4,5:1 sul fondo (calcolato con `getContrastRatio` alla creazione del tema) il testo è `X.dark`. Con la palette attuale vale solo per `secondary` (Spedito), che usa `secondary.dark`. La usano i chip di stato d'ordine e quelli di stato del profilo («Confermata», «Da confermare»); mai colori del chip negli `sx`. `src/theme/index.test.jsx` verifica il contrasto di ogni stato d'ordine e di disponibilità.
 
 | Stato d'ordine | Colore del `Chip` |
 |---|---|
@@ -356,3 +361,6 @@ Solo `@mui/icons-material`, nella variante outlined dove esiste.
    - per un admin il pulsante dell'assistente non compare e la sezione «Elimina account» è nascosta (il mockup non mostra la pagina Sicurezza dell'admin; l'API risponde 403)
    - i suggerimenti dopo una domanda fuori tema compaiono solo quando la risposta completa, senza marcatori e spazi iniziali, inizia con la frase fissa del rifiuto (anche se il modello aggiunge un invito) (regola nella skill `react-architecture`)
    - il catalogo del mockup `05-assistente-account.pdf` mostra ancora «Rilevanza»: vale «Novità»
+   - l'elenco «I miei ordini» non mostra mai «In attesa» (il mockup `03-account.pdf` sì): il cliente vede solo ordini pagati almeno una volta
+   - i chip di stato hanno fondo tenue e testo scuro come nel mockup, ma «Spedito» usa `secondary.dark` per il contrasto (sezione "Colori semantici")
+   - aggiunta e modifica di un indirizzo, e la sua eliminazione, si fanno in un `Dialog`, che il mockup non mostra
