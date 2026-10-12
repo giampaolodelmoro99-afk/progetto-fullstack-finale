@@ -318,7 +318,7 @@ describe('AssistantWidget answer', () => {
     );
     expect(within(panel()).queryByRole('button', { name: 'Interrompi' })).not.toBeInTheDocument();
     expect(questionField()).toBeEnabled();
-    expect(questionField()).toHaveFocus();
+    await waitFor(() => expect(questionField()).toHaveFocus());
     expect(liveRegion()).toHaveTextContent('Ti consiglio le Cuffie Aria, con 40 ore di autonomia.');
   });
 
@@ -718,7 +718,10 @@ describe('AssistantWidget errors', () => {
   it('shows the error after a second 419', async () => {
     const user = userEvent.setup();
     recordAssistantMessages(() =>
-      HttpResponse.json({ message: 'CSRF token mismatch.' }, { status: 419 }),
+      HttpResponse.json(
+        { message: 'La sessione è scaduta. Ricarica la pagina e riprova.' },
+        { status: 419 },
+      ),
     );
     renderApp('/');
 

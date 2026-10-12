@@ -12,9 +12,13 @@ if [ ! -f .env ]; then
     cp .env.example .env
 fi
 
-if [ ! -d vendor ]; then
+# Reinstalls also when composer.lock changed since the last install (after a
+# git pull): the hash of the installed lock file is kept inside vendor/.
+lock_hash=$(sha256sum composer.lock | cut -d' ' -f1)
+if [ ! -d vendor ] || [ "$(cat vendor/.composer-lock.sha256 2>/dev/null)" != "$lock_hash" ]; then
     echo "[entrypoint] Installo le dipendenze Composer"
     composer install --no-interaction --prefer-dist --no-progress
+    echo "$lock_hash" > vendor/.composer-lock.sha256
 fi
 
 if grep -Eq '^APP_KEY=\s*$' .env; then

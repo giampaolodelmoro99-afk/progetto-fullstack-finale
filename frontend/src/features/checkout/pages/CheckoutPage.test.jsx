@@ -112,7 +112,7 @@ function cachedSnapshot(queryClient) {
   });
 }
 
-describe('CheckoutPage', { timeout: 15000 }, () => {
+describe('CheckoutPage', () => {
   it('goes through the three steps and opens the order confirmation', async () => {
     const user = userEvent.setup();
     serveCart(readyCart());

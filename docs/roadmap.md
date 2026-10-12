@@ -28,4 +28,5 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 9a | Area account: profilo con cambio email, indirizzi, ordini con dettaglio e annullamento; stile unico dei chip di stato | completata |
 | Fase 9b | Area account: pagina Sicurezza (password, doppia autenticazione, passkey, attività recente) ed eliminazione dell'account | completata |
 | Fase 9c | Pannello admin: dashboard, prodotti con immagini, categorie, ordini | completata |
-| Fase 10 | Rifinitura, README, verifica dei dati demo, preparazione della presentazione; test end-to-end con Playwright facoltativi | |
+| Fase 10a | Rifinitura tecnica: righe aperte del backlog, testi di Laravel in italiano, health check con il database, notifiche cifrate in coda, reinstallazione delle dipendenze al cambio dei lock file, test frontend stabili, comando `admin:create`, prova da un clone pulito, coerenza tra skill, codice e documentazione, copertura, README finale | completata |
+| Fase 10b | Verifica dei dati demo, preparazione della presentazione; test end-to-end con Playwright facoltativi | |

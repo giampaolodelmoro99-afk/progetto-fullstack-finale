@@ -55,7 +55,7 @@ Riferimenti visivi: `design/mockups/03-account.pdf` (accesso, registrazione, pag
 - `security_events.user_id` non è nullable: gli eventi riguardano solo utenti esistenti. `login_failed` si registra solo quando l'email appartiene a un utente; per un'email inesistente non si scrive nessun evento, e la risposta HTTP resta identica nei due casi.
 - Negli eventi `passkey_added` e `passkey_removed`, e nel `login` fatto con una passkey, i `metadata` contengono `passkey_name`: il nome della passkey al momento dell'evento.
 
-Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`, `other_sessions_closed`. Ogni caso ha `label()` in italiano, con queste parole fisse:
+Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`, `logout`, `email_verified`, `password_changed`, `password_reset`, `email_change_requested`, `email_changed`, `email_change_cancelled`, `two_factor_enabled`, `two_factor_disabled`, `recovery_codes_regenerated`, `recovery_code_used`, `passkey_added`, `passkey_removed`. Ogni caso ha `label()` in italiano, con queste parole fisse:
 
 | Valore | Etichetta |
 |---|---|
@@ -75,7 +75,6 @@ Enum `SecurityEventType`: `login`, `login_failed`, `two_factor_challenge_failed`
 | `recovery_code_used` | Codice di recupero usato |
 | `passkey_added` | Passkey aggiunta |
 | `passkey_removed` | Passkey rimossa |
-| `other_sessions_closed` | Altre sessioni chiuse |
 
 Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un'etichetta che non dipende dal genere della persona).
 
@@ -103,6 +102,8 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 - Implementazioni: `TotpVerifier`, `RecoveryCodeVerifier`, `PasskeyVerifier`.
 - `VerifySecondFactorAction` si usa solo se `hasSecondFactor()`: sceglie l'implementazione in base al campo `method` (`totp`, `recovery_code`, `passkey`) e lancia `InvalidSecondFactorException` (422) se la verifica fallisce: errore sul campo `code` («Codice non valido.») per TOTP e codici di recupero, sul campo `credential` («Passkey non valida: riprova.») per la passkey.
 - Il payload contiene `code` oppure, per la passkey, `credential`: la risposta del browser (`startAuthentication()`), verificata dalla libreria. Un `credential` mancante con `method` `passkey` è un errore di campo obbligatorio sul campo `credential` e non conta come tentativo. L'Action passa al verificatore anche il contesto, perché la passkey usa le opzioni generate per quel contesto e per quell'utente.
+- Enum `SecondFactorMethod`: `totp`, `recovery_code`, `passkey`. Enum `SecondFactorContext`, il contesto in cui si chiede il secondo fattore: `login`, `password_reset`, `identity_confirmation`, `password_change`.
+- Enum `PasskeyPurpose`, lo scopo delle opzioni passkey conservate in sessione (sezione "Passkey"): `registration`, `login` (accesso senza password), e uno per ogni contesto del secondo fattore, `second_factor_login`, `password_reset`, `identity_confirmation`, `password_change`.
 - I metodi disponibili, restituiti nel campo `methods` delle risposte, sono `totp` e `recovery_code`, più `passkey` se l'utente ha almeno una passkey registrata.
 - Il TOTP accetta una finestra di un intervallo e rifiuta intervalli già usati.
 - Un codice di recupero usato viene rimosso; se ne restano due o meno, la risposta lo segnala e il frontend invita a rigenerarli.
@@ -134,6 +135,15 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 4. `POST /email/verification-notification` reinvia l'email (autenticato, limitato).
 5. Senza email verificata l'utente naviga e usa il carrello, ma il checkout è bloccato dal middleware `verified`.
 
+### Creazione di un amministratore
+
+Gli admin non si registrano dall'API: si creano solo dal terminale con `php artisan admin:create` (`make admin`).
+
+- Il comando chiede nome, email, password e conferma. La password si chiede **sempre** in modo nascosto (`secret()`) e non esiste un'opzione `--password`: non finisce nella cronologia del terminale né nell'elenco dei processi. Non compare mai nell'output né nei log.
+- Valida con le **stesse regole della registrazione**, in un solo punto: `App\Support\Auth\RegistrationRules` (`rules()`, `messages()`, `normalize()`), usato anche da `RegisterRequest`. Quindi email unica, niente dominio `.invalid`, `Password::defaults()` con conferma. Con un errore stampa i messaggi in italiano ed esce con codice di errore, senza creare nulla.
+- `App\Actions\Admin\CreateAdminAction` crea l'utente con ruolo `admin`, `email_verified_at` e `password_changed_at` valorizzate (chi esegue il comando ha accesso al server, quindi l'indirizzo non si verifica). Nessuna email, nessuna sessione, nessun evento di sicurezza (l'evento ha bisogno di una richiesta HTTP).
+- Solo creazione: un'email già usata (anche da un cliente) è rifiutata con «Questo indirizzo email è già in uso.», un cliente non si promuove mai ad admin.
+
 ### Login
 
 1. `POST /login` con email e password.
@@ -146,6 +156,7 @@ Enum `UserRole`: `customer` → «Cliente», `admin` → «Amministrazione» (un
 5. Accesso senza password con passkey, sempre disponibile per chi ha una passkey, con o senza doppia autenticazione: `POST /passkeys/login/options`, poi `POST /passkeys/login` con `credential`. La passkey da sola basta, non si chiede altro. Le opzioni sono monouso e valgono `passkey_challenge_ttl` secondi; se riesce, l'accesso rimuove una challenge del login con password e una conferma dell'identità rimaste in sessione, rigenera la sessione e scrive l'evento `login` con `passkey_name`. Ogni fallimento (opzioni mancanti, usate o scadute, credenziale sconosciuta, firma, origine o verifica dell'utente non valide, account anonimizzato) dà la stessa `InvalidPasskeyException`: 422 con `{ "message": "Passkey non riconosciuta: riprova o accedi con la password.", "code": "invalid_passkey" }`, senza `errors` e senza evento `login_failed` (senza una passkey valida l'utente non è identificato in modo affidabile).
 6. Credenziali errate: `InvalidCredentialsException` (422) con `{ "message": "Credenziali non valide", "code": "invalid_credentials" }`, senza errori sui campi (non si usa `ValidationException`, che porta sempre `errors`), così il frontend mostra un solo avviso e non fa pensare che il problema sia l'indirizzo. Mai "email non trovata".
 7. Account anonimizzato (`anonymized_at` valorizzata): la stessa `InvalidCredentialsException`, senza evento `login_failed`. Con email fittizia e password casuale l'accesso non riuscirebbe comunque; il controllo esplicito rende la regola indipendente da questo. Per difesa in profondità lo stesso controllo vale per `forgot-password` (nessuna email, stessa risposta generica) e per l'accesso con passkey.
+8. Logout: `POST /logout` (autenticato, in `customer.php`) con `LogoutAction`: scrive l'evento `logout` finché l'utente è ancora noto, poi logout della guard `web`, invalidazione della sessione e nuovo token CSRF; risponde 204. Si azzera così anche la conferma dell'identità.
 
 ### Recupero password
 
@@ -254,7 +265,7 @@ La cancellazione automatica degli ordini dopo 10 anni è fuori dal progetto: è 
 
   Senza doppia autenticazione `two_factor_confirmed_at` è null e i conteggi dei codici sono 0.
 - `GET /me/security-events`: eventi dell'utente dal più recente, paginati a `security_events_per_page` (10), con `meta` e `links` della paginazione standard.
-- Extra opzionale: `GET /me/sessions`, `DELETE /me/sessions/{id}`, `DELETE /me/sessions` per le altre sessioni.
+- La gestione delle sessioni attive (`GET /me/sessions`, `DELETE /me/sessions/{id}`, `DELETE /me/sessions` per chiudere le altre) non è realizzata: è nel README tra gli sviluppi futuri, insieme a un evento di sicurezza dedicato. Le altre sessioni si chiudono oggi solo come effetto del cambio e del reset della password e della disattivazione della doppia autenticazione.
 
 ### Eventi di sicurezza
 
@@ -292,6 +303,8 @@ La cancellazione automatica degli ordini dopo 10 anni è fuori dal progetto: è 
 ## Notifiche email (in italiano)
 
 Verifica email, reset password, password cambiata, conferma cambio email (nuovo indirizzo), avviso cambio email (vecchio indirizzo), cambio email annullato dal profilo, email cambiata, doppia autenticazione attivata o disattivata, codici di recupero rigenerati, codice di recupero usato, passkey aggiunta o rimossa, account eliminato. Ogni avviso indica data, ora e dispositivo (etichetta di `UserAgentLabel`), e invita a cambiare la password se l'operazione non è stata fatta dall'utente. Fa eccezione l'avviso di account eliminato: va all'indirizzo originale, indica data e ora, dice che gli ordini restano conservati per gli obblighi fiscali e, invece di invitare a cambiare la password (non c'è più un account), invita a contattare l'assistenza (sezione `contatti` di `GET /shop/support`) se l'operazione non è stata fatta dall'utente. L'email di verifica dice che il link vale 24 ore; quelle di reset e di cambio email dicono 60 minuti.
+
+Le notifiche con un link che esegue un'azione (`VerifyEmailNotification`, `ResetPasswordNotification`, `EmailChangeConfirmationNotification`, `EmailChangeRequestedNotification` con il link di annullamento) implementano, oltre a `ShouldQueue`, **`ShouldBeEncrypted`**: con un driver di coda asincrono il payload nella tabella `jobs` è cifrato con `APP_KEY`, quindi token e firme non restano mai in chiaro nel database. Un test di architettura lo impone a queste quattro classi; ogni nuova notifica con un link d'azione si aggiunge all'elenco. Prima di ruotare `APP_KEY` in produzione si svuota la coda, altrimenti i job già in coda non si decifrano.
 
 ## Password
 

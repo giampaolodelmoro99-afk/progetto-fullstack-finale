@@ -612,7 +612,7 @@ Prefisso comune: `/api/v1`. Autenticazione, account, sicurezza ed eliminazione d
 
 | Metodo | Percorso | Descrizione |
 |---|---|---|
-| GET | /health | stato del servizio |
+| GET | /health | stato del servizio e del database (503 se il database non risponde) |
 | GET | /shop/settings | `shipping_cost` e `free_shipping_threshold` per i testi del negozio |
 | GET | /shop/support | sezioni della pagina Assistenza, usate anche dall'assistente AI |
 | GET | /assistant/status | disponibilità dell'assistente AI (skill `ai-assistant`) |

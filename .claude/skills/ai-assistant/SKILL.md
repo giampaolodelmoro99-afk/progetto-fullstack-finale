@@ -183,7 +183,7 @@ Limiter `assistant` in `AppServiceProvider`, per utente se autenticato e per IP 
   - healthcheck con `ollama show` del modello del negozio (l'immagine non contiene `curl`): il servizio è sano solo quando il modello esiste; `start_period` di 900 s per il primo download. Lo script usa `ollama list` per attendere che il server risponda
   - `ASSISTANT_MODEL` nell'ambiente del servizio, uguale a `config('assistant.model')`
   - script di avvio in `docker/ollama/` idempotente: avvia `ollama serve`, attende che risponda, esegue `ollama pull` del modello base solo se manca e `ollama create` del modello del negozio dal `docker/ollama/Modelfile`
-- `app` **non** dipende da `ollama`: con il profilo `ai` il negozio funziona anche mentre il modello si sta scaricando o se Ollama non parte; senza profilo l'assistente risulta non disponibile. Il README riporta dimensioni e tempi dei download.
+- `app` **non** dipende da `ollama`: con il profilo `ai` il negozio funziona anche mentre il modello si sta scaricando o se Ollama non parte; senza profilo l'assistente risulta non disponibile. Dimensioni e tempi dei download sono in `docs/assistant/running.md`, con la demo consigliata e la GPU; il README ne dà un riassunto.
 - GPU NVIDIA solo con un file compose opzionale, `docker-compose.gpu.yml`, da usare con `docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile ai up` (target `make up-gpu`). Senza quel file l'assistente usa la CPU.
 - `docker/ollama/Modelfile`:
   - `FROM` il modello base scelto e parametri di generazione (temperatura bassa, contesto sufficiente per 10 messaggi e i risultati dei tool)

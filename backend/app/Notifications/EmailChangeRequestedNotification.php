@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\SecurityNotice;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -13,8 +14,10 @@ use Illuminate\Notifications\Notification;
 /**
  * Notice to the current address when a change is requested, with the link
  * that cancels it without logging in (/cancel-email-change).
+ * The link performs an action, so the queued payload is encrypted with
+ * APP_KEY: with an asynchronous driver it never sits in clear in jobs.
  */
-final class EmailChangeRequestedNotification extends Notification implements ShouldQueue
+final class EmailChangeRequestedNotification extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 

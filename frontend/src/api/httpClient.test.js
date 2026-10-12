@@ -49,7 +49,10 @@ describe('httpClient', () => {
       http.post(apiUrl('/api/v1/echo'), () => {
         attempts += 1;
         if (attempts === 1) {
-          return HttpResponse.json({ message: 'CSRF token mismatch.' }, { status: 419 });
+          return HttpResponse.json(
+            { message: 'La sessione è scaduta. Ricarica la pagina e riprova.' },
+            { status: 419 },
+          );
         }
         return HttpResponse.json({ ok: true });
       }),
@@ -69,7 +72,10 @@ describe('httpClient', () => {
       countingCsrfHandler(csrf),
       http.post(apiUrl('/api/v1/echo'), () => {
         attempts += 1;
-        return HttpResponse.json({ message: 'CSRF token mismatch.' }, { status: 419 });
+        return HttpResponse.json(
+          { message: 'La sessione è scaduta. Ricarica la pagina e riprova.' },
+          { status: 419 },
+        );
       }),
     );
 

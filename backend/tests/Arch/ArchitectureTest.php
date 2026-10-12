@@ -115,6 +115,15 @@ arch('notifications are final and queued')
     ->toHaveSuffix('Notification')
     ->toImplement('Illuminate\Contracts\Queue\ShouldQueue');
 
+arch('notifications with a link that performs an action are encrypted in the queue')
+    ->expect([
+        'App\Notifications\ResetPasswordNotification',
+        'App\Notifications\EmailChangeConfirmationNotification',
+        'App\Notifications\EmailChangeRequestedNotification',
+        'App\Notifications\VerifyEmailNotification',
+    ])
+    ->toImplement('Illuminate\Contracts\Queue\ShouldBeEncrypted');
+
 arch('validation rules are final')
     ->expect('App\Rules')
     ->toBeFinal()

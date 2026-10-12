@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -11,8 +12,10 @@ use Illuminate\Notifications\Notification;
  * Sent on demand to the new address, which belongs to no user yet. The
  * link opens the frontend page /confirm-email-change with the plain token,
  * which exists only here: the database keeps its SHA-256 hash.
+ * The link performs an action, so the queued payload is encrypted with
+ * APP_KEY: with an asynchronous driver it never sits in clear in jobs.
  */
-final class EmailChangeConfirmationNotification extends Notification implements ShouldQueue
+final class EmailChangeConfirmationNotification extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 

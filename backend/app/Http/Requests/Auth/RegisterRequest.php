@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests\Auth;
 
-use App\Rules\NotReservedEmailDomain;
+use App\Support\Auth\RegistrationRules;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 final class RegisterRequest extends FormRequest
 {
@@ -19,11 +17,7 @@ final class RegisterRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', new NotReservedEmailDomain, Rule::unique('users', 'email')],
-            'password' => ['required', 'string', 'confirmed', Password::defaults()],
-        ];
+        return RegistrationRules::rules();
     }
 
     /**
@@ -31,16 +25,11 @@ final class RegisterRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            'email.unique' => 'Questo indirizzo email è già in uso.',
-        ];
+        return RegistrationRules::messages();
     }
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'name' => is_string($this->name) ? trim($this->name) : $this->name,
-            'email' => is_string($this->email) ? mb_strtolower(trim($this->email)) : $this->email,
-        ]);
+        $this->merge(RegistrationRules::normalize($this->only(['name', 'email'])));
     }
 }

@@ -1,6 +1,6 @@
 ---
 name: laravel-api
-description: Architettura e convenzioni del backend Laravel del progetto — rotte versionate, controller sottili, Form Request, Policy, API Resource, Action, middleware personalizzati, enum, eccezioni, eventi, migration, factory, seeder e test manuale con Postman. Usala per qualsiasi modifica in backend/.
+description: Architettura e convenzioni del backend Laravel del progetto — rotte versionate, controller sottili, Form Request, Policy, API Resource, Action, middleware personalizzati, enum, eccezioni, eventi, migration, factory, seeder e test manuale con curl. Usala per qualsiasi modifica in backend/.
 ---
 
 # Laravel API — convenzioni del progetto
@@ -31,7 +31,7 @@ app/
 ├── Policies/
 ├── Providers/
 ├── Services/{Area}/           # implementazioni delle interfacce e servizi di un'area (Assistant/: implementazioni di AiAssistant, giri dei tool, slot, citazione dei prodotti, streaming NDJSON)
-└── Support/                   # piccole classi di utilità senza stato (UserAgentLabel)
+└── Support/                   # piccole classi di utilità senza stato (UserAgentLabel; Auth/RegistrationRules e Auth/PasskeyCredentialRules per le regole condivise)
 config/
 ├── cors.php                   # origine del frontend, credenziali, exposed_headers con Retry-After
 ├── shop.php                   # spedizione, soglie ultimi pezzi e scorte basse, giorni delle novità
@@ -49,7 +49,7 @@ routes/
 ## Rotte
 
 - `routes/api.php` include i file di `routes/api/v1/` con prefisso `v1` e nome `v1.`.
-- `public.php`: catalogo, impostazioni e testi dell'assistenza del negozio (`GET /shop/settings`, `GET /shop/support`), assistente AI (`GET /assistant/status`, `POST /assistant/messages`), health check, registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
+- `public.php`: catalogo, impostazioni e testi dell'assistenza del negozio (`GET /shop/settings`, `GET /shop/support`), assistente AI (`GET /assistant/status`, `POST /assistant/messages`), health check (`GET /health`, che verifica anche il database con `System\CheckDatabaseConnectionAction` e risponde 503 se non è raggiungibile), registrazione, login, recupero password, conferme via link (compresa la verifica email, protetta solo dalla firma: vedi `account-security`).
 - `customer.php`: middleware `auth:sanctum`.
 - `admin.php`: middleware `auth:sanctum` e `role:admin`, prefisso `admin`, nome `admin.`.
 - Usa `Route::apiResource` quando possibile; per le azioni singole usa controller invocabili (`__invoke`). L'update di `apiResource` accetta sia `PATCH` sia `PUT` (comportamento standard di Laravel): il frontend usa `PATCH`, che le skill indicano sempre, e `PUT` resta un alias senza differenze.
@@ -108,7 +108,8 @@ final class ProductController extends Controller
 - Regole in forma di array, con `Rule::enum()`, `Rule::exists()`, `Rule::unique()->ignore()` negli update.
 - `prepareForValidation()` per normalizzare l'input (trim, lowercase delle email, cast; spazi rimossi dal numero della carta).
 - Regole di indirizzi e checkout: tabelle di `StoreAddressRequest` e `PlaceOrderRequest` nella skill `ecommerce-domain`. Il numero della carta si valida con una Rule dedicata (`LuhnRule` in `App\Rules`); `country` non è tra le regole degli indirizzi perché lo imposta il server a `IT`.
-- Messaggi in italiano tramite `lang/it/validation.php`; nomi dei campi leggibili con `attributes()`.
+- Messaggi in italiano tramite `lang/it/validation.php`; nomi dei campi leggibili con `attributes()`, compresi i campi oggetto (`payment` → «dati della carta»). Il `message` di un 422 con più errori finisce con «(e un altro errore)» o «(e altri N errori)», chiavi in `lang/it.json`.
+- Regole usate anche fuori da una Form Request (es. da un comando Artisan) si estraggono in una classe di `App\Support` con metodi statici, come `RegistrationRules` (registrazione e `admin:create`) e `PasskeyCredentialRules`.
 
 ```php
 final class StoreProductRequest extends FormRequest
@@ -198,7 +199,7 @@ final class StoreProductRequest extends FormRequest
 - Le eccezioni di dominio sono risposte previste, non guasti: implementano `Illuminate\Contracts\Debug\ShouldntReport` e non finiscono nel log. Restano riportate solo quelle che segnalano un guasto di un servizio esterno o della libreria: `RefundFailedException` (502), `PasskeyCeremonyFailedException`, `AssistantTimeoutException` e `AssistantFailedException`. Un test di architettura impone l'interfaccia a ogni nuova classe di `App\Exceptions` che non sia in questo elenco.
 - Forma uniforme delle risposte d'errore: `{ "message": "...", "errors": { ... }, "code": "..." }`, con `errors` presente solo per il 422 con errori sui campi e `code` presente solo quando il frontend deve distinguere errori con lo stesso status. I valori di `code` sono stringhe stabili in snake_case (es. `two_factor_challenge_expired`), definite nell'eccezione che le produce (es. `InvalidCredentialsException` → `invalid_credentials`, `TwoFactorChallengeExpiredException` → `two_factor_challenge_expired`).
 - Le risposte 429 includono l'header `Retry-After`, esposto al frontend da `config/cors.php`.
-- Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403, `InvalidSignatureException` del middleware `signed` → 403 JSON con lo stesso messaggio italiano dell'eccezione che la verifica email lancia per un link non valido (skill `account-security`), così firma non valida, utente inesistente e hash sbagliato sono indistinguibili. Il renderer del 404 intercetta ogni `HttpException` con status 404, non solo `NotFoundHttpException`: il 404 di una Policy con `denyAsNotFound()` arriva come `HttpException` generica, e senza questo filtro avrebbe il messaggio inglese «Not Found».
+- Gestione centralizzata in `bootstrap/app.php` con `withExceptions()`: modello non trovato → 404 JSON con messaggio in italiano, autorizzazione negata → 403, 419 di un token CSRF mancante o scaduto → «La sessione è scaduta. Ricarica la pagina e riprova.» (il frontend non lo mostra, ripete la richiesta), `InvalidSignatureException` del middleware `signed` → 403 JSON con lo stesso messaggio italiano dell'eccezione che la verifica email lancia per un link non valido (skill `account-security`), così firma non valida, utente inesistente e hash sbagliato sono indistinguibili. Il renderer del 404 intercetta ogni `HttpException` con status 404, non solo `NotFoundHttpException`: il 404 di una Policy con `denyAsNotFound()` arriva come `HttpException` generica, e senza questo filtro avrebbe il messaggio inglese «Not Found».
 - Dati sensibili mai rimandati indietro o salvati in sessione: in `withExceptions()` si aggiungono a `dontFlash` i campi della carta insieme a quelli delle password:
 
 ```php
@@ -216,9 +217,22 @@ $exceptions->dontFlash([
 ## Enum, eventi, notifiche, servizi
 
 - Enum string-backed in `App\Enums` con metodo `label()` in italiano, con le parole fisse di `design/design-system/voice-and-content.md` (es. `OrderStatus`: In attesa, Pagato, Spedito, Consegnato, Annullato).
-- Listener e notifiche implementano `ShouldQueue`; in sviluppo girano in modo sincrono perché `QUEUE_CONNECTION=sync`.
+- Listener e notifiche implementano `ShouldQueue`; in sviluppo girano in modo sincrono perché `QUEUE_CONNECTION=sync`. Le notifiche con un link d'azione (verifica email, reset, conferma e annullamento del cambio email) implementano anche `ShouldBeEncrypted` (skill `account-security`, "Notifiche email").
 - Email come Notification (canale `mail`), testi in italiano.
 - Interfacce in `App\Contracts`, implementazioni in `App\Services`, binding in `AppServiceProvider` guidato da config.
+
+## Comandi Artisan
+
+In `App\Console\Commands`, classi `final` con suffisso `Command`, testi per l'operatore in italiano, logica nelle Action come per i controller.
+
+| Comando | Target | Effetto |
+|---|---|---|
+| `db:seed-if-empty` | (entrypoint) | esegue i seeder solo se `users` è vuota |
+| `orders:reconcile-pending` | `make artisan cmd="orders:reconcile-pending"` | riconcilia gli ordini rimasti in attesa (skill `ecommerce-domain`) |
+| `assistant:ask` | `make ask q="..."` | domanda all'assistente con le chiamate ai tool e i tempi (skill `ai-assistant`) |
+| `admin:create` | `make admin` | crea un amministratore, con la password chiesta in modo nascosto (skill `account-security`, "Creazione di un amministratore") |
+
+Un dato segreto non si accetta mai come argomento o opzione: si chiede con `secret()`.
 
 ## Migration
 
@@ -263,24 +277,23 @@ $exceptions->dontFlash([
 - `DatabaseSeeder` esegue tutti i seeder in un'unica `DB::transaction()`: un seeding interrotto non lascia il database a metà, così `db:seed-if-empty` (che controlla solo `users`) al riavvio lo ripete da capo. I file copiati sul disco `public` non sono coperti dalla transazione: un seeding fallito può lasciare immagini orfane, che il `ProductSeeder` rimuove al tentativo successivo svuotando la cartella `products/` prima di copiare.
 - Il mese corrente ha sempre almeno un ordine pagato, anche seedando il primo giorno del mese: l'`OrderSeeder` crea un ordine fisso con `paid_at` a metà tra l'inizio del mese e `now()`.
 
-## Test manuale con Postman
+## Test manuale con curl
 
-Con l'autenticazione a cookie Postman va configurato così:
+Le verifiche manuali delle API si propongono con curl (o nel browser per i flussi del frontend). Con l'autenticazione a cookie servono un cookie jar, gli header `Origin` e `Referer` del frontend (Sanctum riconosce così la richiesta come stateful) e l'header `X-XSRF-TOKEN` con il valore **decodificato** del cookie `XSRF-TOKEN`, riletto prima di ogni richiesta perché il login e il logout lo cambiano:
 
-1. Environment con `base_url = http://localhost:8000` e `xsrf_token` vuoto.
-2. Header su tutte le richieste della collection: `Accept: application/json`, `Origin: http://localhost:5173`, `X-XSRF-TOKEN: {{xsrf_token}}`. L'header `Origin` fa riconoscere a Sanctum la richiesta come proveniente dal frontend.
-3. Script post-response a livello di collection, che aggiorna il token dopo ogni risposta:
+```bash
+API=http://localhost:8000
+H=(-H 'Accept: application/json' -H 'Origin: http://localhost:5173' -H 'Referer: http://localhost:5173/')
+xsrf() { local t; t=$(awk '$6=="XSRF-TOKEN"{print $7}' cookies.txt); printf '%b' "${t//%/\\x}"; }
 
-```js
-const token = pm.cookies.get('XSRF-TOKEN');
-if (token) {
-    pm.environment.set('xsrf_token', decodeURIComponent(token));
-}
+curl -s -c cookies.txt -b cookies.txt "${H[@]}" $API/sanctum/csrf-cookie
+curl -s -c cookies.txt -b cookies.txt "${H[@]}" -H 'Content-Type: application/json' \
+  -H "X-XSRF-TOKEN: $(xsrf)" -X POST $API/api/v1/login \
+  -d '{"email":"giulia.ferri@esempio.it","password":"Silicio2026"}'
+curl -s -c cookies.txt -b cookies.txt "${H[@]}" $API/api/v1/me
 ```
 
-4. Prima richiesta di ogni sessione di test: `GET {{base_url}}/sanctum/csrf-cookie`, poi `POST {{base_url}}/api/v1/login`.
-
-Quando proponi verifiche manuali, indica per ogni richiesta metodo, URL, body JSON e risposta attesa con status code.
+Le richieste di sola lettura non hanno bisogno di `X-XSRF-TOKEN`; senza il token una scrittura risponde 419. Per ogni verifica indica il comando completo, il body JSON e la risposta attesa con lo status code (`-w '\n%{http_code}\n'`). Chi preferisce Postman trova la configurazione in `docs/development.md`.
 
 ## Checklist per un nuovo endpoint
 
@@ -292,4 +305,4 @@ Quando proponi verifiche manuali, indica per ogni richiesta metodo, URL, body JS
 6. Factory e stati necessari
 7. Test Pest secondo la skill `testing`
 8. `make test-backend` verde
-9. Richiesta Postman da far provare all'utente
+9. Comando curl da far provare all'utente
