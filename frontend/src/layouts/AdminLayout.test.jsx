@@ -19,11 +19,10 @@ function adminNavigation() {
 }
 
 describe('AdminLayout', () => {
-  it('shows the page title from the route as the only heading of level one', async () => {
+  it('shows the page title from the route as the only heading of level one', () => {
     renderAdmin('/admin/orders/7');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Dettaglio ordine' })).toBeInTheDocument();
-    expect(await screen.findByText('Questa pagina arriva presto.')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 

@@ -50,6 +50,10 @@ describe('theme', () => {
 
   it('defines the layout tokens', () => {
     expect(theme.layout.adminDrawerWidth).toBe(264);
+    expect(theme.layout.adminContentPadding).toEqual({ xs: 2, md: 4 });
+    expect(theme.layout.adminSearchMaxWidth).toBe(360);
+    expect(theme.layout.adminOrderSearchMaxWidth).toBe(400);
+    expect(theme.layout.adminFilterMinWidth).toBe(200);
     expect(theme.layout.assistantPanelWidth).toBe(440);
     expect(theme.layout.assistantPanelMaxHeight).toBe(760);
     expect(theme.layout.storeHeaderHeight).toBe(120);

@@ -27,5 +27,5 @@ Elenco di riferimento delle fasi del progetto. Skill, backlog e documenti citano
 | Fase 8c | Widget dell'assistente AI e formato Markdown leggero (garantito dal parser del widget) | completata |
 | Fase 9a | Area account: profilo con cambio email, indirizzi, ordini con dettaglio e annullamento; stile unico dei chip di stato | completata |
 | Fase 9b | Area account: pagina Sicurezza (password, doppia autenticazione, passkey, attività recente) ed eliminazione dell'account | completata |
-| Fase 9c | Pannello admin: dashboard, prodotti con immagini, categorie, ordini | |
+| Fase 9c | Pannello admin: dashboard, prodotti con immagini, categorie, ordini | completata |
 | Fase 10 | Rifinitura, README, verifica dei dati demo, preparazione della presentazione; test end-to-end con Playwright facoltativi | |

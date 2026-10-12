@@ -1,7 +1,14 @@
 import { http, HttpResponse } from 'msw';
 import {
   buildAddress,
+  buildAdminCategories,
+  buildAdminOrder,
+  buildAdminOrderPage,
+  buildAdminOrderSummary,
+  buildAdminProduct,
+  buildAdminProductPage,
   buildAdminSettings,
+  buildDashboard,
   buildCart,
   buildCategories,
   buildOrder,
@@ -49,6 +56,22 @@ export const handlers = [
   ),
   http.get(apiUrl('/api/v1/admin/settings'), () =>
     HttpResponse.json({ data: buildAdminSettings() }),
+  ),
+  http.get(apiUrl('/api/v1/admin/dashboard'), () => HttpResponse.json({ data: buildDashboard() })),
+  http.get(apiUrl('/api/v1/admin/products'), () =>
+    HttpResponse.json(buildAdminProductPage([buildAdminProduct()])),
+  ),
+  http.get(apiUrl('/api/v1/admin/products/:productId'), ({ params }) =>
+    HttpResponse.json({ data: buildAdminProduct({ id: Number(params.productId) }) }),
+  ),
+  http.get(apiUrl('/api/v1/admin/categories'), () =>
+    HttpResponse.json({ data: buildAdminCategories() }),
+  ),
+  http.get(apiUrl('/api/v1/admin/orders'), () =>
+    HttpResponse.json(buildAdminOrderPage([buildAdminOrderSummary()])),
+  ),
+  http.get(apiUrl('/api/v1/admin/orders/:orderId'), ({ params }) =>
+    HttpResponse.json({ data: buildAdminOrder({ id: Number(params.orderId) }) }),
   ),
   http.get(apiUrl('/api/v1/assistant/status'), () =>
     HttpResponse.json({ data: { available: true } }),

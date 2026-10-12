@@ -29,6 +29,10 @@ export const layout = {
   mobileActionBarHeight: 80,
   stickySummaryTop: 120,
   qrCodeSize: 176,
+  adminContentPadding: { xs: 2, md: 4 },
+  adminSearchMaxWidth: 360,
+  adminFilterMinWidth: 200,
+  adminOrderSearchMaxWidth: 400,
 };
 
 const mixins = {

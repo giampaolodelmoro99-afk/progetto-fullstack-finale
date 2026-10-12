@@ -6,6 +6,7 @@ import {
   formatDayTimeShort,
   formatItemCount,
   formatMonthYear,
+  formatOrderCount,
   formatPostalLine,
   formatPrice,
 } from '@/utils/format';
@@ -58,6 +59,12 @@ describe('dates', () => {
     expect(formatItemCount(1)).toBe('1 articolo');
     expect(formatItemCount(4)).toBe('4 articoli');
     expect(formatItemCount(0)).toBe('0 articoli');
+  });
+
+  it('formats the number of orders with singular and plural', () => {
+    expect(formatOrderCount(1)).toBe('1 ordine');
+    expect(formatOrderCount(48)).toBe('48 ordini');
+    expect(formatOrderCount(0)).toBe('0 ordini');
   });
 
   it('formats the postal line of an italian address', () => {

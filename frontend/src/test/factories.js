@@ -239,6 +239,215 @@ export function buildAdminSettings(overrides = {}) {
   return {
     ...buildShopSettings(),
     low_stock_threshold: 5,
+    order_statuses: [
+      { value: 'pending', label: 'In attesa' },
+      { value: 'paid', label: 'Pagato' },
+      { value: 'shipped', label: 'Spedito' },
+      { value: 'delivered', label: 'Consegnato' },
+      { value: 'cancelled', label: 'Annullato' },
+    ],
+    ...overrides,
+  };
+}
+
+function buildPage(data, path, meta) {
+  return {
+    data,
+    links: { first: null, last: null, prev: null, next: null },
+    meta: {
+      current_page: 1,
+      from: data.length > 0 ? 1 : null,
+      last_page: 1,
+      per_page: 10,
+      to: data.length > 0 ? data.length : null,
+      total: data.length,
+      path: `http://localhost:8000${path}`,
+      ...meta,
+    },
+  };
+}
+
+export function buildAdminCategory(overrides = {}) {
+  return {
+    ...buildCategory(),
+    products_count: 24,
+    can_delete: false,
+    ...overrides,
+  };
+}
+
+export function buildAdminCategories() {
+  return [
+    buildAdminCategory({ name: 'Audio', slug: 'audio', products_count: 24 }),
+    buildAdminCategory({
+      name: 'Ricarica ed energia',
+      slug: 'ricarica-ed-energia',
+      description: 'Caricatori, cavi, batterie',
+      products_count: 8,
+    }),
+    buildAdminCategory({
+      name: 'Viaggio',
+      slug: 'viaggio',
+      description: 'Custodie e adattatori per chi viaggia',
+      products_count: 0,
+      can_delete: true,
+    }),
+  ];
+}
+
+export function buildAdminProductImage(overrides = {}) {
+  const id = nextId();
+
+  return {
+    id,
+    url: `https://cdn.esempio.it/products/${id}.webp`,
+    alt: 'Cuffie Aria',
+    position: 1,
+    ...overrides,
+  };
+}
+
+export function buildAdminProduct(overrides = {}) {
+  const id = overrides.id ?? nextId();
+
+  return {
+    id,
+    name: 'Cuffie Aria',
+    slug: `cuffie-aria-${id}`,
+    sku: 'CDS-AUD-001',
+    category: { id: 1, name: 'Audio', slug: 'audio' },
+    short_description: 'Cuffie over-ear con cancellazione del rumore adattiva.',
+    description: 'Padiglioni in alluminio anodizzato.',
+    specifications: [
+      { label: 'Driver', value: '40 mm' },
+      { label: 'Autonomia', value: '40 ore' },
+    ],
+    price: 34900,
+    stock: 18,
+    stock_status: { status: 'available', label: 'Disponibile' },
+    is_active: true,
+    cover: { url: `https://cdn.esempio.it/products/${id}.webp`, alt: 'Cuffie Aria' },
+    images: [],
+    updated_at: '2026-09-26T14:03:00+02:00',
+    ...overrides,
+  };
+}
+
+export function buildAdminProductPage(products = [], meta = {}) {
+  return buildPage(products, '/api/v1/admin/products', meta);
+}
+
+export function buildAdminOrderSummary(overrides = {}) {
+  return {
+    id: 42,
+    number: 'ORD-2026-000042',
+    customer: { name: 'Giulia Ferri', email: 'giulia.ferri@esempio.it' },
+    created_at: '2026-09-28T18:41:00+02:00',
+    items_count: 4,
+    total: 49600,
+    status: { value: 'paid', label: 'Pagato' },
+    failed_payment: false,
+    ...overrides,
+  };
+}
+
+export function buildAdminOrderPage(orders = [], meta = {}) {
+  return buildPage(orders, '/api/v1/admin/orders', meta);
+}
+
+export function buildAdminOrder(overrides = {}) {
+  return {
+    ...buildAdminOrderSummary(),
+    paid_at: '2026-09-28T18:42:00+02:00',
+    subtotal: 49600,
+    shipping_cost: 0,
+    can_cancel: true,
+    allowed_transitions: ['shipped', 'cancelled'],
+    shipping_address: {
+      full_name: 'Giulia Ferri',
+      street: 'Via San Martino 42',
+      postal_code: '56125',
+      city: 'Pisa',
+      province: 'PI',
+      country: 'IT',
+      phone: '+39 333 123 4567',
+    },
+    payment: {
+      card_last_four: '4242',
+      status: { value: 'succeeded', label: 'Riuscito' },
+      amount: 49600,
+      created_at: '2026-09-28T18:42:00+02:00',
+    },
+    items: [
+      {
+        product_name: 'Cuffie Aria',
+        product_sku: 'CDS-AUD-001',
+        unit_price: 34900,
+        quantity: 1,
+        line_total: 34900,
+        cover: { url: 'https://cdn.esempio.it/products/cuffie-aria.webp', alt: 'Cuffie Aria' },
+      },
+      {
+        product_name: 'Caricatore Brezza 65 W',
+        product_sku: 'CDS-RIC-001',
+        unit_price: 5900,
+        quantity: 2,
+        line_total: 11800,
+        cover: null,
+      },
+    ],
+    status_history: [
+      {
+        status: { value: 'pending', label: 'In attesa' },
+        description: 'Ordine ricevuto, in attesa del pagamento',
+        changed_by: null,
+        reason: null,
+        created_at: '2026-09-28T18:41:00+02:00',
+      },
+      {
+        status: { value: 'paid', label: 'Pagato' },
+        description: 'Pagamento con carta riuscito',
+        changed_by: null,
+        reason: null,
+        created_at: '2026-09-28T18:42:00+02:00',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function buildDashboard(overrides = {}) {
+  return {
+    period: { month: '2026-09' },
+    revenue_month: 874200,
+    orders_month: 24,
+    orders_to_ship: 6,
+    low_stock_count: 4,
+    orders_by_status: [
+      { status: { value: 'paid', label: 'Pagato' }, count: 6 },
+      { status: { value: 'shipped', label: 'Spedito' }, count: 5 },
+      { status: { value: 'delivered', label: 'Consegnato' }, count: 11 },
+      { status: { value: 'cancelled', label: 'Annullato' }, count: 2 },
+    ],
+    latest_orders: [
+      {
+        id: 47,
+        number: 'ORD-2026-000047',
+        customer: { name: 'Marco Bellini', email: 'marco.bellini@esempio.it' },
+        created_at: '2026-09-29T15:10:00+02:00',
+        total: 69800,
+        status: { value: 'paid', label: 'Pagato' },
+      },
+    ],
+    low_stock_products: [
+      {
+        id: 31,
+        name: 'Radio Onda Portatile',
+        stock: 0,
+        stock_status: { status: 'out_of_stock', label: 'Esaurito' },
+        cover: null,
+      },
+    ],
     ...overrides,
   };
 }

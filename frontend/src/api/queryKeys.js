@@ -39,6 +39,7 @@ export const queryKeys = {
     },
     orders: {
       all: ['admin', 'orders'],
+      lists: ['admin', 'orders', 'list'],
       list: (filters) => ['admin', 'orders', 'list', filters],
       detail: (orderId) => ['admin', 'orders', 'detail', orderId],
     },

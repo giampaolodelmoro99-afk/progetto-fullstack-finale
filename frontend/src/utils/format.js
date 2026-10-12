@@ -77,6 +77,10 @@ export function formatItemCount(count) {
   return `${count} ${count === 1 ? 'articolo' : 'articoli'}`;
 }
 
+export function formatOrderCount(count) {
+  return `${count} ${count === 1 ? 'ordine' : 'ordini'}`;
+}
+
 export function formatPostalLine(address) {
   return `${address.postal_code} ${address.city} (${address.province}), Italia`;
 }

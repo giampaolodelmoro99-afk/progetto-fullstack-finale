@@ -33,9 +33,13 @@ import { StoreLayout } from '@/layouts/StoreLayout';
 import ErrorPage from '@/pages/ErrorPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
-const AdminPlaceholderPage = lazy(() => import('@/pages/PlaceholderPage'));
-
-const adminPage = <AdminPlaceholderPage headingComponent={null} />;
+const DashboardPage = lazy(() => import('@/features/admin/dashboard/pages/DashboardPage'));
+const AdminProductsPage = lazy(() => import('@/features/admin/products/pages/ProductsPage'));
+const AdminProductNewPage = lazy(() => import('@/features/admin/products/pages/ProductNewPage'));
+const AdminProductEditPage = lazy(() => import('@/features/admin/products/pages/ProductEditPage'));
+const AdminCategoriesPage = lazy(() => import('@/features/admin/categories/pages/CategoriesPage'));
+const AdminOrdersPage = lazy(() => import('@/features/admin/orders/pages/OrdersPage'));
+const AdminOrderPage = lazy(() => import('@/features/admin/orders/pages/OrderPage'));
 
 function page(path, title, element, handle = {}) {
   return { path, element, handle: { title, ...handle } };
@@ -118,13 +122,17 @@ export const routes = [
           {
             element: <AdminLayout />,
             children: [
-              page(paths.admin, 'Dashboard', adminPage),
-              page(paths.adminProducts, 'Prodotti', adminPage),
-              page(paths.adminProductNew, 'Nuovo prodotto', adminPage),
-              page('/admin/products/:productId/edit', 'Modifica prodotto', adminPage),
-              page(paths.adminCategories, 'Categorie', adminPage),
-              page(paths.adminOrders, 'Ordini', adminPage),
-              page('/admin/orders/:orderId', 'Dettaglio ordine', adminPage),
+              page(paths.admin, 'Dashboard', <DashboardPage />),
+              page(paths.adminProducts, 'Prodotti', <AdminProductsPage />),
+              page(paths.adminProductNew, 'Nuovo prodotto', <AdminProductNewPage />),
+              page(
+                '/admin/products/:productId/edit',
+                'Modifica prodotto',
+                <AdminProductEditPage />,
+              ),
+              page(paths.adminCategories, 'Categorie', <AdminCategoriesPage />),
+              page(paths.adminOrders, 'Ordini', <AdminOrdersPage />),
+              page('/admin/orders/:orderId', 'Dettaglio ordine', <AdminOrderPage />),
             ],
           },
         ],
