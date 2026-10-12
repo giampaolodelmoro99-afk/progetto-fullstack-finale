@@ -150,7 +150,7 @@ describe('ProductNewPage', () => {
     recordCreation(() =>
       HttpResponse.json(
         {
-          message: 'Questo SKU è già in uso (and 1 more error)',
+          message: 'Questo SKU è già in uso (e un altro errore)',
           errors: {
             sku: ['Questo SKU è già in uso'],
             'specifications.0.value': ['Il campo valore non può superare 255 caratteri.'],

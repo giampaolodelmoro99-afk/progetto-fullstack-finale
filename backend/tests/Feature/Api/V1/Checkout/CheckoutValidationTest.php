@@ -100,7 +100,8 @@ it('rejects card data that is not an object without reaching the gateway', funct
 
     fromFrontend()->postJson('/api/v1/checkout', checkoutPayload($address->id, overrides: ['payment' => $payment]))
         ->assertUnprocessable()
-        ->assertJsonValidationErrors(['payment', 'payment.holder', 'payment.number', 'payment.expiry', 'payment.cvc']);
+        ->assertJsonValidationErrors(['payment', 'payment.holder', 'payment.number', 'payment.expiry', 'payment.cvc'])
+        ->assertJsonPath('errors.payment.0', 'Il campo dati della carta deve essere un elenco.');
 
     expect(Order::query()->count())->toBe(0)
         ->and($gateway->charges)->toBe(0);

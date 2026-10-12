@@ -43,7 +43,7 @@ info:
     | 423 | conferma dell'identità mancante o scaduta (operazioni sensibili): `requires` dice cosa chiedere |
     | 429 | troppi tentativi, con header `Retry-After` in secondi |
     | 502 | il gateway di pagamento ha rifiutato il rimborso |
-    | 503 | assistente AI non disponibile o occupato |
+    | 503 | assistente AI non disponibile o occupato; database non raggiungibile in `GET /health` |
 
     ### Codici di dominio
 
@@ -130,15 +130,24 @@ paths:
       operationId: getHealth
       security: []
       summary: Stato del servizio
+      description: Verifica anche la connessione al database, così l'healthcheck di Docker Compose rileva un MySQL non raggiungibile. Con cache e rate limiter sul database (la configurazione di sviluppo) un MySQL fermo fa fallire prima il limiter `api` e la risposta è un 500.
       responses:
         '200':
-          description: Il servizio risponde.
+          description: Il servizio e il database rispondono.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   status: { type: string, const: ok }
+        '503':
+          description: Il database non è raggiungibile.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: unavailable }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   # ---------------------------------------------------------------- Negozio
@@ -2189,11 +2198,11 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/DomainError' }
     CsrfMismatch:
-      description: Token CSRF mancante o scaduto. Il messaggio è quello predefinito di Laravel; il frontend non lo mostra, richiede di nuovo `/sanctum/csrf-cookie` e ripete la richiesta una volta.
+      description: Token CSRF mancante o scaduto. Il frontend non mostra il messaggio, richiede di nuovo `/sanctum/csrf-cookie` e ripete la richiesta una volta.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Message' }
-          example: { message: CSRF token mismatch. }
+          example: { message: La sessione è scaduta. Ricarica la pagina e riprova. }
     ValidationError:
       description: Dati non validi, con gli errori per campo.
       content:
@@ -2341,14 +2350,14 @@ components:
       type: object
       required: [message, errors]
       properties:
-        message: { type: string, description: 'primo errore, seguito dal numero degli altri' }
+        message: { type: string, description: 'primo errore, seguito dal numero degli altri: «(e un altro errore)», «(e altri N errori)»' }
         errors:
           type: object
           additionalProperties:
             type: array
             items: { type: string }
       example:
-        message: Il campo email deve essere un indirizzo email valido. (and 1 more error)
+        message: Il campo email deve essere un indirizzo email valido. (e un altro errore)
         errors:
           email: [Il campo email deve essere un indirizzo email valido.]
           password: [Il campo password è obbligatorio.]

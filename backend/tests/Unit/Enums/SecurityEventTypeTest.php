@@ -21,11 +21,10 @@ it('has the fixed italian labels', function (string $value, string $label) {
     ['recovery_code_used', 'Codice di recupero usato'],
     ['passkey_added', 'Passkey aggiunta'],
     ['passkey_removed', 'Passkey rimossa'],
-    ['other_sessions_closed', 'Altre sessioni chiuse'],
 ]);
 
-it('has exactly seventeen cases', function () {
-    expect(SecurityEventType::cases())->toHaveCount(17);
+it('has exactly sixteen cases', function () {
+    expect(SecurityEventType::cases())->toHaveCount(16);
 });
 
 it('fits every value in the 50 characters of the type column', function () {

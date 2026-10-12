@@ -20,7 +20,6 @@ enum SecurityEventType: string
     case RecoveryCodeUsed = 'recovery_code_used';
     case PasskeyAdded = 'passkey_added';
     case PasskeyRemoved = 'passkey_removed';
-    case OtherSessionsClosed = 'other_sessions_closed';
 
     public function label(): string
     {
@@ -41,7 +40,6 @@ enum SecurityEventType: string
             self::RecoveryCodeUsed => 'Codice di recupero usato',
             self::PasskeyAdded => 'Passkey aggiunta',
             self::PasskeyRemoved => 'Passkey rimossa',
-            self::OtherSessionsClosed => 'Altre sessioni chiuse',
         };
     }
 }

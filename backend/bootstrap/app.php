@@ -79,6 +79,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ? response()->json(['message' => 'La risorsa richiesta non esiste.'], Response::HTTP_NOT_FOUND)
             : null);
 
+        // The 419 of a missing or wrong CSRF token (TokenMismatchException).
+        $exceptions->render(fn (HttpException $e) => $e->getStatusCode() === 419
+            ? response()->json(['message' => 'La sessione è scaduta. Ricarica la pagina e riprova.'], 419)
+            : null);
+
         $exceptions->render(fn (MethodNotAllowedHttpException $e) => response()->json([
             'message' => 'Metodo non consentito per questo indirizzo.',
         ], Response::HTTP_METHOD_NOT_ALLOWED, $e->getHeaders()));

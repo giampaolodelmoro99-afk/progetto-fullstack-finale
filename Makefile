@@ -2,7 +2,7 @@ COMPOSE = docker compose
 APP = $(COMPOSE) exec app
 NODE = $(COMPOSE) exec node
 
-.PHONY: up up-ai up-gpu down build shell logs migrate fresh test test-backend test-frontend coverage-backend coverage-frontend lint artisan composer npm ask
+.PHONY: up up-ai up-gpu down build shell logs migrate fresh test test-backend test-frontend coverage-backend coverage-frontend lint artisan composer npm ask admin
 
 up:
 	$(COMPOSE) up -d
@@ -60,3 +60,6 @@ npm:
 
 ask:
 	$(APP) php artisan assistant:ask --timing "$(q)"
+
+admin:
+	$(APP) php artisan admin:create

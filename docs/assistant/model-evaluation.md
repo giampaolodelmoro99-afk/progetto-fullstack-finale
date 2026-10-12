@@ -234,7 +234,7 @@ Il widget mostra solo grassetto ed elenchi puntati e numerati (Design E, parser 
 
 > - Formato: usa solo il grassetto (\*\*parola\*\*) ed elenchi puntati (righe che iniziano con «- ») o numerati («1. »). Niente titoli, tabelle, link, immagini, codice né HTML.
 
-Domande consigliate del README riprovate con `make ask` (11 ottobre 2026, CPU, modello ricreato all'avvio):
+Domande consigliate (oggi in `docs/assistant/running.md`) riprovate con `make ask` (11 ottobre 2026, CPU, modello ricreato all'avvio):
 
 | Domanda | Tool chiamati | Formato ed esito | Prima parola | Totale |
 |---|---|---|---|---|
@@ -292,7 +292,7 @@ Osservazioni:
 
 **Misura GPU: facoltativa, non eseguita.** Sull'host di prova ci sono il driver NVIDIA (RTX 3060 Laptop, 6 GB, driver 595.71.05) ma non il NVIDIA Container Toolkit, e l'utente ha deciso di non installarlo per ora. Il progetto usa la CPU; tutte le misure di questo documento sono su CPU.
 
-`docker-compose.gpu.yml` e `make up-gpu` restano disponibili, con i prerequisiti nel README (sezione "GPU NVIDIA"). Chi installa il toolkit può ripetere le domande q1–q9 con `make up-gpu`, dopo aver verificato con `docker compose exec ollama ollama ps` che la colonna `PROCESSOR` indichi la GPU. Modello (3,4 GB) e contesto di 8192 token stanno nei 6 GB della scheda.
+`docker-compose.gpu.yml` e `make up-gpu` restano disponibili, con i prerequisiti in `docs/assistant/running.md` (sezione "GPU NVIDIA"). Chi installa il toolkit può ripetere le domande q1–q9 con `make up-gpu`, dopo aver verificato con `docker compose exec ollama ollama ps` che la colonna `PROCESSOR` indichi la GPU. Modello (3,4 GB) e contesto di 8192 token stanno nei 6 GB della scheda.
 
 ## Raccomandazione
 

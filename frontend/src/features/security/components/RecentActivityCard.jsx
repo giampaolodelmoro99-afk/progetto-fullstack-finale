@@ -24,7 +24,6 @@ import { formatDateTime } from '@/utils/format';
 const EVENT_ICONS = {
   login: Login,
   logout: Login,
-  other_sessions_closed: Login,
   login_failed: WarningAmberOutlined,
   two_factor_challenge_failed: WarningAmberOutlined,
   password_changed: LockOutlined,

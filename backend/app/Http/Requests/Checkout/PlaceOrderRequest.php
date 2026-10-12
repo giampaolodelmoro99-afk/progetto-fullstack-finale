@@ -66,6 +66,7 @@ final class PlaceOrderRequest extends FormRequest
     {
         return [
             'address_id' => 'indirizzo di spedizione',
+            'payment' => 'dati della carta',
             'payment.holder' => 'intestatario della carta',
             'payment.number' => 'numero della carta',
             'payment.expiry' => 'scadenza',

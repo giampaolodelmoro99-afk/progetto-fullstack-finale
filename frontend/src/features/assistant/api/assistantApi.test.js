@@ -81,7 +81,10 @@ describe('streamAssistantAnswer', () => {
     const csrf = countCsrfRequests();
     const requests = recordAssistantMessages(({ call }) =>
       call === 1
-        ? HttpResponse.json({ message: 'CSRF token mismatch.' }, { status: 419 })
+        ? HttpResponse.json(
+            { message: 'La sessione è scaduta. Ricarica la pagina e riprova.' },
+            { status: 419 },
+          )
         : ndjsonResponse(completeAnswer('Ciao.')),
     );
 
@@ -95,7 +98,10 @@ describe('streamAssistantAnswer', () => {
     setXsrfCookie('scaduto');
     countCsrfRequests();
     const requests = recordAssistantMessages(() =>
-      HttpResponse.json({ message: 'CSRF token mismatch.' }, { status: 419 }),
+      HttpResponse.json(
+        { message: 'La sessione è scaduta. Ricarica la pagina e riprova.' },
+        { status: 419 },
+      ),
     );
 
     const error = await failure(collect());

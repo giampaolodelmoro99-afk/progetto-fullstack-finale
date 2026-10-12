@@ -12,13 +12,18 @@ if [ ! -f .env ]; then
     cp .env.example .env
 fi
 
-if [ ! -d node_modules ]; then
+# Reinstalls also when package-lock.json changed since the last install
+# (after a git pull): the hash of the installed lock file is kept inside
+# node_modules/.
+lock_hash=$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+if [ ! -d node_modules ] || [ "$(cat node_modules/.package-lock.sha256 2>/dev/null)" != "$lock_hash" ]; then
     echo "[entrypoint] Installo le dipendenze npm"
     if [ -f package-lock.json ]; then
         npm ci
     else
         npm install
     fi
+    echo "$lock_hash" > node_modules/.package-lock.sha256
 fi
 
 echo "[entrypoint] Avvio Vite su 0.0.0.0:5173"

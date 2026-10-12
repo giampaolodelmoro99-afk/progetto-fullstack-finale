@@ -1,9 +1,27 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
+
 it('reports that the service is up', function () {
     $this->getJson(route('v1.health'))
         ->assertOk()
         ->assertExactJson(['status' => 'ok']);
+});
+
+it('answers 503 when the database is not reachable', function () {
+    $database = config('database.connections.mysql.database');
+    config(['database.connections.mysql.database' => 'ecommerce_missing']);
+    DB::purge('mysql');
+
+    try {
+        $response = $this->getJson('/api/v1/health');
+    } finally {
+        config(['database.connections.mysql.database' => $database]);
+        DB::purge('mysql');
+    }
+
+    $response->assertServiceUnavailable()
+        ->assertExactJson(['status' => 'unavailable']);
 });
 
 it('is reachable at the versioned api path', function () {

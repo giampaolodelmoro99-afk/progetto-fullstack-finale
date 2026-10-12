@@ -5,14 +5,17 @@ namespace App\Notifications;
 use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
  * The link opens the frontend page /verify-email with the signed parameters
  * of the API route (VerifyEmail::createUrlUsing in AppServiceProvider).
+ * The link performs an action, so the queued payload is encrypted with
+ * APP_KEY: with an asynchronous driver it never sits in clear in jobs.
  */
-final class VerifyEmailNotification extends VerifyEmail implements ShouldQueue
+final class VerifyEmailNotification extends VerifyEmail implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
