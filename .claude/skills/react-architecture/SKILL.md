@@ -34,7 +34,7 @@ src/
 │   ├── account/
 │   ├── settings/             # api/ hooks/: useShopSettings, useAdminSettings, useSupportContent
 │   ├── assistant/            # widget dell'assistente AI: api/ hooks/ components/ utils/ (sezione "Assistente AI")
-│   └── admin/                # navigation.js; dashboard/ products/ categories/ orders/, ognuna con api/ hooks/ components/ pages/
+│   └── admin/                # navigation.js, listParams.js; components/ e hooks/ condivisi; dashboard/ products/ categories/ orders/, ognuna con api/ hooks/ components/ pages/
 ├── components/               # condivisi: feedback/, form/, data-display/, layout/, navigation/
 ├── layouts/                  # StoreLayout, AuthLayout, AccountLayout, AdminLayout
 ├── hooks/                    # hook condivisi, es. useDebouncedValue
@@ -117,6 +117,7 @@ export const paths = {
   adminProductEdit: (productId) => `/admin/products/${productId}/edit`,
   adminCategories: '/admin/categories',
   adminOrders: '/admin/orders',
+  adminOrdersFiltered: (filters) => `/admin/orders?${new URLSearchParams(filters)}`,
   adminOrder: (orderId) => `/admin/orders/${orderId}`,
 };
 ```
@@ -308,7 +309,7 @@ Dal mockup `03-account.pdf`.
 
 - **Menu account nell'header:** per l'ospite l'icona porta a `paths.login`; per l'utente autenticato apre un menu con nome ed email e le voci Profilo, Indirizzi, I miei ordini, Sicurezza ed Esci. Le stesse voci formano la navigazione di `AccountLayout` (lista laterale su desktop, tab su mobile), definite una sola volta in un array condiviso con etichetta, icona e percorso. La voce attiva si ricava dalla rotta corrente.
 - **Voci per un admin:** nel menu account dell'header e nella navigazione di `AccountLayout` (lista laterale e `Tabs`) le voci «Indirizzi» e «I miei ordini» sono nascoste, perché un admin non può fare acquisti e non ha ordini propri; compare invece la voce «Amministrazione», che porta al pannello admin (`paths.admin`). L'array condiviso delle voci indica per ognuna a chi è visibile (clienti, admin o tutti), così menu e layout filtrano allo stesso modo. Le rotte `/account/addresses`, `/account/orders` e `/account/orders/:orderId` restano protette da `CustomerRoute`, che per un admin reindirizza a `/account/profile`.
-- **Esci:** `useLogoutToHome()` di `features/auth/hooks` porta prima alla home e poi chiama `logout()` di `useAuth`. L'ordine evita che, in una pagina protetta, il redirect al login di `ProtectedRoute` (che scatta appena l'utente diventa ospite) prevalga sulla navigazione alla home. Se il logout fallisce l'utente resta autenticato.
+- **Esci:** `useLogoutToHome()` di `features/auth/hooks` porta prima alla home e poi chiama `logout()` di `useAuth`. L'ordine evita che, in una pagina protetta, il redirect al login di `ProtectedRoute` (che scatta appena l'utente diventa ospite) prevalga sulla navigazione alla home. Se il logout fallisce l'utente resta autenticato. Con un form admin modificato vale la regola di "Modifiche non salvate" (sezione "Area admin").
 - **Profilo** (anche per l'admin):
   - "Dati personali": form del nome, `PATCH /me`, poi `setQueryData(me)` con la `User` della risposta e Snackbar «Modifiche salvate».
   - Email con lo stato di verifica da `user.email_verified_at`.
@@ -339,8 +340,9 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
 
 - Filtri, pagina e righe per pagina nella query string (`useSearchParams`), come nel catalogo: i valori predefiniti non compaiono, cambiare un filtro riporta a pagina 1.
 - La ricerca aggiorna la query string dopo 300 ms di pausa con `hooks/useDebouncedValue.js`; la X del campo la svuota subito.
-- Prodotti: `search`, `category` (slug, opzioni da `useCategories()`), `status` (`active`, `inactive`), `page`, `per_page`.
-- Ordini: `status`, `search`, `failed_payment=1` (`Switch` "Solo pagamenti non riusciti"), `paid_month` (`AAAA-MM`, senza un controllo proprio nella barra: arriva dai link della dashboard e compare come filtro attivo rimovibile sopra la tabella; rimuoverlo toglie il parametro e riporta a pagina 1), `page`, `per_page`; «N ordini» sopra la tabella da `meta.total`. "Azzera filtri" toglie anche `paid_month`.
+- Prodotti: `search`, `category` (slug, opzioni da `useAdminCategories()`: `GET /categories` esclude le categorie con soli prodotti disattivati, che l'admin deve poter filtrare), `status` (`active`, `inactive`), `page`, `per_page`.
+- Lettura e scrittura dei filtri: `useListFilters(parse, serialize)` di `features/admin/hooks`, con le funzioni pure di `productFilters.js` e `orderFilters.js` (testate a parte); i parametri dell'API sono quelli della query string. Una pagina oltre `meta.last_page` (link vecchio) riporta all'ultima con `replace`.
+- Ordini: `status` (opzioni da `order_statuses` di `useAdminSettings()`, cioè `GET /admin/settings`: le etichette degli stati arrivano dall'API anche per il filtro; i soli valori ammessi nella query string sono scritti in `orderFilters.js` e vanno aggiornati se l'enum `OrderStatus` cambia), `search`, `failed_payment=1` (`Switch` "Solo pagamenti non riusciti"), `paid_month` (`AAAA-MM`, senza un controllo proprio nella barra: arriva dai link della dashboard e compare come filtro attivo rimovibile sopra la tabella; rimuoverlo toglie il parametro e riporta a pagina 1), `page`, `per_page`; «N ordini» sopra la tabella da `meta.total`. "Azzera filtri" toglie anche `paid_month`.
 - `TablePagination` è a base 0, l'API a base 1: la conversione avviene solo nel componente.
 - Stati vuoti con il testo che cita la ricerca e "Azzera filtri", che riporta a `paths.adminProducts` o `paths.adminOrders` senza parametri.
 
@@ -361,26 +363,32 @@ Dal mockup `04-admin.pdf`; regole e forme delle risposte nella skill `ecommerce-
   - modifica: `PATCH /admin/products/{id}` con i campi e `images` (id e `alt` nell'ordine del form), poi `reset()` con la risposta e Snackbar «Modifiche salvate»
   - entrambi invalidano `admin.products`, `admin.dashboard`, `admin.categories` (cambiano `products_count` e `can_delete`), `products` e `categories` (`GET /categories` elenca solo le categorie con almeno un prodotto attivo: una categoria può comparire o sparire dal menu del negozio quando un prodotto viene creato, attivato, disattivato o spostato); lo stesso vale per l'eliminazione di un prodotto
 - **Annulla:** nella modifica riporta il form ai valori salvati (`reset()`) ed è disabilitato senza modifiche; nel nuovo prodotto torna a `paths.adminProducts`.
-- **Modifiche non salvate:** `useBlocker` di React Router, attivo quando `isDirty` e non è in corso un salvataggio, apre il Dialog di conferma; "Esci senza salvare" chiama `blocker.proceed()`, "Resta sulla pagina" `blocker.reset()`. `useBeforeUnload` copre chiusura e ricarica della scheda. Vale per le pagine di form, non per i dialog delle categorie.
+- **Modifiche non salvate:** `useUnsavedChangesGuard(shouldBlock)` di `features/admin/hooks` usa `useBlocker` di React Router, attivo quando `isDirty` e non è in corso un salvataggio e solo se cambia il percorso, e apre il Dialog di conferma; "Esci senza salvare" chiama `blocker.proceed()`, "Resta sulla pagina" `blocker.reset()`. `useBeforeUnload` copre chiusura e ricarica della scheda. Vale per le pagine di form, non per i dialog delle categorie. Dopo la creazione `allowNextNavigation()` lascia passare la navigazione alla modifica.
+- **Esci con modifiche non salvate:** `AdminLayout` monta `LeaveGuardProvider` (`components/navigation`), a cui il form registra la sua guardia. Se il form bloccherà la navigazione, `useLogoutToHome()` memorizza l'intenzione di logout nel provider e naviga verso la home: il blocker apre il dialog; "Esci senza salvare" fa `proceed()` e poi il logout (chi ha chiesto di uscire e ha confermato di perdere le modifiche deve risultare uscito, anche su un computer condiviso); "Resta sulla pagina" annulla l'intenzione, quindi una navigazione confermata in seguito non fa uscire. Fuori dall'area admin il provider non c'è e il logout parte come sempre. Il logout dopo `proceed()` non attende la navigazione: l'ordine è garantito in pratica perché `logout()` aspetta la risposta di `POST /logout` prima di svuotare la sessione.
 - **Immagini** (solo in modifica; nel nuovo prodotto la sezione mostra «Potrai aggiungere le immagini dopo il primo salvataggio»):
   - area di caricamento con gli eventi nativi `onDragOver`, `onDragLeave` e `onDrop` e un `<input type="file" multiple accept="image/jpeg,image/png,image/webp">` nascosto aperto da "Scegli i file"; nessuna libreria di drag and drop
   - prima dell'invio si scartano i file non validi con un messaggio per file: «Formato non supportato: usa JPG, PNG o WebP», «Il file supera 5 MB»
+  - più di 10 file validi in una volta si inviano in gruppi da 10 (limite del backend per richiesta); dopo ogni gruppo le immagini nuove entrano nel form, così un errore in un gruppo successivo non perde quelle già caricate
   - caricamento (`POST .../images`, `FormData`) ed eliminazione (`DELETE .../images/{id}`, dopo il dialog di conferma) sono immediati; la risposta si unisce al field array `images` del form senza toccare gli `alt` e l'ordine non ancora salvati delle altre immagini, e senza rendere il form "modificato"
   - ordine (← e →, disabilitati agli estremi) e testi alternativi fanno parte del form e si salvano con "Salva"
+  - la sincronizzazione aggiorna insieme i default (`resetField` con `defaultValue`) e i valori (`replace` del field array) di `images`, così `isDirty` riflette solo le modifiche dell'utente
+  - Snackbar «Immagine caricata» o «Immagini caricate», «Immagine eliminata»; errori del caricamento in un `Alert` nella card
 - L'helper dello stock «Con N pezzi o meno il prodotto entra tra le scorte basse.» legge N da `useAdminSettings()`.
+- Prodotto inesistente (404): stato vuoto «Non abbiamo trovato questo prodotto», «Potrebbe essere stato eliminato.» e "Tutti i prodotti"; altri errori di caricamento con «Non è stato possibile caricare il prodotto» e «Riprova».
+- Snackbar: «Prodotto creato», «Modifiche salvate», «Prodotto eliminato».
 
 ### Categorie
 
 - Elenco da `GET /admin/categories` (`queryKeys.admin.categories`). Nuova e modifica in un `Dialog` con React Hook Form; lo slug non è un campo del form e si mostra in sola lettura in modifica.
 - Il pulsante elimina è disabilitato quando `can_delete` è false; un 409 dell'API mostra comunque il messaggio ricevuto.
-- Creazione, modifica ed eliminazione invalidano `admin.categories` e `categories`, così menu e footer del negozio si aggiornano.
+- Creazione, modifica ed eliminazione invalidano `admin.categories` e `categories`, così menu e footer del negozio si aggiornano, e anche `admin.products` e `products`, dove compare il nome della categoria; un 409 rilegge l'elenco. Snackbar «Categoria creata», «Modifiche salvate», «Categoria eliminata».
 
 ### Ordini
 
-- Dettaglio da `GET /admin/orders/{id}` (`queryKeys.admin.orders.detail(id)`).
+- Dettaglio da `GET /admin/orders/{id}` (`queryKeys.admin.orders.detail(id)`). Ordine inesistente (404): stato vuoto «Non abbiamo trovato questo ordine», «Controlla il link oppure cerca l'ordine nell'elenco.» e "Tutti gli ordini".
 - Card Cliente: nome ed email da `customer` (senza la riga dell'email quando è `null`, per «Cliente eliminato»), telefono da `shipping_address.phone`. Il telefono appartiene al destinatario della spedizione, quindi l'API non lo mette in `customer`.
 - Le azioni si ricavano solo da `allowed_transitions`: `shipped` → "Segna come spedito", `delivered` → "Segna come consegnato", `cancelled` → "Annulla l'ordine" con il dialog di conferma; lista vuota → «Nessuna azione disponibile per questo ordine.».
-- Mutation su `PATCH /admin/orders/{id}/status` che invalida `admin.orders` e `admin.dashboard`, e dopo un annullamento anche `admin.products` e `products` (scorte ripristinate). Un 502 con `code` `refund_failed` lascia il dialog aperto con l'`Alert` del messaggio ricevuto; l'ordine resta invariato.
+- Mutation su `PATCH /admin/orders/{id}/status`: la risposta sostituisce il dettaglio in cache (`setQueryData`) e si invalidano `admin.orders.lists` e `admin.dashboard`, e dopo un annullamento anche `admin.products` e `products` (scorte ripristinate). Un 502 con `code` `refund_failed` lascia il dialog aperto con l'`Alert` del messaggio ricevuto; l'ordine resta invariato. Un 422 `invalid_order_transition` mostra il messaggio nella card Azioni e rilegge il dettaglio. Snackbar «Ordine segnato come spedito», «Ordine segnato come consegnato», «Ordine annullato e rimborsato».
 - Pagamento rifiutato (`failed_payment`): `Chip` "Annullato" dallo stato; `Alert` "Pagamento non riuscito" e riga "Motivo" della card Pagamento con il `reason` della riga di cronologia `cancelled`, più `payment.card_last_four`.
 
 ## Dati dal server (TanStack Query)
@@ -434,6 +442,7 @@ export const queryKeys = {
     },
     orders: {
       all: ['admin', 'orders'],
+      lists: ['admin', 'orders', 'list'],
       list: (filters) => ['admin', 'orders', 'list', filters],
       detail: (orderId) => ['admin', 'orders', 'detail', orderId],
     },

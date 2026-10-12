@@ -178,7 +178,25 @@ describe('router', () => {
     renderRoute('/admin/products/new', buildAdmin());
 
     await expectPage('Nuovo prodotto');
-    expect(await screen.findByText('Questa pagina arriva presto.')).toBeInTheDocument();
+    expect(await screen.findByRole('form', { name: 'Nuovo prodotto' })).toBeInTheDocument();
+  });
+
+  it('loads every page of the admin area lazily', () => {
+    const adminLayout = routes[0].children[1].children[0];
+    const lazyType = Symbol.for('react.lazy');
+
+    expect(adminLayout.children.map((route) => route.path)).toEqual([
+      '/admin',
+      '/admin/products',
+      '/admin/products/new',
+      '/admin/products/:productId/edit',
+      '/admin/categories',
+      '/admin/orders',
+      '/admin/orders/:orderId',
+    ]);
+    adminLayout.children.forEach((route) => {
+      expect(route.element.type.$$typeof).toBe(lazyType);
+    });
   });
 
   it.each([

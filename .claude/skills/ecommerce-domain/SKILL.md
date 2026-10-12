@@ -642,7 +642,7 @@ Prefisso comune: `/api/v1`. Autenticazione, account, sicurezza ed eliminazione d
 
 | Metodo | Percorso | Descrizione |
 |---|---|---|
-| GET | /admin/settings | impostazioni del negozio più `low_stock_threshold` |
+| GET | /admin/settings | impostazioni del negozio più `low_stock_threshold` e `order_statuses` (tutti gli stati d'ordine con valore ed etichetta, nell'ordine dell'enum, per il filtro dell'elenco ordini) |
 | GET | /admin/dashboard | indicatori, ordini per stato, ultimi ordini e scorte basse (sezione "Dashboard") |
 | GET, POST, PATCH, DELETE | /admin/products | gestione prodotti (`apiResource`) con filtri `search`, `category`, `status`; `images` nel `PATCH` per ordine e testi alternativi |
 | POST | /admin/products/{product}/images | caricamento di una o più immagini |

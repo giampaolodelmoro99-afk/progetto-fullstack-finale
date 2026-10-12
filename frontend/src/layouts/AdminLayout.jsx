@@ -13,6 +13,7 @@ import { useDocumentTitle } from '@/app/router/useDocumentTitle';
 import { useRouteTitle } from '@/app/router/useRouteTitle';
 import { PageLoader } from '@/components/feedback/PageLoader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { LeaveGuardProvider } from '@/components/navigation/LeaveGuardProvider';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { AdminDrawerContent } from '@/layouts/admin/AdminDrawerContent';
 import { getInitials } from '@/utils/initials';
@@ -31,77 +32,86 @@ export function AdminLayout() {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        minHeight: (theme) => theme.layout.minPageHeight,
-        bgcolor: 'background.default',
-      }}
-    >
-      {isDesktop ? (
-        <Drawer
-          variant="permanent"
-          sx={{ width: drawerWidth, flexShrink: 0 }}
-          slotProps={{ paper: { sx: { width: drawerWidth, boxSizing: 'border-box' } } }}
-        >
-          <AdminDrawerContent />
-        </Drawer>
-      ) : (
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={closeDrawer}
-          slotProps={{
-            paper: {
-              sx: { width: drawerWidth, maxWidth: (theme) => theme.layout.drawerMaxWidth },
-            },
-          }}
-        >
-          <AdminDrawerContent onNavigate={closeDrawer} onClose={closeDrawer} />
-        </Drawer>
-      )}
-      <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <AppBar>
-          <Toolbar>
-            {isDesktop ? null : (
-              <IconButton
-                edge="start"
-                aria-label="Apri il menu"
-                onClick={() => setMobileOpen(true)}
-              >
-                <MenuOutlined />
-              </IconButton>
-            )}
-            <Typography variant="h4" component="h1" noWrap sx={{ flexGrow: 1 }}>
-              {title}
-            </Typography>
-            <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5 }}>
-              {isDesktop ? (
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle2">{user.name}</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {user.email}
-                  </Typography>
-                </Stack>
-              ) : null}
-              <Avatar
-                role={isDesktop ? undefined : 'img'}
-                aria-label={isDesktop ? undefined : user.name}
-                aria-hidden={isDesktop ? true : undefined}
-                sx={{ bgcolor: 'secondary.light', color: 'text.primary', typography: 'subtitle2' }}
-              >
-                {getInitials(user.name)}
-              </Avatar>
-            </Stack>
-          </Toolbar>
-        </AppBar>
-        <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 } }}>
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
+    <LeaveGuardProvider>
+      <Box
+        sx={{
+          display: 'flex',
+          minHeight: (theme) => theme.layout.minPageHeight,
+          bgcolor: 'background.default',
+        }}
+      >
+        {isDesktop ? (
+          <Drawer
+            variant="permanent"
+            sx={{ width: drawerWidth, flexShrink: 0 }}
+            slotProps={{ paper: { sx: { width: drawerWidth, boxSizing: 'border-box' } } }}
+          >
+            <AdminDrawerContent />
+          </Drawer>
+        ) : (
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={closeDrawer}
+            slotProps={{
+              paper: {
+                sx: { width: drawerWidth, maxWidth: (theme) => theme.layout.drawerMaxWidth },
+              },
+            }}
+          >
+            <AdminDrawerContent onNavigate={closeDrawer} onClose={closeDrawer} />
+          </Drawer>
+        )}
+        <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <AppBar>
+            <Toolbar>
+              {isDesktop ? null : (
+                <IconButton
+                  edge="start"
+                  aria-label="Apri il menu"
+                  onClick={() => setMobileOpen(true)}
+                >
+                  <MenuOutlined />
+                </IconButton>
+              )}
+              <Typography variant="h4" component="h1" noWrap sx={{ flexGrow: 1 }}>
+                {title}
+              </Typography>
+              <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5 }}>
+                {isDesktop ? (
+                  <Stack sx={{ alignItems: 'flex-end' }}>
+                    <Typography variant="subtitle2">{user.name}</Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {user.email}
+                    </Typography>
+                  </Stack>
+                ) : null}
+                <Avatar
+                  role={isDesktop ? undefined : 'img'}
+                  aria-label={isDesktop ? undefined : user.name}
+                  aria-hidden={isDesktop ? true : undefined}
+                  sx={{
+                    bgcolor: 'secondary.light',
+                    color: 'text.primary',
+                    typography: 'subtitle2',
+                  }}
+                >
+                  {getInitials(user.name)}
+                </Avatar>
+              </Stack>
+            </Toolbar>
+          </AppBar>
+          <Box
+            component="main"
+            sx={(theme) => ({ flexGrow: 1, p: theme.layout.adminContentPadding })}
+          >
+            <Suspense fallback={<PageLoader />}>
+              <Outlet />
+            </Suspense>
+          </Box>
         </Box>
+        <ScrollRestoration />
       </Box>
-      <ScrollRestoration />
-    </Box>
+    </LeaveGuardProvider>
   );
 }

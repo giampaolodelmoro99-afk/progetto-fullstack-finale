@@ -1646,7 +1646,7 @@ paths:
         - sessionCookie: []
       responses:
         '200':
-          description: Impostazioni con la soglia delle scorte basse.
+          description: Impostazioni con la soglia delle scorte basse e gli stati d'ordine per il filtro dell'elenco ordini.
           content:
             application/json:
               schema:
@@ -1658,6 +1658,10 @@ paths:
                       - type: object
                         properties:
                           low_stock_threshold: { type: integer, example: 5 }
+                          order_statuses:
+                            type: array
+                            description: tutti gli stati d'ordine nell'ordine dell'enum (In attesa, Pagato, Spedito, Consegnato, Annullato)
+                            items: { $ref: '#/components/schemas/OrderStatus' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
 

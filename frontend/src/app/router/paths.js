@@ -32,5 +32,6 @@ export const paths = {
   adminProductEdit: (productId) => `/admin/products/${productId}/edit`,
   adminCategories: '/admin/categories',
   adminOrders: '/admin/orders',
+  adminOrdersFiltered: (filters) => `/admin/orders?${new URLSearchParams(filters)}`,
   adminOrder: (orderId) => `/admin/orders/${orderId}`,
 };
