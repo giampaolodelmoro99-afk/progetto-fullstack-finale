@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Notifications\AccountDeletedNotification;
+use App\Notifications\AdminRemovedNotification;
 use App\Notifications\EmailChangeCancelledNotification;
 use App\Notifications\EmailChangeConfirmationNotification;
 use App\Notifications\EmailChangedNotification;
@@ -180,6 +181,18 @@ it('writes the notice of the deleted account with the retained orders and the su
         ->and(implode(' ', $mail->introLines))->not->toContain('cambia subito la password');
 });
 
+it('writes the notice of the removed admin without the customer support contacts', function () {
+    $mail = (new AdminRemovedNotification('Paolo Neri', CarbonImmutable::parse('2026-10-13 09:15:00')))
+        ->toMail((new AnonymousNotifiable)->route('mail', 'paolo.neri@esempio.it'));
+
+    expect($mail->subject)->toBe('Il tuo account di amministrazione è stato rimosso')
+        ->and($mail->greeting)->toBe('Ciao Paolo Neri,')
+        ->and($mail->introLines)->toBe([
+            'il tuo account di amministrazione è stato rimosso il 13 ottobre 2026 alle 09:15.',
+            'Se non te lo aspettavi, contatta subito il responsabile del negozio.',
+        ]);
+});
+
 it('queues every authentication email', function (string $notification) {
     expect(is_subclass_of($notification, ShouldQueue::class))->toBeTrue();
 })->with([
@@ -196,6 +209,7 @@ it('queues every authentication email', function (string $notification) {
     EmailChangeCancelledNotification::class,
     EmailChangedNotification::class,
     AccountDeletedNotification::class,
+    AdminRemovedNotification::class,
 ]);
 
 it('translates the texts of the email layout', function () {

@@ -37,6 +37,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public const DELETED_CUSTOMER_LABEL = 'Cliente eliminato';
 
     /**
+     * Label the admin area shows instead of an admin removed by admin:remove.
+     */
+    public const DELETED_ADMIN_LABEL = 'Amministratore eliminato';
+
+    /**
      * @var array<string, mixed>
      */
     protected $attributes = [
@@ -122,8 +127,9 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The customer deleted the account: the user stays, anonymized, only
-     * for the orders kept by the retention obligation, and cannot log in.
+     * The customer deleted the account, or the admin was removed with
+     * admin:remove: the user stays, anonymized, only for the orders and the
+     * status history kept by the retention obligation, and cannot log in.
      */
     public function isAnonymized(): bool
     {
@@ -131,12 +137,17 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The name of the user in the admin area: the label "Cliente eliminato"
-     * for an anonymized account, never the stored name.
+     * The name of the user in the admin area: for an anonymized account the
+     * label "Amministratore eliminato" or "Cliente eliminato" by role, never
+     * the stored name.
      */
     public function adminLabel(): string
     {
-        return $this->isAnonymized() ? self::DELETED_CUSTOMER_LABEL : $this->name;
+        if (! $this->isAnonymized()) {
+            return $this->name;
+        }
+
+        return $this->isAdmin() ? self::DELETED_ADMIN_LABEL : self::DELETED_CUSTOMER_LABEL;
     }
 
     /**

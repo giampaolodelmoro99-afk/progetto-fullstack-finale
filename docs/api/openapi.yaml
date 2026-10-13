@@ -2725,7 +2725,7 @@ components:
                   - type: object
                     properties:
                       changed_by:
-                        description: null = sistema
+                        description: null = sistema; `name` vale «Cliente eliminato» o «Amministratore eliminato» per un account anonimizzato
                         oneOf:
                           - type: object
                             properties:

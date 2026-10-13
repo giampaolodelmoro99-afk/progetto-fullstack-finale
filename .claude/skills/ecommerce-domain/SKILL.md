@@ -452,6 +452,7 @@ Gli ordini di un cliente che ha eliminato l'account (`users.anonymized_at` valor
 - La ricerca per email dell'elenco ordini non trova gli account anonimizzati: la loro email è fittizia.
 - Il frontend mostra `email` null senza la riga dell'email.
 - I due testi sono voluti: «Utente eliminato» è il valore salvato in `users.name`, neutro rispetto al ruolo; «Cliente eliminato» è l'etichetta che l'area admin mostra al posto del cliente. Le Resource admin usano sempre l'etichetta, mai il nome salvato.
+- Un admin rimosso con `admin:remove` (skill `account-security`, "Rimozione di un amministratore") è anonimizzato allo stesso modo ma mantiene il ruolo: `User::adminLabel()` restituisce «Amministratore eliminato», quindi la cronologia admin mostra per esempio «Segnato come spedito da Amministratore eliminato».
 
 ### Dashboard (`GET /admin/dashboard`)
 

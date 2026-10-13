@@ -58,3 +58,14 @@ it('builds the fictitious address of an anonymized account from its id', functio
     expect($user->anonymizedEmail())->toBe('deleted-42@anonymized.invalid')
         ->and(User::ANONYMIZED_NAME)->toBe('Utente eliminato');
 });
+
+it('labels the user in the admin area by role once anonymized', function (UserRole $role, ?string $anonymizedAt, string $label) {
+    $user = (new User)->forceFill(['name' => 'Paolo Neri', 'role' => $role, 'anonymized_at' => $anonymizedAt]);
+
+    expect($user->adminLabel())->toBe($label);
+})->with([
+    'active admin' => [UserRole::Admin, null, 'Paolo Neri'],
+    'active customer' => [UserRole::Customer, null, 'Paolo Neri'],
+    'removed admin' => [UserRole::Admin, '2026-10-13 09:15', 'Amministratore eliminato'],
+    'deleted customer' => [UserRole::Customer, '2026-10-13 09:15', 'Cliente eliminato'],
+]);
