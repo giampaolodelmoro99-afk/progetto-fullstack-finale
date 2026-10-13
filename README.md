@@ -86,9 +86,9 @@ Il pagamento è simulato, nessun addebito reale. Scadenza qualsiasi non passata 
 | 4242 4242 4242 4242 | pagamento approvato |
 | 4000 0000 0000 0002 | pagamento rifiutato |
 
-## Creazione di un amministratore
+## Creazione e rimozione di un amministratore
 
-Gli amministratori non si registrano dal sito: si creano dal terminale.
+Gli amministratori non si registrano dal sito: si creano e si rimuovono dal terminale.
 
 ```sh
 make admin
@@ -97,6 +97,14 @@ docker compose exec app php artisan admin:create
 ```
 
 Il comando chiede nome, email, password e conferma. La password si scrive sempre in modo nascosto e non si può passare come opzione, così non resta nella cronologia del terminale; non compare mai nell'output né nei log. Valgono le stesse regole della registrazione (email unica e valida, almeno 10 caratteri con maiuscole, minuscole e numeri, password non comparsa in fughe di dati). L'account nasce con l'email già verificata. Il comando crea solo account nuovi: un'email già usata, anche da un cliente, viene rifiutata.
+
+```sh
+make admin-remove
+# equivale a
+docker compose exec app php artisan admin:remove
+```
+
+Il comando chiede l'email, mostra nome ed email dell'amministratore trovato e chiede di riscrivere l'email per confermare. Un'email inesistente o di un cliente viene rifiutata senza modifiche, così come la rimozione dell'ultimo amministratore attivo. L'account non si cancella ma si anonimizza come quello di un cliente che si elimina, perché la cronologia degli ordini conserva chi ha fatto ogni passaggio: lì compare come «Amministratore eliminato». All'indirizzo originale arriva un'email che avvisa della rimozione.
 
 ## Funzionalità
 
@@ -134,7 +142,7 @@ Rotta → middleware → Form Request (Policy + validazione) → Controller → 
 - **Errori** in una forma unica `{ message, errors, code }`: eccezioni di dominio con lo status giusto e un `code` stabile quando il frontend deve distinguere i casi.
 - **Servizi dietro un'interfaccia** (`app/Contracts`), scelti dalla configurazione: gateway di pagamento finto, assistente con Ollama o finto, cerimonia WebAuthn. Nei test si sostituiscono con implementazioni finte.
 - **Notifiche e listener** tutti in coda (`ShouldQueue`); in sviluppo `QUEUE_CONNECTION=sync` li esegue subito.
-- **Comandi Artisan**: `admin:create`, `orders:reconcile-pending` (riconciliazione degli ordini rimasti in attesa), `assistant:ask` e `db:seed-if-empty` usato dall'avvio.
+- **Comandi Artisan**: `admin:create`, `admin:remove`, `orders:reconcile-pending` (riconciliazione degli ordini rimasti in attesa), `assistant:ask` e `db:seed-if-empty` usato dall'avvio.
 
 Documentazione: schema del database in [docs/database/er-diagram.md](docs/database/er-diagram.md), specifica OpenAPI 3.1 in italiano in [docs/api/openapi.yaml](docs/api/openapi.yaml), tenuta allineata alle rotte da un test.
 

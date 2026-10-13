@@ -40,7 +40,7 @@ Scelte vincolanti:
 - L'assistente AI è nel profilo Compose `ai`: `docker compose up` non scarica nulla di Ollama e il negozio funziona con l'assistente "non disponibile"; `docker compose --profile ai up` (`make up-ai`) lo avvia. `app` non dipende da `ollama`. La GPU NVIDIA è facoltativa, con `docker-compose.gpu.yml` (`make up-gpu`).
 - Frontend e backend sono su porte diverse: CORS è configurato con credenziali e Sanctum riconosce `localhost:5173` come frontend stateful.
 
-Comandi del `Makefile`: `up`, `up-ai` (profilo `ai`), `up-gpu` (profilo `ai` con `docker-compose.gpu.yml`), `down` (ferma anche il profilo `ai`), `build`, `shell`, `logs`, `migrate`, `fresh`, `test`, `test-backend`, `test-frontend`, `coverage-backend`, `coverage-frontend`, `lint`, `artisan cmd="..."`, `composer cmd="..."`, `npm cmd="..."`, `ask q="..."` (`php artisan assistant:ask --timing`), `admin` (`php artisan admin:create`: crea un amministratore chiedendo nome, email e password, quest'ultima in modo nascosto).
+Comandi del `Makefile`: `up`, `up-ai` (profilo `ai`), `up-gpu` (profilo `ai` con `docker-compose.gpu.yml`), `down` (ferma anche il profilo `ai`), `build`, `shell`, `logs`, `migrate`, `fresh`, `test`, `test-backend`, `test-frontend`, `coverage-backend`, `coverage-frontend`, `lint`, `artisan cmd="..."`, `composer cmd="..."`, `npm cmd="..."`, `ask q="..."` (`php artisan assistant:ask --timing`), `admin` (`php artisan admin:create`: crea un amministratore chiedendo nome, email e password, quest'ultima in modo nascosto), `admin-remove` (`php artisan admin:remove`: rimuove un amministratore anonimizzandolo, con l'email riscritta per conferma; l'ultimo amministratore attivo non si rimuove).
 
 ## Lingua e convenzioni
 

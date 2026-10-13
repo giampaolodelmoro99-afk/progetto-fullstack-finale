@@ -1,10 +1,11 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Enums\UserRole;
 use App\Models\OrderStatusChange;
 use App\Models\User;
 
-function statusChange(?OrderStatus $from, OrderStatus $to, ?string $author = null, ?string $reason = null, bool $anonymized = false): OrderStatusChange
+function statusChange(?OrderStatus $from, OrderStatus $to, ?string $author = null, ?string $reason = null, bool $anonymized = false, UserRole $role = UserRole::Customer): OrderStatusChange
 {
     $change = new OrderStatusChange([
         'from_status' => $from,
@@ -16,6 +17,7 @@ function statusChange(?OrderStatus $from, OrderStatus $to, ?string $author = nul
     if ($author !== null) {
         $user = new User(['name' => $author]);
         $user->anonymized_at = $anonymized ? now() : null;
+        $user->role = $role;
         $change->setRelation('changedBy', $user);
     }
 
@@ -47,6 +49,13 @@ it('names an anonymized customer "Cliente eliminato" in the admin variant', func
 
     expect($change->description(true))->toBe('Annullato e rimborsato da Cliente eliminato')
         ->and($change->description(false))->toBe('Annullato e rimborsato');
+});
+
+it('names a removed admin "Amministratore eliminato" in the admin variant', function () {
+    $change = statusChange(OrderStatus::Paid, OrderStatus::Shipped, 'Utente eliminato', anonymized: true, role: UserRole::Admin);
+
+    expect($change->description(true))->toBe('Segnato come spedito da Amministratore eliminato')
+        ->and($change->description(false))->toBe('Segnato come spedito');
 });
 
 it('includes the reason of a rejected payment', function () {

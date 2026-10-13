@@ -1,9 +1,11 @@
 <?php
 
+use App\Actions\Admin\RemoveAdminAction;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductImage;
 use App\Models\User;
+use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
     $this->travelTo('2026-09-30 12:00');
@@ -156,6 +158,20 @@ it('shows an anonymized customer as "Cliente eliminato", also as author of the c
         ->assertJsonPath('data.shipping_address.full_name', 'Giulia Ferri')
         ->assertJsonPath('data.status_history.2.description', 'Annullato e rimborsato da Cliente eliminato')
         ->assertJsonPath('data.status_history.2.changed_by', ['id' => $customer->id, 'name' => 'Cliente eliminato']);
+});
+
+it('shows a removed admin as "Amministratore eliminato" in the history', function () {
+    Notification::fake();
+    actingAsAdmin();
+    $shipper = User::factory()->admin()->create(['name' => 'Paolo Neri', 'email' => 'paolo.neri@esempio.it']);
+    $order = Order::factory()->shipped($shipper)->create();
+
+    app(RemoveAdminAction::class)->execute($shipper);
+
+    $this->getJson("/api/v1/admin/orders/{$order->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status_history.2.description', 'Segnato come spedito da Amministratore eliminato')
+        ->assertJsonPath('data.status_history.2.changed_by', ['id' => $shipper->id, 'name' => 'Amministratore eliminato']);
 });
 
 it('answers 404 for an order that does not exist', function () {

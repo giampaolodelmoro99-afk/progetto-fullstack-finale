@@ -15,6 +15,7 @@ Dettagli operativi per chi lavora sul progetto. L'avvio rapido e le credenziali 
 | `make migrate` | esegue le migration |
 | `make fresh` | ricrea il database con i dati demo |
 | `make admin` | crea un amministratore (`php artisan admin:create`) |
+| `make admin-remove` | rimuove un amministratore anonimizzandolo (`php artisan admin:remove`) |
 | `make test` | test di backend (Pest) e frontend (Vitest) |
 | `make test-backend` / `make test-frontend` | test di un solo lato |
 | `make coverage-backend` / `make coverage-frontend` | test con copertura (soglie 80% e 70%) |

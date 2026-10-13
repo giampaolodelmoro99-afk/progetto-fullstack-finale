@@ -144,6 +144,19 @@ Gli admin non si registrano dall'API: si creano solo dal terminale con `php arti
 - `App\Actions\Admin\CreateAdminAction` crea l'utente con ruolo `admin`, `email_verified_at` e `password_changed_at` valorizzate (chi esegue il comando ha accesso al server, quindi l'indirizzo non si verifica). Nessuna email, nessuna sessione, nessun evento di sicurezza (l'evento ha bisogno di una richiesta HTTP).
 - Solo creazione: un'email già usata (anche da un cliente) è rifiutata con «Questo indirizzo email è già in uso.», un cliente non si promuove mai ad admin.
 
+### Rimozione di un amministratore
+
+Un admin non può eliminare il proprio account dall'API (403 dalla Policy, sezione "Eliminazione dell'account"): si rimuove solo dal terminale con `php artisan admin:remove` (`make admin-remove`).
+
+- Il comando chiede l'email (normalizzata come nella registrazione: spazi tolti, minuscole). Email inesistente o di un account anonimizzato → «Nessun account con questa email.»; email di un cliente → «Questo account è un cliente: il comando rimuove solo amministratori.». In entrambi i casi esce con codice di errore, senza modifiche.
+- Mostra «Amministratore trovato: {nome} <{email}>» e chiede di riscrivere l'email per confermare; se non coincide, «Conferma non corrispondente: nessuna modifica.».
+- **Ultimo amministratore attivo** (ruolo `admin` e `anonymized_at` null): «Non puoi rimuovere l'ultimo amministratore attivo.», il negozio non resta mai senza amministratori. Il comando lo controlla prima della conferma, per non chiederla inutilmente; il controllo che conta è in `App\Actions\Admin\RemoveAdminAction`, sotto lock (`LastAdminException`).
+- `RemoveAdminAction`, in `DB::transaction()`: blocca con `lockForUpdate()` **tutte** le righe degli admin attivi in ordine di `id` crescente, bersaglio compreso, poi le conta. Così due rimozioni contemporanee di admin diversi si attendono e la seconda vede la prima. Sono tutte righe di `users`, quindi l'ordine dei lock (prima l'utente) resta rispettato. Senza un indice su `users.role` InnoDB blocca ogni riga che legge, clienti compresi: si accetta, perché il comando è raro e la transazione dura pochi millisecondi. Se nel frattempo il bersaglio non è più un admin attivo → `AdminNotFoundException`.
+- Sotto lock legge email e nome originali, poi anonimizza con `App\Actions\Account\AnonymizeUserAction`, la stessa usata da `DeleteAccountAction` (cancellazioni e campi del punto 5 di "Eliminazione dell'account"). Non c'è il controllo degli ordini aperti: un admin non compra. Il ruolo resta `admin`.
+- **Nessuna cancellazione fisica:** `order_status_changes.changed_by` è `restrictOnDelete`, e la cronologia deve conservare chi ha fatto ogni passaggio. Nell'area admin l'autore diventa «Amministratore eliminato» (`User::adminLabel()`, skill `ecommerce-domain`, "Clienti eliminati").
+- **Dopo il commit:** notifica on-demand `AdminRemovedNotification` all'indirizzo originale, con `afterCommit()`. Oggetto «Il tuo account di amministrazione è stato rimosso»; testo con data e ora della rimozione e «Se non te lo aspettavi, contatta subito il responsabile del negozio.», senza i contatti dell'assistenza clienti. **Motivo:** ogni cambiamento di sicurezza di un account si comunica al titolare, e una rimozione inattesa può indicare un accesso non autorizzato al server. Se la transazione fallisce non parte nessuna email.
+- Le sessioni dell'admin rimosso sono cancellate e il login è rifiutato come per ogni account anonimizzato. Nessun evento di sicurezza: il registro dell'utente è appena stato cancellato.
+
 ### Login
 
 1. `POST /login` con email e password.
@@ -216,10 +229,11 @@ Gli admin non si registrano dall'API: si creano solo dal terminale con `php arti
 Si realizza nella Fase 3b (`docs/roadmap.md`), con la colonna `users.anonymized_at` aggiunta da una nuova migration.
 
 1. `DELETE /me`, con i middleware in quest'ordine: `can:delete,…` sull'utente autenticato (Policy), poi `identity.confirmed` (password, più secondo fattore se la doppia autenticazione è attiva). La logica sta in `DeleteAccountAction`.
-2. **Chi può farlo:** solo un `customer`. Un admin riceve 403 dalla Policy, così il negozio non resta senza amministratori. Il permesso si controlla **prima** della conferma dell'identità: un admin riceve subito 403, senza che gli si chieda la password.
+2. **Chi può farlo:** solo un `customer`. Un admin riceve 403 dalla Policy, così il negozio non resta senza amministratori; un admin si rimuove solo con `admin:remove` (sezione "Rimozione di un amministratore"). Il permesso si controlla **prima** della conferma dell'identità: un admin riceve subito 403, senza che gli si chieda la password.
 3. **Ordini aperti:** sono aperti gli ordini `paid` e `shipped`, e gli ordini `pending` creati negli ultimi `account_deletion_pending_window` minuti (15), cioè un pagamento ancora in corso. Un ordine `pending` più vecchio è un orfano e non blocca per sempre l'eliminazione. Con ordini aperti: `AccountHasOpenOrdersException` (409) con `code` `account_has_open_orders` e il messaggio del Design E «Hai ordini in corso: potrai eliminare l'account dopo la consegna, oppure annullandoli.» (dalla Fase 9b; prima era «Hai ordini ancora in corso: potrai eliminare l'account quando saranno consegnati o annullati.»). Nessun effetto.
 4. **Prima della transazione** si legge l'indirizzo email originale e il nome, che servono alla notifica.
 5. **In `DB::transaction()`, con `lockForUpdate()` sull'utente** (il controllo degli ordini aperti si ripete sotto lock; un checkout che arriva dopo trova le sessioni chiuse e riceve 401):
+   - le cancellazioni e l'anonimizzazione che seguono stanno in `AnonymizeUserAction`, condivisa con la rimozione di un amministratore
    - si cancellano indirizzi, carrello con le sue righe, eventi di sicurezza, richieste di cambio email, token di reset dell'indirizzo originale (`password_reset_tokens`) e tutte le sessioni dell'utente, compresa quella corrente
    - si disattiva la doppia autenticazione: `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at` e `two_factor_last_used_step` a null
    - si cancellano le passkey

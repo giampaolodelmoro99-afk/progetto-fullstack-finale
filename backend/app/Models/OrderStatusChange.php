@@ -49,7 +49,8 @@ class OrderStatusChange extends Model
 
     /**
      * Description of the transition. The admin variant adds " da {name}" when
-     * there is an author, with "Cliente eliminato" for an anonymized customer.
+     * there is an author, with "Cliente eliminato" for an anonymized customer
+     * and "Amministratore eliminato" for a removed admin.
      */
     public function description(bool $withAuthor): string
     {

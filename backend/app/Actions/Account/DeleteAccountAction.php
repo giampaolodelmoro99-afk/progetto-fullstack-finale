@@ -4,7 +4,6 @@ namespace App\Actions\Account;
 
 use App\Actions\Shop\GetSupportSectionsAction;
 use App\Exceptions\Account\AccountHasOpenOrdersException;
-use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\AccountDeletedNotification;
@@ -12,12 +11,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 
 /**
- * Deletes the account of a customer by anonymizing it (D13): orders, items,
- * status history and payments stay for the retention obligation, everything
- * else of the user is erased. Only customers get here (UserPolicy::delete).
+ * Deletes the account of a customer by anonymizing it (D13) with
+ * AnonymizeUserAction, shared with the removal of an admin. Only customers
+ * get here (UserPolicy::delete).
  *
  * Open orders are checked first, then again under the row lock: a checkout
  * arriving later finds the sessions closed. Original email and name are read
@@ -37,6 +35,7 @@ final class DeleteAccountAction
     public function __construct(
         private readonly Request $request,
         private readonly GetSupportSectionsAction $getSupportSections,
+        private readonly AnonymizeUserAction $anonymizeUser,
     ) {}
 
     public function execute(User $user): void
@@ -55,27 +54,7 @@ final class DeleteAccountAction
             $originalEmail = $locked->email;
             $originalName = $locked->name;
 
-            $locked->addresses()->delete();
-            CartItem::query()->whereHas('cart', fn ($query) => $query->where('user_id', $locked->id))->delete();
-            $locked->cart()->delete();
-            $locked->securityEvents()->delete();
-            $locked->emailChangeRequests()->delete();
-            $locked->passkeys()->delete();
-            DB::table(config('auth.passwords.users.table'))->where('email', $originalEmail)->delete();
-            DB::table(config('session.table'))->where('user_id', $locked->id)->delete();
-
-            $locked->forceFill([
-                'name' => User::ANONYMIZED_NAME,
-                'email' => $locked->anonymizedEmail(),
-                'password' => Str::random(64),
-                'email_verified_at' => null,
-                'remember_token' => null,
-                'two_factor_secret' => null,
-                'two_factor_recovery_codes' => null,
-                'two_factor_confirmed_at' => null,
-                'two_factor_last_used_step' => null,
-                'anonymized_at' => now(),
-            ])->save();
+            $this->anonymizeUser->execute($locked);
 
             return ['email' => $originalEmail, 'name' => $originalName];
         });
